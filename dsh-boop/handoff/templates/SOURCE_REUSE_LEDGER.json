@@ -1,0 +1,17 @@
+{
+  "baseline": "v1.2-FROZEN-R1",
+  "status": "template",
+  "note": "本交接包未移植第三方插件实现。实施后逐文件填写，不把参考机制当作已导入代码。",
+  "imports": [],
+  "exampleFields": [
+    "upstreamRepo",
+    "upstreamCommit",
+    "upstreamPath",
+    "localPath",
+    "originalLicense",
+    "modificationNotes",
+    "transitiveDependencies",
+    "noticeFiles",
+    "reviewedBy"
+  ]
+}

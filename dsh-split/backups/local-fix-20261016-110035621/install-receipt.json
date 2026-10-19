@@ -1,0 +1,33 @@
+{
+  "installedAt": "2026-10-16T11:00:36.2838661+08:00",
+  "status": "installed-files-verified",
+  "backup": "E:\\dsh-plugin\\dsh-split\\backups\\local-fix-20261016-110035621",
+  "restoreScript": "E:\\dsh-plugin\\dsh-split\\backups\\local-fix-20261016-110035621\\restore.ps1",
+  "appAsarSha256": "983ca71114e6dfd353fc79af5a1f9481a250ee64c2a3c757673029b811b23bc2",
+  "patchEdits": 24,
+  "patchFilesVerified": 28,
+  "loadedViaProfile": [
+    {
+      "package": "@deepseek-ai/dsh-client-ui-workspace",
+      "resolvedTarget": "E:\\dsh-plugin\\dsh-split\\patches\\patched\\dsh-client-ui-workspace",
+      "clientSha256": "dba0645d1206400ba60c2c34e2e05dc1d02f207e93ccc981e543e6692329cd34"
+    },
+    {
+      "package": "@deepseek-ai/dsh-client-ui-attachment",
+      "resolvedTarget": "E:\\dsh-plugin\\dsh-split\\patches\\patched\\dsh-client-ui-attachment",
+      "clientSha256": "0f54931521da35fb27a8279773cbd200ec3aa3e6ebeea2f0b0efd1b95452ab92"
+    },
+    {
+      "package": "dsh-split",
+      "resolvedTarget": "E:\\dsh-plugin\\dsh-split",
+      "clientSha256": "8ecdbc972d5a4c7bf24a5b0eb0b8b7b5a82f1182b5bd61cc90edbe2e547b1053"
+    },
+    {
+      "package": "@deepseek-ai/dsh-client-ui-sidebar-right",
+      "resolvedTarget": "E:\\dsh-plugin\\dsh-split\\patches\\patched\\dsh-client-ui-sidebar-right",
+      "clientSha256": "eaf6a0b189421c3a62739ba466e916f2a98b98337bdddcfacdf9a3bf22af2f25"
+    }
+  ],
+  "restartPerformed": false,
+  "liveUploadOrModelTested": false
+}

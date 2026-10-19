@@ -1,0 +1,106 @@
+{
+  "delivery": "v1.2-FROZEN-R1",
+  "scope": "文档交接、文件完整性、关系检查与阅读器；不包含BOOP插件运行验收",
+  "checks": [
+    {
+      "name": "65 original baseline files preserved byte-for-byte",
+      "passed": true
+    },
+    {
+      "name": "baseline freeze manifest matches all original files",
+      "passed": true
+    },
+    {
+      "name": "original v1.2 checksum list remains valid",
+      "passed": true
+    },
+    {
+      "name": "approved artwork original hashes match",
+      "passed": true
+    },
+    {
+      "name": "26 unique engineering tickets with actual Markdown files",
+      "passed": true
+    },
+    {
+      "name": "no live GitHub issues falsely claimed",
+      "passed": true
+    },
+    {
+      "name": "all named task dependencies exist",
+      "passed": true
+    },
+    {
+      "name": "task dependency graph is acyclic",
+      "passed": true
+    },
+    {
+      "name": "71 implementation checks are unique and NOT_RUN",
+      "passed": true
+    },
+    {
+      "name": "9 gates / 10 taskboard / 12 frontend / 40 acceptance checks",
+      "passed": true
+    },
+    {
+      "name": "all ticket Gate/TB references resolve",
+      "passed": true
+    },
+    {
+      "name": "all JSON files parse",
+      "passed": true,
+      "details": 19
+    },
+    {
+      "name": "provided core SQL draft parses in temporary SQLite",
+      "passed": true,
+      "details": {
+        "scope": "仅SQL语法/内存建表，不是DSH driver/业务repository验证",
+        "sqliteVersion": "3.46.1"
+      }
+    },
+    {
+      "name": "38 embedded documents exactly match Markdown payloads",
+      "passed": true
+    },
+    {
+      "name": "all reader navigation targets exist",
+      "passed": true
+    },
+    {
+      "name": "task links target embedded Issue pages",
+      "passed": true
+    },
+    {
+      "name": "local reader links resolve",
+      "passed": true,
+      "details": []
+    },
+    {
+      "name": "baseline Markdown image references resolve",
+      "passed": true,
+      "details": []
+    },
+    {
+      "name": "no font binaries distributed",
+      "passed": true
+    },
+    {
+      "name": "33 reader interaction checks passed",
+      "passed": true,
+      "details": {
+        "fileNavigation": "Not verified: environment policy blocks file://; used set_content, no bypass",
+        "runtime": "No plugin/model/channel testing in this turn"
+      }
+    }
+  ],
+  "manualVisualReview": {
+    "done": true,
+    "viewed": [
+      "qa/01_冻结总览_桌面.png",
+      "qa/02_工程任务_桌面.png (top viewport)",
+      "qa/04_冻结说明_手机.png (top viewport)"
+    ],
+    "result": "已查看桌面总览、任务表和手机冻结说明，未见标题/图片/表格覆盖或页面横溢；手机宽表在局部容器滚动。"
+  }
+}

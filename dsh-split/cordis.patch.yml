@@ -1,0 +1,28 @@
+# Bundle layer for the dsh-split workbench plugin.
+#
+# `name` must be the bare package specifier: the client-module scan attaches a package's
+# browser half (`exports["./client"]`) to the row whose specifier is exactly that name, and
+# the bundle also has to be listed in the profile's `dsh.profile.bundles`.
+#
+# The contract-patch rows are appended by tools/workbench-install.mjs, and only when the
+# patched host packages are linked into the profile (see docs/host-change-decision.md). They
+# are absent from a plain install, so a missing link can never leave the app without a
+# Sidebar/workspace package.
+- insert:
+    - id: dsh-split
+      name: 'dsh-split'
+
+# ── contract patches (written by tools/workbench-install.mjs) ──
+- id: ui-sidebar-right
+  disabled: true
+- id: ui-workspace
+  disabled: true
+- id: ui-attachment
+  disabled: true
+- insert:
+    - id: dsh-patch-ui-sidebar-right
+      name: '@deepseek-ai/dsh-client-ui-sidebar-right'
+    - id: dsh-patch-ui-workspace
+      name: '@deepseek-ai/dsh-client-ui-workspace'
+    - id: dsh-patch-ui-attachment
+      name: '@deepseek-ai/dsh-client-ui-attachment'

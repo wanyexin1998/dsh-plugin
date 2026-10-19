@@ -1,0 +1,15 @@
+fake upstream: http://127.0.0.1:52109
+bridge:        http://127.0.0.1:52110
+
+PASS  listener binds 127.0.0.1 only  address=127.0.0.1 port=52110
+PASS  SSE streams chunk-by-chunk (no buffering)  first chunk @75ms, last @1120ms, 5 chunks, spread 1045ms
+PASS  Set-Cookie rewritten (Domain/Secure/Partitioned removed)  a=1; Path=/; HttpOnly; SameSite=Lax | b=2; Path=/; Max-Age=60
+PASS  Location rewritten to the local origin  http://127.0.0.1:52110/after
+PASS  gzip HTML inflated, integrity/crossorigin stripped, re-encoded  717 bytes, script tag => <script>
+PASS  seed script injected at the very start of <head>  <script>(function(){try{var m=/[?&]__bridge_seed=([^&]*)/.ex...
+PASS  POST body and content-type forwarded, Host = upstream host  {"method":"POST","contentType":"application/json","host":"127.0.0.1:52109","body":"{\"a\":1,\"b\":\"x\"}"}
+PASS  /__bridge/health is not forwarded upstream  {"ok":true,"upstream":"http://127.0.0.1:52109","port":52110}
+[bridge] port 52110 is busy -> falling back to an OS-assigned port
+PASS  port-busy fallback assigns an ephemeral port  busy 52110 -> fallback 52579
+
+ALL CHECKS PASSED

@@ -1,0 +1,60 @@
+{
+  "scope": "仅离线阅读器展示/交互检查，不是Taskboard/BOOP运行验收",
+  "errors": [],
+  "checks": [
+    {
+      "viewport": 1440,
+      "page": "overview",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 1440,
+      "page": "visual",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 1440,
+      "page": "doc6",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 1440,
+      "page": "doc5",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "darkToggle": true
+    },
+    {
+      "searchReactHits": 4
+    },
+    {
+      "mdExportName": "06_Taskboard复用审查与接入决策.md"
+    },
+    {
+      "viewport": 390,
+      "page": "overview",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 390,
+      "page": "visual",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "viewport": 390,
+      "page": "doc6",
+      "visible": true,
+      "bodyOverflow": false
+    },
+    {
+      "mobileMenuVisible": true
+    }
+  ]
+}

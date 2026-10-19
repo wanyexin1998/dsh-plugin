@@ -1,0 +1,54 @@
+{
+  "scope": "文档与资产一致性；不包含插件运行验证",
+  "checks": [
+    {
+      "name": "01_产品功能架构书.md保持原内容",
+      "passed": true
+    },
+    {
+      "name": "02_Agent_Harness与Loop技术方案.md保持原内容",
+      "passed": true
+    },
+    {
+      "name": "03_插件完整技术详细方案.md保持原内容",
+      "passed": true
+    },
+    {
+      "name": "06_Taskboard复用审查与接入决策.md保持原内容",
+      "passed": true
+    },
+    {
+      "name": "boop-brand-tokens.json未改变",
+      "passed": true
+    },
+    {
+      "name": "boop-tokens.json未改变",
+      "passed": true
+    },
+    {
+      "name": "boop.tokens.css未改变",
+      "passed": true
+    },
+    {
+      "name": "boop-ui-scope-v1.1.css未改变",
+      "passed": true
+    },
+    {
+      "name": "boop-kv-approved.png原始字节一致",
+      "passed": true
+    },
+    {
+      "name": "boop-character-approved.png原始字节一致",
+      "passed": true
+    },
+    {
+      "name": "Markdown图路径有效 ../assets/boop-kv-approved.png",
+      "passed": true
+    },
+    {
+      "name": "Markdown图路径有效 ../assets/boop-character-approved.png",
+      "passed": true
+    }
+  ],
+  "visual_inspection": "已查看桌面总览与手机第05册截图，图片比例和主要版面无明显异常。"
+}

@@ -1,0 +1,3 @@
+/* BOOP brand values: design proposal, not DSH-global overrides. */
+.boop-brand { --boop-brand-deep:#073f5c; --boop-brand:#449bcc; --boop-brand-soft:#eaf5fb; --boop-brand-highlight:#adddeb; --boop-brand-ink:#0b2637; --boop-interactive:#17648b; --boop-pearl:#f8f7f2; }
+/* Read native DSH theme values through the tested adapter. Do not style body globally. */

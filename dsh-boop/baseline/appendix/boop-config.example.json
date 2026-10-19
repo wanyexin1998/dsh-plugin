@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "productName": "BOOP",
+  "hostVersion": "0.2.0-rc.2",
+  "model": {
+    "providerId": null,
+    "modelId": "qwen3.8-27b",
+    "credentialRef": null,
+    "quantization": "4bit",
+    "declaredContext": "196k",
+    "contextWindowTokens": null,
+    "externalFallbackAllowed": false
+  },
+  "scope": {
+    "mode": "local-single-owner",
+    "sharedControl": "single-writer",
+    "differentDshHomes": "isolated"
+  },
+  "memory": {
+    "initialization": "ask-in-main-chat",
+    "importMaxBytes": 5242880,
+    "debounceMs": 2000,
+    "maxBatchInputTokens": 12000,
+    "maxBatchOutputTokens": 4000,
+    "retryMax": 2,
+    "embedding": "disabled"
+  },
+  "runtime": {
+    "sharedModelConcurrency": 1,
+    "foregroundPriority": true,
+    "compensationScanSeconds": 60,
+    "automaticBusinessRecovery": false,
+    "automaticReadonlyMemoryRecovery": true,
+    "costAccounting": false
+  },
+  "policy": {
+    "proxyDispatchEnabled": false,
+    "enableAfterGates": [
+      "G01",
+      "G02",
+      "G03",
+      "G04",
+      "G05",
+      "G08"
+    ],
+    "dangerousApproval": "dsh-human-only",
+    "autoHealingMaxSameFailure": 2,
+    "globalShellTool": false
+  },
+  "channels": {
+    "dingtalk": {
+      "enabled": false,
+      "mode": "application-bot-stream",
+      "groupsAllowed": false
+    },
+    "feishu": {
+      "enabled": false,
+      "mode": "official-sdk-events",
+      "groupsAllowed": false
+    }
+  },
+  "note": "设计示例，不是可直接加载的 DSH config；需 adapter 映射并完成接入探测。所有数字为可调设计初值。"
+}

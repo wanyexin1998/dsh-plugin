@@ -1,0 +1,22 @@
+flowchart TB
+  U[用户：Web / Desktop / 已绑定IM] --> UI[BOOP 唯一主聊天 + 轻量任务看板]
+  UI --> A[原生 DSH Agent + BOOP Preset]
+  A --> C[BOOP Task / Action 控制器]
+  C --> P[委托 / 版本 / 资源 / 审批门禁]
+  P --> AD[rc.2 受控通信适配层]
+  AD --> E[原有 Workspace / Session Agent]
+  E --> NP[原生工具权限与审批]
+  E --> O[轻量事件观察]
+  O --> C
+  O --> MJ[记忆增量队列：仅固定快照]
+  MJ --> EX[无业务工具的模型提取候选]
+  EX --> V[程序校验 + CAS事务提交]
+  V --> SM[Session工作记忆]
+  SM --> WM[Workspace项目记忆]
+  WM --> R[项目上下文与RAG]
+  R --> A
+  V -->|失效传播：不授权| C
+  C --> B[BOOP本地SQLite账本]
+  V --> B
+  E --> H[DSH原始会话日志]
+  H -->|证据回读| R

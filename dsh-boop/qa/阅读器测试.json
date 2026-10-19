@@ -1,0 +1,140 @@
+{
+  "scope": "仅本次冻结交接阅读器；不含插件、模型、渠道运行验证",
+  "method": "Chromium headless通过set_content渲染本地HTML；1440×1000、390×844。环境策略禁止file://导航，未声称实际文件双击打开已验证；截图人工复核另记",
+  "checks": [
+    {
+      "name": "HTML content rendering",
+      "passed": true
+    },
+    {
+      "name": "desktop overview no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "original embedded visual dimensions",
+      "passed": true
+    },
+    {
+      "name": "navigation hand0",
+      "passed": true
+    },
+    {
+      "name": "navigation hand1",
+      "passed": true
+    },
+    {
+      "name": "navigation hand2",
+      "passed": true
+    },
+    {
+      "name": "navigation hand3",
+      "passed": true
+    },
+    {
+      "name": "navigation hand4",
+      "passed": true
+    },
+    {
+      "name": "navigation hand5",
+      "passed": true
+    },
+    {
+      "name": "navigation overview",
+      "passed": true
+    },
+    {
+      "name": "navigation visual",
+      "passed": true
+    },
+    {
+      "name": "navigation doc1",
+      "passed": true
+    },
+    {
+      "name": "navigation doc2",
+      "passed": true
+    },
+    {
+      "name": "navigation doc3",
+      "passed": true
+    },
+    {
+      "name": "navigation doc4",
+      "passed": true
+    },
+    {
+      "name": "navigation doc5",
+      "passed": true
+    },
+    {
+      "name": "navigation doc6",
+      "passed": true
+    },
+    {
+      "name": "navigation sources",
+      "passed": true
+    },
+    {
+      "name": "work items rendered",
+      "passed": true
+    },
+    {
+      "name": "task link opens embedded issue",
+      "passed": true
+    },
+    {
+      "name": "issue export exactly matches package",
+      "passed": true
+    },
+    {
+      "name": "return from issue to work items",
+      "passed": true
+    },
+    {
+      "name": "cross-doc search works",
+      "passed": true
+    },
+    {
+      "name": "handoff Markdown export is exact",
+      "passed": true
+    },
+    {
+      "name": "approved KV modal opens",
+      "passed": true
+    },
+    {
+      "name": "approved KV modal closes",
+      "passed": true
+    },
+    {
+      "name": "dark mode",
+      "passed": true
+    },
+    {
+      "name": "mobile handoff no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "mobile visual document no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "mobile work item table independently scrolls",
+      "passed": true
+    },
+    {
+      "name": "print active section visible",
+      "passed": true
+    },
+    {
+      "name": "no JavaScript errors",
+      "passed": true,
+      "details": []
+    },
+    {
+      "name": "reader loads without external requests",
+      "passed": true,
+      "details": []
+    }
+  ]
+}

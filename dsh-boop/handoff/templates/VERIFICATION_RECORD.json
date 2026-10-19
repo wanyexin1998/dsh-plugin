@@ -1,0 +1,27 @@
+{
+  "baseline": "v1.2-FROZEN-R1",
+  "checkId": "G03",
+  "status": "NOT_RUN",
+  "implementationCommit": null,
+  "environment": {
+    "dshVersion": "0.2.0-rc.2",
+    "dshCommit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+    "os": null,
+    "node": null,
+    "electron": null,
+    "modelRoute": null,
+    "exactContextTokens": null,
+    "sdkVersion": null,
+    "testScope": "isolated-fixture"
+  },
+  "commands": [],
+  "expected": null,
+  "actual": null,
+  "artifacts": [],
+  "startedAt": null,
+  "finishedAt": null,
+  "executedBy": null,
+  "reviewedBy": null,
+  "limitations": [],
+  "securityNote": "不要填写密钥、token、完整私有对话或未经脱敏的服务器地址；这是模板不是运行结果。"
+}

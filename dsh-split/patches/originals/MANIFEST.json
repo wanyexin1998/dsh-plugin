@@ -1,0 +1,174 @@
+{
+  "source": "E:/deepseek-harness/resources/app.asar",
+  "extractedAt": "2026-10-15T15:02:49.806Z",
+  "files": [
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "LICENSE",
+      "bytes": 1065,
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.i18n.yaml",
+      "bytes": 1831,
+      "sha256": "63a6024aa96aefc3127b459fe09ed7f59c170bc672de9994cbd275384a407f57"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.md",
+      "bytes": 6923,
+      "sha256": "c4270eb1b909ccafb46440c1a834b2ec750ac4bc512d35a9b8a6e14ae99f0a80"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.zh.md",
+      "bytes": 6312,
+      "sha256": "7dd37f8adc19aa70609a56fd104ee5b7188b91c83e783722ece7d0dde42c4c11"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "bytes": 44965,
+      "sha256": "ee6cd9e7010faec1d94ec4e6a711bb6d69e84005bf97a1962fa28433977c57b1"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/index.js",
+      "bytes": 229,
+      "sha256": "ef16c813d42ad74dfd707e162af400f65ddd0f8cb1fd3b22e91bbd1f751fc80f"
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "package.json",
+      "bytes": 1922,
+      "sha256": "2f6cd7347c9847ec98fee589e7de130200db4b05875b02889360220f3ac7b6ce"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "LICENSE",
+      "bytes": 1065,
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.i18n.yaml",
+      "bytes": 1652,
+      "sha256": "d9e1a0d7963e4e882963f7f3f964c6e0b171c38a3a9c3a86e0df6ddb4b92e603"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.md",
+      "bytes": 9892,
+      "sha256": "4750f70b0e69f1dd6025697a467b3bf7a99abf6abac42d0d5a96433dbe7bd9e3"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.zh.md",
+      "bytes": 8784,
+      "sha256": "e7bcf134d80a3d78fd6d5f87326f045f58388537ccd824fb3b83da5dc21ad069"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "lib/client.js",
+      "bytes": 31732,
+      "sha256": "980ab8c5adccd46b46b655ba3016a5851661e932f27e89c5ef033c0ec6c62f84"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "lib/index.js",
+      "bytes": 180,
+      "sha256": "c62669c2bcf72075724aa3d4c90bb6064f8b5952322c7950640cc8ca95389859"
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "package.json",
+      "bytes": 1803,
+      "sha256": "615b22c04a33ffc221b4077a7cdf3bdd8fcbc82221638879db4d9cf6a8448623"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "LICENSE",
+      "bytes": 1065,
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.i18n.yaml",
+      "bytes": 2091,
+      "sha256": "d96f29a780ded7b5a1b9a92cb66f91333c7c8b409db0f48274e88669aa14062f"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.md",
+      "bytes": 26278,
+      "sha256": "4db0d3726b9e860a6d216a00e4d55ea3f6bf731038604c6e345437c68efdc0f6"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.zh.md",
+      "bytes": 23891,
+      "sha256": "2078ff0dce21b19de5b229a7bcccfc5373d516ddaa4390de040d5b86e9633fbc"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "bytes": 331036,
+      "sha256": "5e8426c9378944050768abd3706009fe22aaae764ce4a9ede85e83a349464108"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/index.js",
+      "bytes": 225,
+      "sha256": "c6edb0b0d3fd64404d353b7ac6502e82ed54919e2a2f5d59fd0f5fedd287bfce"
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "package.json",
+      "bytes": 2551,
+      "sha256": "f2c0c85b515f2810c35828bd7c1eff19e99a7bffd33f171c37aa03ea9f026bd8"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "LICENSE",
+      "bytes": 1065,
+      "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.i18n.yaml",
+      "bytes": 3012,
+      "sha256": "5c10edd2a8d0356ee3d60f94a05b6b0be565a8e2a4b4087cffb08163a179e9ac"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.md",
+      "bytes": 29127,
+      "sha256": "870129c5356ba1c5fc70ee3617f74a64a66ae47bb6b0df60777f8048b0143869"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.zh.md",
+      "bytes": 27159,
+      "sha256": "ba829e7750450d387afcafaab48800a5bfbd44685f8036d48ee227919df565ef"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/client.js",
+      "bytes": 200124,
+      "sha256": "29c34ce1c2a437cf8a50ba35d1ae44741114439e37a17153dfd4b1aa942aa955"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/index.js",
+      "bytes": 453,
+      "sha256": "e6cdc4b725585354102a5c4598c9d8c79d6abac62d7979c09919821716370438"
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "package.json",
+      "bytes": 2987,
+      "sha256": "1664f6d24e2d5817d5d42cead5faa5fb1d0202358b300b338e791da0b4972951"
+    }
+  ]
+}

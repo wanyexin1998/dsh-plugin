@@ -1,0 +1,12 @@
+flowchart TD
+  START[Host启动] --> LOCK[版本/DB/单写lease]
+  LOCK --> GATE[先注册BOOP来源与恢复门禁]
+  GATE --> READ[只读扫描inbox/log/outbox]
+  READ --> M[继续合法的记忆整理与状态对账]
+  READ --> T[旧业务Task设为recovery_required]
+  T --> USER{用户明确恢复？}
+  USER -->|否| WAIT[保持等待，不自动投递]
+  USER -->|是| CHECK[重新核查目标/事实/版本/权限]
+  CHECK --> SAFE{前提成立？}
+  SAFE -->|是| SEND[放行新版本受控动作]
+  SAFE -->|否| WAIT

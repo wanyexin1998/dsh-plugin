@@ -1,0 +1,77 @@
+{
+  "status": "document-artifact validation only; not plugin runtime acceptance",
+  "date": "2026-10-16",
+  "documents": [
+    {
+      "title": "产品功能架构书",
+      "characters": 8540,
+      "sections": 17
+    },
+    {
+      "title": "Agent_Harness与Loop技术方案",
+      "characters": 9787,
+      "sections": 16
+    },
+    {
+      "title": "插件完整技术详细方案",
+      "characters": 20330,
+      "sections": 23
+    },
+    {
+      "title": "前端设计方案",
+      "characters": 7082,
+      "sections": 16
+    },
+    {
+      "title": "BOOP（波波）视觉设计方案",
+      "characters": 4733,
+      "sections": 11
+    }
+  ],
+  "sourceCount": 27,
+  "decisionCount": 15,
+  "acceptanceCount": 40,
+  "sql": {
+    "sqliteVersion": "3.46.1",
+    "schemaExecuted": true,
+    "tests": [
+      {
+        "test": "未验收不可直接completed",
+        "passed": true
+      },
+      {
+        "test": "跨scope action引用拒绝",
+        "passed": true
+      },
+      {
+        "test": "IM event复投唯一约束",
+        "passed": true
+      },
+      {
+        "test": "未知事实状态拒绝",
+        "passed": true
+      }
+    ],
+    "foreignKeyCheck": []
+  },
+  "contrast": {
+    "checks": 12,
+    "allPassed": true
+  },
+  "runtimeGates": {
+    "G01": "not executed",
+    "G02": "not executed",
+    "G03": "not executed",
+    "G04": "not executed",
+    "G05": "not executed",
+    "G06": "not executed",
+    "G07": "not executed",
+    "G08": "not executed",
+    "G09": "not executed"
+  },
+  "typeScript": {
+    "command": "tsc --noEmit --strict --target ES2022 --lib ES2022,DOM appendix/boop-contracts.ts",
+    "passed": true,
+    "scope": "BOOP own interface declarations only; no DSH adapter implementation or runtime validated"
+  }
+}

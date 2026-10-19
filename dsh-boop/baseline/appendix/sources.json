@@ -1,0 +1,217 @@
+{
+  "date": "2026-10-16",
+  "dshCommit": "639ed015397290b3745d163aafe02ffee4aa3f84",
+  "botCommit": "9411ac3629f4c0494c7963a371dee703c2cfd7aa",
+  "museCommit": "3d8f1a787bc9c32058e44d2fe6434dec41b7647d",
+  "sources": {
+    "S01": {
+      "title": "DSH 0.2.0-rc.2 发布基线",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.0-rc.2"
+    },
+    "S02": {
+      "title": "DSH Agent Loop",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/core/agent-loop/README.md"
+    },
+    "S03": {
+      "title": "DSH Session Controller",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/api/session-controller/README.md"
+    },
+    "S04": {
+      "title": "DSH Session 请求与回执类型",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/api/session-controller/src/types.ts"
+    },
+    "S05": {
+      "title": "DSH UI Layout / 全局 Panel",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/client/ui-layout/README.md"
+    },
+    "S06": {
+      "title": "DSH Conversation / 输入与扩展位",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/client/ui-conversation/README.md"
+    },
+    "S07": {
+      "title": "DeepSeek-Bot 插件装配",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/index.js"
+    },
+    "S08": {
+      "title": "DeepSeek-Bot 消息投递",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/delivery.js"
+    },
+    "S09": {
+      "title": "DeepSeek-Bot 记忆复核与游标",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/memory.js"
+    },
+    "S10": {
+      "title": "DeepSeek-Bot 长对话与分段",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/parts.js"
+    },
+    "S11": {
+      "title": "DeepSeek-Bot FTS5 历史索引",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/chat-index.js"
+    },
+    "S12": {
+      "title": "DeepSeek-Bot 中断续接",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/resume.js"
+    },
+    "S13": {
+      "title": "DeepSeek-Bot 审批路由",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/src/host/approvals.js"
+    },
+    "S14": {
+      "title": "nanoMuse Preset",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/dsh-nanomuse/presets/nanomuse.patch.yml"
+    },
+    "S15": {
+      "title": "nanoMuse Rooms / Activity / Goal",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/dsh-nanomuse/src/rooms.ts"
+    },
+    "S16": {
+      "title": "nanoMuse TaskRunner",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/dsh-nanomuse/src/task.ts"
+    },
+    "S17": {
+      "title": "nanoMuse Python MemoryStore",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/nanomuse/memory/store.py"
+    },
+    "S18": {
+      "title": "nanoMuse 记忆整理规则",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/nanomuse/memory/consolidate.py"
+    },
+    "S19": {
+      "title": "nanoMuse 全局替换配置",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/dsh-nanomuse/cordis.patch.yml"
+    },
+    "S20": {
+      "title": "nanoMuse 非稳定 DOM 钩子检查",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/desktop/scripts/check-hooks.mjs"
+    },
+    "S21": {
+      "title": "DeepSeek-Bot 包与许可证声明",
+      "url": "https://github.com/Fei2411/DeepSeek-Bot/blob/9411ac3629f4c0494c7963a371dee703c2cfd7aa/ds-bot/package.json"
+    },
+    "S22": {
+      "title": "nanoMuse 包与许可证声明",
+      "url": "https://github.com/nano-muse/nanoMuse/blob/3d8f1a787bc9c32058e44d2fe6434dec41b7647d/harness/dsh-nanomuse/package.json"
+    },
+    "S23": {
+      "title": "Qwen 官方模型卡",
+      "url": "https://huggingface.co/Qwen/Qwen3.8-27B"
+    },
+    "S24": {
+      "title": "钉钉官方 Stream 概述",
+      "url": "https://opensource.dingtalk.com/developerpedia/docs/learn/stream/overview/"
+    },
+    "S25": {
+      "title": "飞书官方 Node SDK",
+      "url": "https://github.com/larksuite/node-sdk/blob/main/README.md"
+    },
+    "S26": {
+      "title": "SQLite FTS5 官方文档",
+      "url": "https://www.sqlite.org/fts5.html"
+    },
+    "S27": {
+      "title": "DSH Workspace 源码契约（补充阅读，非本轮 rc.2 核验）",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/86a402200d95fecef4529d969836f1fe13c6cb0d/packages/workspace/workspace/README.md"
+    },
+    "S28": {
+      "title": "Taskboard 源码基线",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/commit/723c400eec86c454c1ffa56ee1b500746d41e142"
+    },
+    "S29": {
+      "title": "Taskboard 包与依赖",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/package.json"
+    },
+    "S30": {
+      "title": "Taskboard 原生集成客户端",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/integrations/deepseek-harness/client.js"
+    },
+    "S31": {
+      "title": "Taskboard 原生集成 Host",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/integrations/deepseek-harness/index.js"
+    },
+    "S32": {
+      "title": "Taskboard 看板列组件",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/web/src/components/BoardColumn.tsx"
+    },
+    "S33": {
+      "title": "Taskboard 任务卡",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/web/src/components/TaskCard.tsx"
+    },
+    "S34": {
+      "title": "Taskboard 详情组件",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/web/src/components/TaskDetail.tsx"
+    },
+    "S35": {
+      "title": "Taskboard 应用总装配",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/web/src/App.tsx"
+    },
+    "S36": {
+      "title": "Taskboard 业务类型",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/web/src/types.ts"
+    },
+    "S37": {
+      "title": "Taskboard 使用与安全边界",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/README.zh-CN.md"
+    },
+    "S38": {
+      "title": "Taskboard 许可证",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/LICENSE"
+    },
+    "S39": {
+      "title": "DSH rc.2 React 依赖",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/client/ui-conversation/package.json"
+    },
+    "S40": {
+      "title": "Taskboard 版本冲突测试",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/test/server.test.mjs"
+    },
+    "S41": {
+      "title": "Taskboard 数据访问",
+      "url": "https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/server/database.mjs"
+    },
+    "S42": {
+      "title": "Apache 2.0 分发条件",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+    "S43": {
+      "title": "DHTMLX v10 社区版许可与版本迁移",
+      "url": "https://docs.dhtmlx.com/gantt/migration/"
+    }
+  },
+  "taskboardCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+  "reviewScope": "静态源码审读；未运行第三方仓库、未完成 DSH 安装或模型/渠道联调。",
+  "documentPackVersion": "1.2",
+  "visualAssets": [
+    {
+      "id": "kv",
+      "title": "BOOP（波波）KV / VI 品牌板",
+      "file": "boop-kv-approved.png",
+      "original_filename": "波波鲸鱼_ai_品牌设计板.png",
+      "source": "本次对话生成图；用户确认“可以可以放到文档中”",
+      "status": "user-approved-visual",
+      "version": "1.2",
+      "width": 1536,
+      "height": 1024,
+      "format": "PNG",
+      "mode": "RGB",
+      "transparent": false,
+      "sha256": "8441a468bc524ffcc783f0d2cc8ae9fbdc270d310d57103fb575cadc749c55b2",
+      "notes": "原始 PNG 原样保存；非矢量文件、非三维模型源文件。"
+    },
+    {
+      "id": "character",
+      "title": "BOOP（波波）角色实体图",
+      "file": "boop-character-approved.png",
+      "original_filename": "深海蓝色q版鲸鱼玩偶.png",
+      "source": "本次对话生成图；用户确认“可以可以放到文档中”",
+      "status": "user-approved-visual",
+      "version": "1.2",
+      "width": 1254,
+      "height": 1254,
+      "format": "PNG",
+      "mode": "RGB",
+      "transparent": false,
+      "sha256": "7652b44586111b86047fa86ffe883069570990763ec446f66aad568a4c23e71e",
+      "notes": "原始 PNG 原样保存；非矢量文件、非三维模型源文件。"
+    }
+  ]
+}

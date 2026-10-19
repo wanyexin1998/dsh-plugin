@@ -1,0 +1,595 @@
+/* Fresh v5 chrome. Source: the frozen 2026-10-15 HTML prototype only.
+ * Native Conversation / Sidebar subtrees are scope limits, not style targets.
+ */
+:where([data-v5-workbench], [data-v5-overlay]) {
+  --v5-bg: var(--dsw-alias-bg-base, #ffffff);
+  --v5-nav: #f0efe9;
+  --v5-surface: var(--v5-bg);
+  --v5-ink: var(--dsw-alias-label-primary, #282824);
+  --v5-muted: var(--dsw-alias-label-secondary, #77766e);
+  --v5-faint: #aaa99f;
+  --v5-line: #e1dfd7;
+  --v5-hover: var(--dsw-alias-interactive-bg-hover, #eeeeee);
+  --v5-strong: #45453e;
+  --v5-preview: rgba(94, 96, 83, .11);
+  --v5-preview-line: #878b76;
+  --v5-shadow: 0 14px 50px #2222;
+  --v5-radius: 12px;
+  --v5-sidebar-shadow: 0 1px 2px rgba(24, 28, 21, .035), 0 4px 12px -4px rgba(24, 28, 21, .065);
+  --v5-inactive-veil: var(--v5-bg);
+  --v5-canvas-bg: var(--dsw-specific-sidebar-fill, var(--v5-bg));
+  --v5-session-active-bg: var(--v5-bg);
+  --v5-session-inactive-bg: color-mix(in srgb, var(--v5-bg) 60%, var(--v5-canvas-bg));
+  --v5-ui-font: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+:where([data-v5-workbench], [data-v5-overlay])[data-theme="dark"] {
+  --v5-bg: var(--dsw-alias-bg-base, #141414);
+  --v5-nav: #262622;
+  --v5-surface: var(--v5-bg);
+  --v5-ink: var(--dsw-alias-label-primary, #e8e7df);
+  --v5-muted: var(--dsw-alias-label-secondary, #aaa99d);
+  --v5-faint: #79796f;
+  --v5-line: #41413a;
+  --v5-hover: var(--dsw-alias-interactive-bg-hover, #303030);
+  --v5-strong: #d6d5c8;
+  --v5-preview: rgba(199, 201, 178, .1);
+  --v5-preview-line: #a3a68e;
+  --v5-shadow: 0 14px 50px #0005;
+  --v5-sidebar-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 4px 12px -4px rgba(0, 0, 0, .20);
+  --v5-inactive-veil: var(--v5-bg);
+  color-scheme: dark;
+}
+
+[data-v5-workbench] {
+  --dv-separator-border: transparent;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: transparent;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--v5-canvas-bg);
+  isolation: isolate;
+}
+
+/* Only sizing is assigned to the native mounts. Their descendants keep their
+ * own typography, controls, tabs, scrollbars, editor, terminal and iframe CSS.
+ */
+[data-v5-workbench] :is(.v5-native-conversation, .v5-native-sidebar) {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+[data-v5-workbench] :is(.v5-native-conversation, .v5-native-sidebar) > * {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The enclosing Sidebar already supplies its perimeter. Suppress only the
+ * native first dock column's duplicate left edge, not internal dividers. */
+[data-v5-workbench] .v5-native-sidebar [data-dockkit-host="dock"][data-dockkit-column="0"] > [data-dockkit-content] {
+  border-left: 0;
+}
+
+/* Second deliberate boundary exception (recorded in docs/visual-contract.md): the shipped
+ * session header tucks its last control into its own right padding
+ * (`headerCorner { margin-left: 8px; margin-right: -16px }` against `padding-right: 28px`),
+ * which leaves only 12px right of the shipped Sidebar control — 8px short of the 28px
+ * session-action size. Widening that one padding by 36px shifts the shipped group
+ * (actions / utilities / corner) exactly one slot left, so the pane's own close control
+ * takes the freed corner with the shipped 12px edge clearance and an 8px gap to the
+ * Sidebar control. The title row simply ellipsizes 36px earlier; nothing else moves,
+ * and the shipped single-session view has no `.v5-native-conversation` wrapper, so it is
+ * untouched. Selectors are structural (the shipped class names are hashed); matching the
+ * header slot wrapper and the direct-child fallback keeps message-level <header> elements
+ * out of scope. */
+[data-v5-workbench] .v5-native-conversation [data-slot="conversation.header"] > header,
+[data-v5-workbench] .v5-native-conversation > header {
+  padding-right: 64px;
+}
+
+@scope ([data-v5-workbench], [data-v5-overlay]) to (.v5-native-conversation, .v5-native-sidebar) {
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  :is(button, input, textarea, select) {
+    font: inherit;
+    color: inherit;
+    -webkit-app-region: no-drag;
+  }
+  button {
+    appearance: none;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    cursor: pointer;
+    transition: background 100ms;
+  }
+  button:disabled { cursor: not-allowed; opacity: .35; }
+  button:hover:not(:disabled) { background: var(--v5-hover); }
+  :is(button, input, textarea, select, a):focus-visible {
+    outline: 2px solid var(--v5-preview-line);
+    outline-offset: 2px;
+  }
+  a { -webkit-app-region: no-drag; }
+  svg {
+    display: inline-block;
+    width: 17px;
+    height: 17px;
+    flex: none;
+    vertical-align: middle;
+  }
+  button :is(svg, span, small) { pointer-events: none; }
+
+  .v5-engine {
+    position: absolute;
+    inset: 8px 0;
+    width: 100%;
+    height: calc(100% - 16px);
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    --dv-separator-border: transparent;
+    --dv-sash-color: transparent;
+    --dv-active-sash-color: transparent;
+    --dv-group-view-background-color: transparent;
+    --dv-background-color: transparent;
+  }
+  .v5-engine .dv-dockview {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+  .v5-engine :is(.dv-groupview, .dv-content-container, .dv-content-container > .dv-view) {
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .v5-engine .dv-groupview > .dv-tabs-and-actions-container {
+    display: none !important;
+  }
+  /* Outer resize handles remain operable and focusable, but never draw a
+   * line. These rules do not match the inner Sidebar handle below.
+   */
+  .v5-engine :is(.dv-sash, .dv-separator),
+  .v5-outer-separator {
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    touch-action: none;
+  }
+  .v5-engine :is(.dv-sash, .dv-separator)::before,
+  .v5-engine :is(.dv-sash, .dv-separator)::after,
+  .v5-outer-separator::before,
+  .v5-outer-separator::after {
+    content: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .v5-outer-separator[data-axis="x"] { cursor: col-resize; }
+  .v5-outer-separator[data-axis="y"] { cursor: row-resize; }
+
+  .v5-panel-mount {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+  .v5-session {
+    /* The colors above resolve against the native page before this local
+     * token override. Native chat and Sidebar surfaces inherit the same base;
+     * the surrounding app and the transparent workspace remain untouched. */
+    --v5-session-bg: var(--v5-session-active-bg);
+    --dsw-alias-bg-base: var(--v5-session-bg);
+    --v5-surface: var(--v5-session-bg);
+    --v5-inactive-veil: var(--v5-session-bg);
+    position: relative;
+    display: grid;
+    grid-template-rows: 8px minmax(0, 1fr);
+    padding: 0 8px 8px;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--v5-radius);
+    background: var(--v5-surface);
+    box-shadow: none;
+    isolation: isolate;
+  }
+  .v5-session::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    border-radius: inherit;
+    background: var(--v5-inactive-veil);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease-out;
+  }
+  .v5-session[data-active="false"]::after { opacity: .16; }
+  .v5-session[data-active="false"] { --v5-session-bg: var(--v5-session-inactive-bg); }
+
+  .v5-session-body {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    container-type: size;
+    /* Leave room for the restrained Sidebar shadow inside the session's
+     * padding; the outer session still clips anything beyond its boundary. */
+    overflow: visible;
+  }
+  .v5-session-layout {
+    display: grid;
+    width: 100%; height: 100%; min-width: 0; min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "chat";
+  }
+  .v5-session-layout[data-side="right"][data-sidebar-open="true"] { grid-template-columns: minmax(0,1fr) 12px var(--v5-sidebar-track); grid-template-areas: "chat divider sidebar"; }
+  .v5-session-layout[data-side="left"][data-sidebar-open="true"] { grid-template-columns: var(--v5-sidebar-track) 12px minmax(0,1fr); grid-template-areas: "sidebar divider chat"; }
+  .v5-session-layout[data-side="bottom"][data-sidebar-open="true"] { grid-template-rows: minmax(0,1fr) 12px var(--v5-sidebar-track); grid-template-areas: "chat" "divider" "sidebar"; }
+  .v5-session-layout[data-side="top"][data-sidebar-open="true"] { grid-template-rows: var(--v5-sidebar-track) 12px minmax(0,1fr); grid-template-areas: "sidebar" "divider" "chat"; }
+  .v5-session-layout[data-sidebar-open="false"] > :is(.v5-sidebar, .v5-inner-divider) { display: none; }
+  :is(.v5-session-drag, .v5-sidebar-drag) {
+    position: relative; width: 100%; height: 8px; min-height: 8px; flex: 0 0 8px;
+    padding: 0; border-radius: 0; cursor: grab; touch-action: none;
+    -webkit-app-region: no-drag;
+  }
+  :is(.v5-session-drag, .v5-sidebar-drag):hover:not(:disabled) { background: transparent; }
+  :is(.v5-session-drag, .v5-sidebar-drag):active { cursor: grabbing; }
+  :is(.v5-session-drag, .v5-sidebar-drag):focus-visible { outline: none; }
+  :is(.v5-session-drag, .v5-sidebar-drag)::after {
+    content: ""; position: absolute; top: 3px; left: calc(50% - 18px);
+    width: 36px; height: 2px; border-radius: 2px; background: var(--v5-muted); opacity: 0;
+  }
+  :is(.v5-session-drag, .v5-sidebar-drag):is(:hover, :focus-visible)::after { opacity: .55; }
+  :is(.v5-session-drag, .v5-sidebar-drag):focus-visible::after { opacity: 1; }
+  /* The pane's own close control: the last action of the conversation column's header row,
+     i.e. to the right of the shipped Sidebar control. It is anchored to `.v5-conversation`
+     (not the session shell) so it keeps the header's right end when the shipped Sidebar is
+     docked right and open, and it is hidden exactly when that column is hidden (the left
+     session menu keeps offering 关闭此分屏 there). Frozen session-action size: 28px, icon 15px. */
+  .v5-conversation > .v5-session-close {
+    position: absolute; top: 11px; right: 12px; z-index: 25;
+    width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0;
+    display: grid; place-items: center; border-radius: 8px;
+    color: var(--v5-muted); cursor: pointer; -webkit-app-region: no-drag;
+  }
+  .v5-conversation > .v5-session-close:hover { background: var(--v5-hover); color: var(--v5-ink); }
+  .v5-conversation > .v5-session-close svg { width: 15px; height: 15px; }
+  .v5-conversation {
+    position: relative;
+    grid-area: chat;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+  }
+  .v5-sidebar {
+    position: relative;
+    grid-area: sidebar;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--dsw-alias-border-l3, var(--v5-line)) 55%, transparent);
+    border-radius: var(--v5-radius);
+    background: var(--v5-surface);
+    box-shadow: var(--v5-sidebar-shadow);
+  }
+  .v5-sidebar-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .v5-inner-divider {
+    position: relative;
+    grid-area: divider;
+    z-index: 4;
+    border: 0;
+    outline: none;
+    background: transparent;
+    touch-action: none;
+  }
+  .v5-inner-divider::after {
+    content: "";
+    position: absolute;
+    border-radius: 2px;
+    background: transparent;
+  }
+  .v5-inner-divider[data-axis="x"] { cursor: col-resize; }
+  .v5-inner-divider[data-axis="x"]::after {
+    top: calc(50% - 15px);
+    left: calc(50% - 1px);
+    width: 2px;
+    height: 30px;
+  }
+  .v5-inner-divider[data-axis="y"] { cursor: row-resize; }
+  .v5-inner-divider[data-axis="y"]::after {
+    top: calc(50% - 1px);
+    left: calc(50% - 15px);
+    width: 30px;
+    height: 2px;
+  }
+  .v5-inner-divider:is(:hover, :focus-visible)::after { background: var(--v5-faint); }
+  .v5-mobile-return {
+    grid-area: return;
+    z-index: 5;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    padding: 7px;
+    background: var(--v5-bg);
+    color: var(--v5-muted);
+    font: 10px var(--v5-ui-font);
+  }
+  @container (width < 535px) {
+    .v5-session-layout[data-axis="x"][data-sidebar-open="true"] {
+      grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 28px; grid-template-areas: "sidebar" "return";
+    }
+    .v5-session-layout[data-axis="x"][data-sidebar-open="true"] > :is(.v5-conversation, .v5-inner-divider) { display: none; }
+    .v5-session-layout[data-axis="x"][data-sidebar-open="true"] > .v5-mobile-return { display: flex; }
+  }
+  @container (height < 322px) {
+    .v5-session-layout[data-axis="y"][data-sidebar-open="true"] {
+      grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 28px; grid-template-areas: "sidebar" "return";
+    }
+    .v5-session-layout[data-axis="y"][data-sidebar-open="true"] > :is(.v5-conversation, .v5-inner-divider) { display: none; }
+    .v5-session-layout[data-axis="y"][data-sidebar-open="true"] > .v5-mobile-return { display: flex; }
+  }
+  .v5-session-layout[data-sidebar-open="true"][data-fullscreen="true"] {
+    grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); grid-template-areas: "sidebar";
+  }
+  .v5-session-layout[data-sidebar-open="true"][data-fullscreen="true"] > :is(.v5-conversation, .v5-inner-divider, .v5-mobile-return) { display: none; }
+
+  :is(.v5-menu, .v5-dialog, .v5-toast, .v5-drag-preview, .v5-drag-ghost, .v5-drag-scope, .v5-empty, .v5-projection-note) {
+    color: var(--v5-ink);
+    font: 13px var(--v5-ui-font);
+  }
+  .v5-menu {
+    position: fixed;
+    z-index: 120;
+    min-width: 145px;
+    max-width: min(280px, calc(100vw - 16px));
+    padding: 5px;
+    border: 1px solid var(--v5-line);
+    border-radius: 10px;
+    background: var(--v5-surface);
+    box-shadow: var(--v5-shadow);
+  }
+  .v5-menu[data-kind="session"] { min-width: 218px; }
+  .v5-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 9px;
+    font-size: 11px;
+    text-align: left;
+  }
+  .v5-menu button:disabled { opacity: .42; }
+  .v5-menu button:focus-visible { outline-offset: -2px; }
+  .v5-menu button svg { width: 13px; }
+  .v5-menu-label { padding: 7px 9px; color: var(--v5-muted); font-size: 9px; }
+  .v5-menu-title {
+    overflow: hidden;
+    padding: 8px 9px 3px;
+    font-size: 11px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .v5-menu-note {
+    max-width: 248px;
+    padding: 7px 9px 8px;
+    color: var(--v5-muted);
+    font-size: 10px;
+    line-height: 1.65;
+    white-space: normal;
+  }
+  .v5-menu :is(hr, [role="separator"]) { margin: 4px 0; border: 0; border-top: 1px solid var(--v5-line); }
+
+  .v5-dialog {
+    width: min(510px, calc(100vw - 32px));
+    max-height: calc(100dvh - 70px);
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid var(--v5-line);
+    border-radius: 16px;
+    background: var(--v5-surface);
+    box-shadow: var(--v5-shadow);
+  }
+  .v5-dialog::backdrop { background: #24241e40; backdrop-filter: blur(2px); }
+  .v5-dialog-head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 24px 25px 16px;
+  }
+  .v5-dialog-head h2 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.4px; }
+  .v5-dialog-head p { margin: 8px 0 0; color: var(--v5-muted); font-size: 11px; line-height: 1.7; }
+  .v5-dialog-head > button { display: grid; place-items: center; width: 27px; height: 27px; color: var(--v5-muted); }
+  .v5-dialog-head svg { width: 15px; }
+  .v5-dialog-body { max-height: calc(100dvh - 230px); overflow: auto; padding: 0 25px 24px; }
+  .v5-dialog-note { margin: 12px 0 0; color: var(--v5-muted); font-size: 11px; line-height: 1.7; }
+  .v5-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 15px 25px;
+    border-top: 1px solid var(--v5-line);
+  }
+  .v5-field-label { display: block; margin: 12px 0 7px; color: var(--v5-muted); font-size: 11px; }
+  .v5-dialog :is(select, input[type="text"], input[type="search"]) {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--v5-line);
+    border-radius: 7px;
+    background: var(--v5-surface);
+    font-size: 12px;
+  }
+  .v5-direction-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 13px; }
+  .v5-direction-buttons button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 7px;
+    border: 1px solid var(--v5-line);
+    font-size: 11px;
+  }
+  .v5-direction-buttons button:is([aria-pressed="true"]) {
+    border-color: var(--v5-muted);
+    background: var(--v5-hover);
+  }
+  .v5-primary { padding: 9px 16px; border-radius: 8px; background: var(--v5-ink); color: var(--v5-bg); font-size: 12px; }
+  .v5-primary:hover:not(:disabled) { background: var(--v5-strong); }
+  .v5-secondary { padding: 8px 13px; border: 1px solid var(--v5-line); border-radius: 7px; font-size: 12px; }
+
+  .v5-drag-shield { position: fixed; inset: 0; z-index: 80; background: transparent; pointer-events: auto; user-select: none; cursor: grabbing; }
+  .v5-drag-shield[data-axis="x"] { cursor: col-resize; }
+  .v5-drag-shield[data-axis="y"] { cursor: row-resize; }
+  .v5-drag-preview {
+    position: fixed;
+    z-index: 85;
+    display: grid;
+    place-items: center;
+    border: 1.5px dashed var(--v5-preview-line);
+    border-radius: 10px;
+    background: var(--v5-preview);
+    color: var(--v5-strong);
+    pointer-events: none;
+  }
+  .v5-drag-preview > :is(span, label) {
+    padding: 7px 12px;
+    border: 1px solid var(--v5-line);
+    border-radius: 6px;
+    background: var(--v5-surface);
+    box-shadow: 0 3px 12px #0001;
+    font-size: 12px;
+  }
+  .v5-drag-ghost {
+    position: fixed;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(290px, calc(100vw - 16px));
+    padding: 9px 12px;
+    border: 1px solid var(--v5-line);
+    border-radius: 7px;
+    background: var(--v5-surface);
+    box-shadow: 0 5px 20px #0002;
+    font-size: 11px;
+    pointer-events: none;
+  }
+  .v5-drag-ghost small { color: var(--v5-muted); font-size: 9px; }
+  .v5-drag-scope { position: fixed; z-index: 82; border: 1px dashed var(--v5-line); border-radius: 4px; pointer-events: none; }
+  .v5-edge-label {
+    position: absolute;
+    padding: 5px 9px;
+    border: 1px solid var(--v5-line);
+    border-radius: 5px;
+    background: var(--v5-surface);
+    color: var(--v5-muted);
+    font-size: 10px;
+    opacity: .95;
+    white-space: nowrap;
+  }
+  .v5-edge-label[data-side="left"] { top: 50%; left: 6px; transform: translateY(-50%); }
+  .v5-edge-label[data-side="right"] { top: 50%; right: 6px; transform: translateY(-50%); }
+  .v5-edge-label[data-side="top"] { top: 6px; left: 50%; transform: translateX(-50%); }
+  .v5-edge-label[data-side="bottom"] { bottom: 6px; left: 50%; transform: translateX(-50%); }
+  .v5-toast {
+    position: fixed;
+    bottom: 45px;
+    left: 50%;
+    z-index: 130;
+    max-width: min(560px, 85vw);
+    padding: 10px 16px;
+    border: 1px solid var(--v5-line);
+    border-radius: 9px;
+    background: var(--v5-surface);
+    box-shadow: 0 5px 18px #0001;
+    font-size: 12px;
+    line-height: 1.65;
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+  .v5-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    padding: 24px;
+    color: var(--v5-muted);
+  }
+  .v5-empty h2 { margin: 0; color: var(--v5-ink); font-size: 22px; font-weight: 500; }
+  .v5-empty p { margin: 0; line-height: 1.7; text-align: center; }
+  .v5-projection-note {
+    position: absolute;
+    right: 12px;
+    bottom: 8px;
+    left: 12px;
+    z-index: 21;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--v5-muted);
+    font-size: 10px;
+    pointer-events: none;
+  }
+  .v5-projection-note button {
+    padding: 5px 8px;
+    border: 1px solid var(--v5-line);
+    border-radius: 5px;
+    background: var(--v5-surface);
+    pointer-events: auto;
+  }
+
+  @media (max-width: 800px) {
+    .v5-session { padding: 0 6px 6px; }
+  }
+  @media (max-width: 380px) {
+    .v5-direction-buttons { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+}

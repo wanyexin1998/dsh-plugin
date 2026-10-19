@@ -1,0 +1,18 @@
+stateDiagram-v2
+  [*] --> planned
+  planned --> awaiting_approval: 需要精确批准
+  planned --> dispatching: 范围与前提通过
+  awaiting_approval --> dispatching: 批准有效且再次校验
+  awaiting_approval --> rejected: 拒绝或过期
+  dispatching --> accepted: 原生接收证据
+  dispatching --> outcome_unknown: 接收结果未知
+  accepted --> running: 精确关联的执行开始
+  running --> settled: 执行结束（不等于验收通过）
+  running --> stopped: 取消已结算
+  running --> outcome_unknown: 副作用结果未知
+  outcome_unknown --> accepted: 对账证实已接收
+  outcome_unknown --> settled: 外部结果已核实
+  outcome_unknown --> rejected: 证实未执行且取消
+  settled --> [*]
+  stopped --> [*]
+  rejected --> [*]

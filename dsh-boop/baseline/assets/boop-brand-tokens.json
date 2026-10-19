@@ -1,0 +1,18 @@
+{
+  "version": "1.1",
+  "status": "design-proposal",
+  "brand": {
+    "deepSea": "#073F5C",
+    "boopBlue": "#449BCC",
+    "lightWave": "#ADDDEB",
+    "pearlWhite": "#F8F7F2",
+    "ink": "#0B2637",
+    "interactive": "#17648B",
+    "soft": "#EAF5FB"
+  },
+  "visualRoles": {
+    "kv": "3D mascot, soft matte appearance",
+    "vi": "same-silhouette vector and micro marks",
+    "ui": "native DSH surfaces; scoped brand accents"
+  }
+}

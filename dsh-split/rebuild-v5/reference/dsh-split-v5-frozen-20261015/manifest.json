@@ -1,0 +1,99 @@
+{
+  "freeze_id": "DSH-SPLIT-V5-FROZEN-20261015",
+  "date": "2026-10-15",
+  "timezone": "UTC+08:00",
+  "product_spec_version": "v5",
+  "prototype_version": "final-v5",
+  "engineering_task_version": "1.0",
+  "implementation_status": "not_started",
+  "host_baseline": {
+    "tag": "dsh-v0.2.0-rc.2",
+    "commit": "639ed015397290b3745d163aafe02ffee4aa3f84"
+  },
+  "layout_library_version": "to_be_verified_and_pinned_in_W005",
+  "entrypoint": "index.html",
+  "counts": {
+    "engineering_tasks": 36,
+    "phases": 5,
+    "freeze_rules": 16,
+    "acceptance_cases": 24
+  },
+  "permissions": {
+    "native_source_modified_in_this_delivery": false,
+    "native_patch_authorized_by_this_freeze": false,
+    "remote_issues_or_prs_created": false,
+    "production_deployed": false
+  },
+  "content_sources": [
+    {
+      "kind": "confirmed_v5_attachment",
+      "filename": "dsh-split-final-plan.html",
+      "bytes": 258629,
+      "sha256": "03ca576542304efb594732f471892d80d1ca87f74d9d3edfdaa239dcb7ba39cb",
+      "copied_byte_identically": true
+    },
+    {
+      "kind": "confirmed_v5_attachment",
+      "filename": "dsh-split-interactive-demo.html",
+      "bytes": 90107,
+      "sha256": "463c42600c48a74c17edff74ec146b392e3eb58fb7e88b943e4634b0d97dd31a",
+      "copied_byte_identically": true
+    }
+  ],
+  "non_goals": [
+    "Sidebar tab tear-out enhancement",
+    "cross-session tab groups",
+    "global independent Sidebar windows",
+    "popout windows",
+    "layout template management",
+    "layout collaboration",
+    "new task center"
+  ],
+  "notes": [
+    "The prototype is not the production implementation and runs no DSH, Dockview, real terminal or model.",
+    "The v5 prototype intentionally retains its previous demo-only v4 storage key; original bytes are frozen.",
+    "SHA256SUMS.txt includes manifest.json and all other files except itself; manifest lists payload files but excludes itself and SHA256SUMS.txt to avoid recursion."
+  ],
+  "files": [
+    {
+      "path": "QA-DELIVERY.md",
+      "bytes": 3789,
+      "sha256": "8c1d4152304bbb5b0b09b11d08f96071835f3a50d829388bc2a5cb8ebca97dd0"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4377,
+      "sha256": "9910d41b8244e7a380f79fb94e87aaf59f34b8845c10178901440f1cb98249af"
+    },
+    {
+      "path": "dsh-split-final-plan.html",
+      "bytes": 258629,
+      "sha256": "03ca576542304efb594732f471892d80d1ca87f74d9d3edfdaa239dcb7ba39cb"
+    },
+    {
+      "path": "dsh-split-interactive-demo.html",
+      "bytes": 90107,
+      "sha256": "463c42600c48a74c17edff74ec146b392e3eb58fb7e88b943e4634b0d97dd31a"
+    },
+    {
+      "path": "engineering-tasks.html",
+      "bytes": 104463,
+      "sha256": "c3c985d09b162bdabac321c6a6074f4627d0f67d91cec1870338d454340ab2b3"
+    },
+    {
+      "path": "engineering-tasks.json",
+      "bytes": 59232,
+      "sha256": "2dc0c458f4502f0e9d64677c63f045bb39c3dccb12d9521fbcc4008ac8f308f8"
+    },
+    {
+      "path": "engineering-tasks.md",
+      "bytes": 69556,
+      "sha256": "0c7dfef9a068bbbe6dfadeb39d041544ed1059de236daf6046d00c4884e4f166"
+    },
+    {
+      "path": "index.html",
+      "bytes": 6255,
+      "sha256": "523462d739c99a0bdcaff517cca80266494f62c10fa9929aeb949af78924f1c1"
+    }
+  ]
+}

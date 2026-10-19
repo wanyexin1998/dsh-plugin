@@ -1,0 +1,1296 @@
+{
+  "mode": "enabled",
+  "home": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF",
+  "releaseSha256": "3d038a75b3adc520cef494f0cda07f361b86c446711af2dcadbac19d4e204cae",
+  "passed": true,
+  "hostEntries": [
+    "@deepseek-ai/dsh-api-gateway",
+    "@deepseek-ai/dsh-client-ui-open-in-app",
+    "@deepseek-ai/dsh-api-job-controller",
+    "@deepseek-ai/dsh-api-terminal-controller",
+    "@deepseek-ai/dsh-api-workspace-files",
+    "@deepseek-ai/dsh-client-ui-settings-account",
+    "@deepseek-ai/dsh-client-hmr",
+    "@deepseek-ai/dsh-client-modules",
+    "@deepseek-ai/dsh-cordis-client-runner",
+    "@deepseek-ai/dsh-client-ui-theme",
+    "@deepseek-ai/dsh-client-locale",
+    "@deepseek-ai/dsh-client-shortcuts",
+    "@deepseek-ai/dsh-client-ui-shortcuts",
+    "@deepseek-ai/dsh-client-ui-layout",
+    "@deepseek-ai/dsh-client-ui-renderer",
+    "@deepseek-ai/dsh-client-ui-session",
+    "@deepseek-ai/dsh-client-resources",
+    "@deepseek-ai/dsh-client-ui-sidebar",
+    "@deepseek-ai/dsh-client-ui-sidebar-right",
+    "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+    "@deepseek-ai/dsh-client-ui-sidebar-browser",
+    "@deepseek-ai/dsh-client-ui-sidebar-terminal",
+    "@deepseek-ai/dsh-client-ui-sidebar-files",
+    "@deepseek-ai/dsh-client-ui-settings",
+    "@deepseek-ai/dsh-client-ui-settings-general",
+    "@deepseek-ai/dsh-client-ui-settings-models",
+    "@deepseek-ai/dsh-client-ui-plugin-manager",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
+    "@deepseek-ai/dsh-client-ui-approval",
+    "@deepseek-ai/dsh-client-ui-brand-official",
+    "@deepseek-ai/dsh-client-ui-attachment",
+    "@deepseek-ai/dsh-client-ui-tool",
+    "@deepseek-ai/dsh-client-ui-cordis",
+    "@deepseek-ai/dsh-client-ui-workspace",
+    "@deepseek-ai/dsh-client-ui-workflow-run",
+    "@deepseek-ai/dsh-client-ui-input-trigger",
+    "@deepseek-ai/dsh-client-ui-commands",
+    "@deepseek-ai/dsh-client-ui-skill",
+    "@deepseek-ai/dsh-client-ui-subagent",
+    "@deepseek-ai/dsh-client-ui-reference",
+    "@deepseek-ai/dsh-client-ui-secret-mask",
+    "@deepseek-ai/dsh-client-ui-jobs",
+    "@deepseek-ai/dsh-client-ui-schedule",
+    "@deepseek-ai/dsh-client-ui-goal",
+    "@deepseek-ai/dsh-client-ui-message-feedback",
+    "@deepseek-ai/dsh-client-ui-model-selection",
+    "@deepseek-ai/dsh-client-ui-deepseek-model-label-1017",
+    "@deepseek-ai/dsh-client-ui-permission-presets",
+    "@deepseek-ai/dsh-client-ui-agent-preset",
+    "@deepseek-ai/dsh-client-ui-settings-session-log",
+    "@deepseek-ai/dsh-client-ui-settings-plugins",
+    "@deepseek-ai/dsh-client-ui-settings-shell",
+    "@deepseek-ai/dsh-client-ui-settings-agent-loop",
+    "@deepseek-ai/dsh-client-ui-settings-subagent",
+    "@deepseek-ai/dsh-client-ui-settings-web-search",
+    "@deepseek-ai/dsh-client-ui-plan",
+    "@deepseek-ai/dsh-client-ui-user-questions",
+    "@deepseek-ai/dsh-client-ui-trajectory",
+    "dsh-split",
+    "dsh-boot-observer",
+    "@deepseek-ai/dsh-api-remote-access",
+    "@deepseek-ai/dsh-session-log-export",
+    "@deepseek-ai/dsh-client-file-upload",
+    "@deepseek-ai/dsh-api-remotes",
+    "@deepseek-ai/dsh-client-ui-conversation",
+    "@deepseek-ai/dsh-client-ui-chat",
+    "@deepseek-ai/dsh-client-ui-deliverables",
+    "@deepseek-ai/dsh-typert-registry",
+    "@deepseek-ai/dsh-client-connection",
+    "@deepseek-ai/dsh-api-workspace-controller",
+    "@deepseek-ai/dsh-api-session-controller",
+    "@deepseek-ai/dsh-client-ui-directory-picker-native"
+  ],
+  "missingEntries": [],
+  "ui": {
+    "boot": false,
+    "workbench": true,
+    "buttons": 9,
+    "text": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n工作区\n暂无会话\n更多\n打开一个会话\n\n从左侧选择会话，通过会话菜单向右或向下分屏。",
+    "url": "http://127.0.0.1:56556"
+  },
+  "sessions": [
+    "session-boot-check-A",
+    "session-boot-check-B",
+    "session-boot-check-C"
+  ],
+  "sessionUi": {
+    "panels": 1,
+    "editors": 1,
+    "text": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n工作区\nworkspace\n新会话\n默认工作区\n更多\nv5-mvcnz7sw-1 opened\n探索未至之境\n预览版\nworkspace\n描述你想要构建的内容, / 调用指令, @ 文件或对话\n工作区内修改\nDeepSeek-V4.1-Flash\n1017\nHigh"
+  },
+  "catalog": {
+    "sessions": {
+      "ids": [
+        "session-boot-check-C",
+        "session-boot-check-B",
+        "session-boot-check-A",
+        "session-f2e08e17-f3fb-4f4d-bf91-54d160212824"
+      ],
+      "byId": {
+        "session-boot-check-C": {
+          "id": "session-boot-check-C",
+          "displayTitle": "Boot check C",
+          "running": false,
+          "retainedBy": {},
+          "blank": true,
+          "updatedAt": 1792257731275,
+          "formatStatus": "current",
+          "projectionValues": {
+            "title": "Boot check C",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "title": "Boot check C",
+          "cwd": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace"
+        },
+        "session-boot-check-B": {
+          "id": "session-boot-check-B",
+          "displayTitle": "Boot check B",
+          "running": false,
+          "retainedBy": {},
+          "blank": true,
+          "updatedAt": 1792257731202,
+          "formatStatus": "current",
+          "projectionValues": {
+            "title": "Boot check B",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "title": "Boot check B",
+          "cwd": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace"
+        },
+        "session-boot-check-A": {
+          "id": "session-boot-check-A",
+          "displayTitle": "Boot check A",
+          "running": false,
+          "retainedBy": {
+            "mainView": 1,
+            "sidebarView": 1,
+            "splitView": 1,
+            "skillCatalog": 1
+          },
+          "blank": true,
+          "updatedAt": 1792257731075,
+          "formatStatus": "current",
+          "projectionValues": {
+            "title": "Boot check A",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "title": "Boot check A",
+          "cwd": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace"
+        },
+        "session-f2e08e17-f3fb-4f4d-bf91-54d160212824": {
+          "id": "session-f2e08e17-f3fb-4f4d-bf91-54d160212824",
+          "displayTitle": "default-workspace",
+          "running": false,
+          "retainedBy": {},
+          "blank": true,
+          "updatedAt": 1792257730462,
+          "formatStatus": "current",
+          "projectionValues": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "C:\\Users\\wanyexin\\Documents\\deepseek-harness\\default-workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "cwd": "C:\\Users\\wanyexin\\Documents\\deepseek-harness\\default-workspace"
+        }
+      },
+      "phase": "ready",
+      "projectionsBySession": {
+        "session-f2e08e17-f3fb-4f4d-bf91-54d160212824": {
+          "values": {
+            "title": null,
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "C:\\Users\\wanyexin\\Documents\\deepseek-harness\\default-workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "state": "idle",
+          "error": null
+        },
+        "session-boot-check-A": {
+          "values": {
+            "title": "Boot check A",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "state": "idle",
+          "error": null
+        },
+        "session-boot-check-B": {
+          "values": {
+            "title": "Boot check B",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "state": "idle",
+          "error": null
+        },
+        "session-boot-check-C": {
+          "values": {
+            "title": "Boot check C",
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "inbox": {
+              "next-turn": [],
+              "next-step": []
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "turnOutline": [],
+            "agentPreset": "standard",
+            "userQuestions": {
+              "active": [],
+              "settled": []
+            },
+            "permissions": {
+              "currentValue": "workspace-write"
+            },
+            "workingDirectory": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+            "subagentCatalog": [],
+            "subagentTiming": {
+              "settledMs": 0
+            },
+            "subagent": null,
+            "todos": null,
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "sessionListMetadata": {
+              "blank": true,
+              "lastPromptAt": null
+            },
+            "imageLimits": {
+              "maxImageBytes": 20971520,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 209715200,
+              "maxImagePixels": 64000000,
+              "maxImageDimension": 8192,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          },
+          "state": "idle",
+          "error": null
+        }
+      }
+    },
+    "workspaces": {
+      "items": [
+        {
+          "workspaceId": "2c429f8c-da69-44df-863b-34063b61a9d4",
+          "path": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-tSs8pF\\workspace",
+          "title": "workspace",
+          "sessionIds": [
+            "session-boot-check-C",
+            "session-boot-check-B",
+            "session-boot-check-A"
+          ],
+          "createdAt": "2026-10-17T17:22:10.435Z",
+          "updatedAt": "2026-10-17T17:22:11.293Z"
+        },
+        {
+          "workspaceId": "095372f2-e862-455a-be5a-d7433bcd5456",
+          "path": "C:\\Users\\wanyexin\\Documents\\deepseek-harness\\default-workspace",
+          "title": "default-workspace",
+          "sessionIds": [
+            "session-f2e08e17-f3fb-4f4d-bf91-54d160212824"
+          ],
+          "createdAt": "2026-10-17T17:22:10.344Z",
+          "updatedAt": "2026-10-17T17:22:10.504Z"
+        }
+      ],
+      "archivedSessionIds": [],
+      "pinnedSessionIds": [],
+      "state": "idle",
+      "phase": "ready",
+      "error": null
+    }
+  },
+  "interactions": {
+    "right": true,
+    "below": true,
+    "independentDrafts": true,
+    "sidebarKeepsEditor": true,
+    "reload": true,
+    "refinement": {
+      "nativeSidebarControls": true,
+      "fullscreenIsLocal": true,
+      "fourSidebarPositions": true,
+      "sidebarFourSideChrome": true,
+      "visual": [
+        {
+          "theme": "light",
+          "outer": "rgb(255, 255, 255)",
+          "sidebar": "rgb(255, 255, 255)",
+          "native": "rgb(255, 255, 255)",
+          "base": "#fff",
+          "dragHeight": 8,
+          "duplicateTitles": 0,
+          "controlsInSidebar": 2,
+          "veil": [
+            {
+              "opacity": "0.16",
+              "color": "color(srgb 0.990588 0.992157 0.993725)",
+              "pointerEvents": "none"
+            },
+            {
+              "opacity": "0.16",
+              "color": "color(srgb 0.990588 0.992157 0.993725)",
+              "pointerEvents": "none"
+            }
+          ],
+          "backgrounds": {
+            "threeBackgroundLayers": true,
+            "nativeSidebarCanvas": true,
+            "singleSidebarEdge": true,
+            "focusTransfer": true,
+            "transparentDragTargets": true,
+            "keyboardHint": true,
+            "workspaceInsets": true,
+            "sidebarChrome": true,
+            "chrome": {
+              "side": "right",
+              "gap": 12,
+              "radius": "12px",
+              "border": "1px",
+              "borderColor": "color(srgb 0 0 0 / 0.0668627)",
+              "edges": [
+                "0px"
+              ],
+              "shadow": "rgba(24, 28, 21, 0.035) 0px 1px 2px 0px, rgba(24, 28, 21, 0.067) 0px 4px 12px -4px",
+              "top": 8,
+              "bottom": 8,
+              "overflow": false
+            },
+            "first": {
+              "page": "255,255,255,255",
+              "workspace": "249,250,251,255",
+              "navigation": "249,250,251,255",
+              "sidebarToken": "249,250,251,255",
+              "theme": "light",
+              "panes": [
+                {
+                  "id": "session-boot-check-A",
+                  "active": true,
+                  "outer": "255,255,255,255",
+                  "sidebar": "255,255,255,255",
+                  "native": "255,255,255,255",
+                  "veil": {
+                    "opacity": 0,
+                    "color": "255,255,255,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-B",
+                  "active": false,
+                  "outer": "253,253,253,255",
+                  "sidebar": "253,253,253,255",
+                  "native": "253,253,253,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "253,253,253,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-C",
+                  "active": false,
+                  "outer": "253,253,253,255",
+                  "sidebar": "253,253,253,255",
+                  "native": "253,253,253,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "253,253,253,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                }
+              ]
+            },
+            "switched": {
+              "page": "255,255,255,255",
+              "workspace": "249,250,251,255",
+              "navigation": "249,250,251,255",
+              "sidebarToken": "249,250,251,255",
+              "theme": "light",
+              "panes": [
+                {
+                  "id": "session-boot-check-A",
+                  "active": false,
+                  "outer": "253,253,253,255",
+                  "sidebar": "253,253,253,255",
+                  "native": "253,253,253,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "253,253,253,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-B",
+                  "active": true,
+                  "outer": "255,255,255,255",
+                  "sidebar": "255,255,255,255",
+                  "native": "255,255,255,255",
+                  "veil": {
+                    "opacity": 0,
+                    "color": "255,255,255,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-C",
+                  "active": false,
+                  "outer": "253,253,253,255",
+                  "sidebar": "253,253,253,255",
+                  "native": "253,253,253,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "253,253,253,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                }
+              ]
+            },
+            "handles": [
+              {
+                "keyboard": true,
+                "outline": "none",
+                "border": "0px",
+                "background": "rgba(0, 0, 0, 0)",
+                "height": 8,
+                "hint": "1"
+              },
+              {
+                "keyboard": true,
+                "outline": "none",
+                "border": "0px",
+                "background": "rgba(0, 0, 0, 0)",
+                "height": 8,
+                "hint": "1"
+              }
+            ]
+          }
+        },
+        {
+          "theme": "dark",
+          "outer": "rgb(21, 21, 23)",
+          "sidebar": "rgb(21, 21, 23)",
+          "native": "rgb(21, 21, 23)",
+          "base": "#151517",
+          "dragHeight": 8,
+          "duplicateTitles": 0,
+          "controlsInSidebar": 2,
+          "veil": [
+            {
+              "opacity": "0.16",
+              "color": "color(srgb 0.0917647 0.0917647 0.0980392)",
+              "pointerEvents": "none"
+            },
+            {
+              "opacity": "0.16",
+              "color": "color(srgb 0.0917647 0.0917647 0.0980392)",
+              "pointerEvents": "none"
+            }
+          ],
+          "backgrounds": {
+            "threeBackgroundLayers": true,
+            "nativeSidebarCanvas": true,
+            "singleSidebarEdge": true,
+            "focusTransfer": true,
+            "transparentDragTargets": true,
+            "keyboardHint": true,
+            "workspaceInsets": true,
+            "sidebarChrome": true,
+            "chrome": {
+              "side": "right",
+              "gap": 12,
+              "radius": "12px",
+              "border": "1px",
+              "borderColor": "color(srgb 1 1 1 / 0.0884314)",
+              "edges": [
+                "0px"
+              ],
+              "shadow": "rgba(0, 0, 0, 0.12) 0px 1px 2px 0px, rgba(0, 0, 0, 0.2) 0px 4px 12px -4px",
+              "top": 8,
+              "bottom": 8,
+              "overflow": false
+            },
+            "first": {
+              "page": "21,21,23,255",
+              "workspace": "27,27,28,255",
+              "navigation": "27,27,28,255",
+              "sidebarToken": "27,27,28,255",
+              "theme": "dark",
+              "panes": [
+                {
+                  "id": "session-boot-check-A",
+                  "active": true,
+                  "outer": "21,21,23,255",
+                  "sidebar": "21,21,23,255",
+                  "native": "21,21,23,255",
+                  "veil": {
+                    "opacity": 0,
+                    "color": "21,21,23,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-B",
+                  "active": false,
+                  "outer": "23,23,25,255",
+                  "sidebar": "23,23,25,255",
+                  "native": "23,23,25,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "23,23,25,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-C",
+                  "active": false,
+                  "outer": "23,23,25,255",
+                  "sidebar": "23,23,25,255",
+                  "native": "23,23,25,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "23,23,25,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                }
+              ]
+            },
+            "switched": {
+              "page": "21,21,23,255",
+              "workspace": "27,27,28,255",
+              "navigation": "27,27,28,255",
+              "sidebarToken": "27,27,28,255",
+              "theme": "dark",
+              "panes": [
+                {
+                  "id": "session-boot-check-A",
+                  "active": false,
+                  "outer": "23,23,25,255",
+                  "sidebar": "23,23,25,255",
+                  "native": "23,23,25,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "23,23,25,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-B",
+                  "active": true,
+                  "outer": "21,21,23,255",
+                  "sidebar": "21,21,23,255",
+                  "native": "21,21,23,255",
+                  "veil": {
+                    "opacity": 0,
+                    "color": "21,21,23,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                },
+                {
+                  "id": "session-boot-check-C",
+                  "active": false,
+                  "outer": "23,23,25,255",
+                  "sidebar": "23,23,25,255",
+                  "native": "23,23,25,255",
+                  "veil": {
+                    "opacity": 0.16,
+                    "color": "23,23,25,255",
+                    "pointerEvents": "none",
+                    "content": "\"\""
+                  }
+                }
+              ]
+            },
+            "handles": [
+              {
+                "keyboard": true,
+                "outline": "none",
+                "border": "0px",
+                "background": "rgba(0, 0, 0, 0)",
+                "height": 8,
+                "hint": "1"
+              },
+              {
+                "keyboard": true,
+                "outline": "none",
+                "border": "0px",
+                "background": "rgba(0, 0, 0, 0)",
+                "height": 8,
+                "hint": "1"
+              }
+            ]
+          }
+        }
+      ],
+      "nativeMoveAndClose": true,
+      "paneClose": true,
+      "paneCloseInline": true,
+      "thinEdgeDragCancel": true,
+      "narrowRestore": true
+    },
+    "performance": {
+      "scope": "Same isolated native DSH host; 3 actual editors, 120 synthetic paragraphs per pane, 48 pointer samples per drag, 3 repeats. Chrome headless; not a guarantee for arbitrary user histories.",
+      "nativeEditorsPreserved": true,
+      "runs": [
+        {
+          "name": "outer-resize",
+          "frames": 56,
+          "p95FrameMs": 66.7,
+          "framesOver34ms": 15,
+          "scriptMs": 141.97,
+          "layoutMs": 392.86,
+          "layoutCount": 194
+        },
+        {
+          "name": "outer-resize",
+          "frames": 72,
+          "p95FrameMs": 33.4,
+          "framesOver34ms": 2,
+          "scriptMs": 117.91,
+          "layoutMs": 302.13,
+          "layoutCount": 194
+        },
+        {
+          "name": "outer-resize",
+          "frames": 76,
+          "p95FrameMs": 33.5,
+          "framesOver34ms": 0,
+          "scriptMs": 117.37,
+          "layoutMs": 279.21,
+          "layoutCount": 194
+        },
+        {
+          "name": "sidebar-resize",
+          "frames": 93,
+          "p95FrameMs": 16.9,
+          "framesOver34ms": 0,
+          "scriptMs": 102.95,
+          "layoutMs": 68.17,
+          "layoutCount": 32
+        },
+        {
+          "name": "sidebar-resize",
+          "frames": 100,
+          "p95FrameMs": 16.8,
+          "framesOver34ms": 0,
+          "scriptMs": 100.89,
+          "layoutMs": 65.76,
+          "layoutCount": 33
+        },
+        {
+          "name": "sidebar-resize",
+          "frames": 94,
+          "p95FrameMs": 16.8,
+          "framesOver34ms": 0,
+          "scriptMs": 98.15,
+          "layoutMs": 79.25,
+          "layoutCount": 32
+        },
+        {
+          "name": "left-sidebar-toggle",
+          "frames": 31,
+          "p95FrameMs": 83.3,
+          "framesOver34ms": 22,
+          "scriptMs": 165.21,
+          "layoutMs": 273.6,
+          "layoutCount": 139
+        },
+        {
+          "name": "left-sidebar-toggle",
+          "frames": 33,
+          "p95FrameMs": 83.3,
+          "framesOver34ms": 20,
+          "scriptMs": 152.66,
+          "layoutMs": 292.44,
+          "layoutCount": 150
+        },
+        {
+          "name": "left-sidebar-toggle",
+          "frames": 34,
+          "p95FrameMs": 83.3,
+          "framesOver34ms": 20,
+          "scriptMs": 155.14,
+          "layoutMs": 281.07,
+          "layoutCount": 157
+        }
+      ],
+      "navCandidates": [
+        {
+          "label": "收起侧边栏",
+          "title": ""
+        }
+      ],
+      "overflow": [
+        {
+          "id": "session-boot-check-A",
+          "overflow": 0
+        },
+        {
+          "id": "session-boot-check-B",
+          "overflow": 0
+        },
+        {
+          "id": "session-boot-check-C",
+          "overflow": 0
+        }
+      ]
+    },
+    "rightGeometry": [
+      {
+        "id": "session-boot-check-A",
+        "x": 280,
+        "y": 8,
+        "w": 654,
+        "h": 984,
+        "editors": 1
+      },
+      {
+        "id": "session-boot-check-B",
+        "x": 946,
+        "y": 8,
+        "w": 654,
+        "h": 984,
+        "editors": 1
+      }
+    ],
+    "belowGeometry": [
+      {
+        "id": "session-boot-check-A",
+        "x": 280,
+        "y": 8,
+        "w": 660,
+        "h": 984,
+        "editors": 1
+      },
+      {
+        "id": "session-boot-check-B",
+        "x": 952,
+        "y": 8,
+        "w": 648,
+        "h": 486,
+        "editors": 1
+      },
+      {
+        "id": "session-boot-check-C",
+        "x": 952,
+        "y": 506,
+        "w": 648,
+        "h": 486,
+        "editors": 1
+      }
+    ],
+    "reloadedGeometry": [
+      {
+        "id": "session-boot-check-A",
+        "x": 280,
+        "y": 8,
+        "w": 642,
+        "h": 486,
+        "editors": 1
+      },
+      {
+        "id": "session-boot-check-C",
+        "x": 280,
+        "y": 506,
+        "w": 642,
+        "h": 486,
+        "editors": 1
+      },
+      {
+        "id": "session-boot-check-B",
+        "x": 934,
+        "y": 8,
+        "w": 666,
+        "h": 984,
+        "editors": 1
+      }
+    ],
+    "catalogFixture": "Blank test rows are made visible; native host sessions and renderer are unchanged."
+  },
+  "layoutStorage": {},
+  "errors": []
+}

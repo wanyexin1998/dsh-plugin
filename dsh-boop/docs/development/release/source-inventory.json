@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "E07-02",
+  "status": "preparation — final public-release review is NOT_RUN and waits for E07-01 / M1 gate closure",
+  "asOf": "2026-10-18",
+  "package": {
+    "name": "dsh-boop",
+    "version": "0.1.0",
+    "license": "Apache-2.0",
+    "licenseFile": "LICENSE",
+    "noticeFile": "NOTICE",
+    "private": true,
+    "publishTarget": "not published to any registry; local tarball only until M3 release review",
+    "distributionBoundary": "runtime plugin only — no internal design/handoff/QA material is included",
+    "shippedRuntimeFiles": [
+      "package.json",
+      "cordis.patch.yml",
+      "presets/boop.patch.yml",
+      "README.md",
+      "LICENSE",
+      "NOTICE",
+      "lib/*.js (compiled runtime bundles; see docs/development/evidence/e07-02/package-manifest.json for the exact list and hashes)",
+      "assets/3d/**"
+    ],
+    "packageVerification": {
+      "tool": "tools/package-boop.mjs",
+      "evidence": "docs/development/evidence/e07-02/package-manifest.json",
+      "report": "docs/development/evidence/e07-02/package-report.md"
+    }
+  },
+  "thirdPartyRuntimeDependencies": {
+    "bundled": [],
+    "note": "BOOP bundles no third-party runtime JavaScript. React/React-DOM stay host-provided platform modules (external in the client bundle); no Markdown pipeline, icon library, drag library or second React is shipped or added."
+  },
+  "hostProvidedDependencies": [
+    {
+      "package": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 DeepSeek",
+      "bundledInPackage": false,
+      "role": "DSH Host runtime; declared in peerDependencies and engines.dsh"
+    },
+    {
+      "package": "@deepseek-ai/dsh-tools",
+      "version": "0.2.1-rc.2",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 DeepSeek",
+      "bundledInPackage": false,
+      "role": "host tool-definition API"
+    },
+    {
+      "package": "@deepseek-ai/dsh-typert-protocol",
+      "version": "0.2.1-rc.2",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 DeepSeek",
+      "bundledInPackage": false,
+      "role": "host Typert Remote protocol"
+    },
+    {
+      "package": "@deepseek-ai/dsh-client-ui-primitives",
+      "version": "0.2.1-rc.2",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 DeepSeek",
+      "bundledInPackage": false,
+      "role": "host browser UI primitives (external in the client bundle)"
+    }
+  ],
+  "devOnlyDependencies": [
+    { "package": "@types/node", "version": "24.19.2", "license": "MIT", "shipped": false },
+    { "package": "@types/react", "version": "18.3.31", "license": "MIT", "shipped": false },
+    { "package": "@types/react-dom", "version": "18.3.1", "license": "MIT", "shipped": false },
+    { "package": "esbuild", "version": "0.28.2", "license": "MIT", "shipped": false },
+    { "package": "esbuild-wasm", "version": "0.28.2", "license": "MIT", "shipped": false },
+    { "package": "jsdom", "version": "30.1.3", "license": "MIT", "shipped": false },
+    { "package": "react", "version": "18.3.1", "license": "MIT", "shipped": false, "note": "test/build only; the runtime React comes from the DSH host platform table" },
+    { "package": "react-dom", "version": "18.3.1", "license": "MIT", "shipped": false, "note": "same as react" },
+    { "package": "typescript", "version": "5.9.2", "license": "Apache-2.0", "shipped": false }
+  ],
+  "importedSourceFiles": [
+    {
+      "upstreamRepo": "chuspeeism/dashi-taskboard",
+      "upstreamCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+      "upstreamLicense": "Apache-2.0",
+      "upstreamNotice": "none in the upstream repository root at that commit",
+      "upstreamPath": "web/src/components/BoardColumn.tsx",
+      "localPath": "src/client/taskboard/BoardColumn.tsx",
+      "modification": "rewritten extraction: BOOP display groups replace the upstream status; drag/drop, i18n, icons and Codex context-menu/create paths removed; keyboard/aria column controls added",
+      "bundledInto": "lib/client.js",
+      "reviewedBy": null
+    },
+    {
+      "upstreamRepo": "chuspeeism/dashi-taskboard",
+      "upstreamCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+      "upstreamLicense": "Apache-2.0",
+      "upstreamNotice": "none in the upstream repository root at that commit",
+      "upstreamPath": "web/src/components/TaskCard.tsx",
+      "localPath": "src/client/taskboard/TaskCard.tsx",
+      "modification": "trimmed rewrite: layout/information hierarchy kept as an idea; Codex api/actors/labels/taskConversations, attachment URL resolution, Markdown pipeline, cover images, startViewTransition and brand assets removed; BOOP three-axis facts and plain-text rendering added",
+      "bundledInto": "lib/client.js",
+      "reviewedBy": null
+    },
+    {
+      "upstreamRepo": "chuspeeism/dashi-taskboard",
+      "upstreamCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+      "upstreamLicense": "Apache-2.0",
+      "upstreamNotice": "none in the upstream repository root at that commit",
+      "upstreamPath": "web/src/components/IssueListView.tsx",
+      "localPath": "src/client/taskboard/IssueListView.tsx",
+      "modification": "selective rewrite: grouped/foldable rows idea kept; Codex identity controls and inline writes removed; shares the same BOOP view model as the board",
+      "bundledInto": "lib/client.js",
+      "reviewedBy": null
+    },
+    {
+      "upstreamRepo": "chuspeeism/dashi-taskboard",
+      "upstreamCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+      "upstreamLicense": "Apache-2.0",
+      "upstreamNotice": "none in the upstream repository root at that commit",
+      "upstreamPath": "web/src/taskFilters.ts",
+      "localPath": "src/client/taskboard/view-model.ts (filter/search section)",
+      "modification": "idea extraction only: filter counting and search-shape ideas; upstream URL query persistence and status/priority/label fields removed; mapped to BOOP displayGroup/workspaceId/pendingReason/search",
+      "bundledInto": "lib/client.js",
+      "reviewedBy": null
+    },
+    {
+      "upstreamRepo": "chuspeeism/dashi-taskboard",
+      "upstreamCommit": "723c400eec86c454c1ffa56ee1b500746d41e142",
+      "upstreamLicense": "Apache-2.0",
+      "upstreamNotice": "none in the upstream repository root at that commit",
+      "upstreamPath": "web/src/types.ts",
+      "localPath": "src/client/taskboard/view-model.ts (field-shape reference only)",
+      "modification": "field-shape reference only, no type copied; BOOP types follow the BOOP host contract (src/host/tasks.ts)",
+      "bundledInto": "lib/client.js",
+      "reviewedBy": null
+    }
+  ],
+  "notImportedFromUpstream": [
+    "web/src/useTaskCardDragPreview.ts (cross-column drag is closed in v1)",
+    "web/src/i18n.tsx, labels.ts, actors.ts, api.ts, taskConversations.ts (Codex identity/dialogue/API)",
+    "web/src/components/SemanticIcons.tsx, LinearIcon.tsx, ActorAvatar.tsx, TaskboardIcon.tsx and assets/figma-taskboard/* (upstream brand assets)",
+    "web/src/App.tsx, web/src/main.tsx, server/* (standalone app/HTTP/SQLite service)",
+    "web/src/styles.css (205 KB global stylesheet)",
+    "integrations/deepseek-harness/* (iframe + DOM scanning integration)",
+    "src-tauri/*, inject/*, cloud/*, gantt/dhtmlx-gantt, AiChat"
+  ],
+  "originalCode": {
+    "statement": "Except for the five rewritten taskboard extractions above, all source in src/**, tools/**, tests/**, build.mjs and cordis.patch.yml is BOOP-original work in this repository.",
+    "sourceRegister": "docs/development/taskboard-sources.md (file-by-file, 2026-10-18)"
+  },
+  "visualAssets": [
+    {
+      "path": "assets/3d/boop.glb",
+      "bytes": 1389436,
+      "sha256": "379e9845c597681f53b90e851bcb88ee31a01a1ace80b3e63478539f4807b56b",
+      "origin": "project owner (user-provided asset pack BOOP_3D_Animation_v0.1, model/boop.glb)",
+      "modified": false,
+      "license": "provided by the project owner; not third-party open source; no separate license granted in this repository",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/boop-assistant.js",
+      "bytes": 14902,
+      "sha256": "fcb546fe430169d35e9c6b43364613a2eafa245ccf1a8a152c51e519e4711e65",
+      "origin": "project owner (asset pack src/boop-assistant.js; zero-dependency WebGL2 player)",
+      "modified": false,
+      "license": "provided by the project owner; the asset pack declares no third-party JS library",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/boop-assistant.d.ts",
+      "bytes": 937,
+      "sha256": "683797ffb69d3179a2a529005e3ce62d2dc9dd9478b4a92d80936186db170e1a",
+      "origin": "project owner (asset pack src/boop-assistant.d.ts)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/README.md",
+      "bytes": 1020,
+      "sha256": "63ca7a9454d9e9121697d0bc26fa9ba61e590d28b9376849104a8d5632d270c7",
+      "origin": "BOOP repository note describing the unmodified asset-pack files",
+      "modified": false,
+      "license": "BOOP repository documentation (Apache-2.0)",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/states/boop-idle-256.png",
+      "bytes": 35390,
+      "sha256": "2e00b9ea7dfca4c322392b2ad4205ce12d7188d45827e9e292a30b78bebab15e",
+      "origin": "project owner (asset pack images/boop-idle-256.png)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/states/boop-listen-256.png",
+      "bytes": 36005,
+      "sha256": "eb83ae65d793f0f2cd8c7a65785061069b98c3068f40f09c025bb6c9e4af57e6",
+      "origin": "project owner (asset pack images/boop-listen-256.png)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/states/boop-think-256.png",
+      "bytes": 35765,
+      "sha256": "846fe157dc04e04b97c61f2247a9e3c74db316b3234d448ef463cd613852379a",
+      "origin": "project owner (asset pack images/boop-think-256.png)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/states/boop-success-256.png",
+      "bytes": 35428,
+      "sha256": "3c83b829ea0e2d182f3f46dbc2867cb275cd0af01f00ba7ae8425b3fe68da312",
+      "origin": "project owner (asset pack images/boop-success-256.png)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    },
+    {
+      "path": "assets/3d/states/boop-error-256.png",
+      "bytes": 34847,
+      "sha256": "d351dd748c9c6ad6f278e0fbae230d31425671716566b5dcccb459b7f1245bab",
+      "origin": "project owner (asset pack images/boop-error-256.png)",
+      "modified": false,
+      "license": "provided by the project owner",
+      "packaged": true
+    }
+  ],
+  "visualDesignOrigin": {
+    "statement": "The BOOP character design originates from the project owner's confirmed BOOP visual baseline (two approved PNGs delivered in the internal design pack). The 3D asset pack states it is a first-version 3D reconstruction/re-verification asset, not a replacement for that frozen 2D visual baseline, and contains no third-party character meshes, textures, fonts or JS runtime libraries.",
+    "internalDesignBaselineNotShipped": [
+      "baseline/assets/boop-kv-approved.png",
+      "baseline/assets/boop-character-approved.png",
+      "baseline/assets/*.json / *.css / *.html asset tokens",
+      "assets/character/** (derived 2D source/preview images; not in package files whitelist)"
+    ]
+  },
+  "internalOnlyMaterials": {
+    "policy": "These are internal design/handoff/QA/reference materials. They are NOT part of the distributed package and are not licensed for redistribution with it.",
+    "paths": [
+      "baseline/** (frozen design pack, incl. references/Cellgent_*.png style references and deprecated concept SVG)",
+      "handoff/** (task/acceptance/hand-off material)",
+      "docs/** (development, release and evidence documentation)",
+      "host-rc2/**, host-rc21/** (local host extractions)",
+      "manifests/**, qa/**, demo/**, tests/**, tools/**, src/** sources",
+      ".work/** (local scratch, upstream taskboard checkout, test runs)",
+      "BOOP_3D_Animation_v0.1.zip + its BOOP_3D_Studio.html / preview MP4/JPGs / QA screenshots (source asset pack, not shipped)",
+      "BOOP_开发交接阅读器.html, README_开发团队先读.md, SHA256SUMS.txt (internal delivery package)",
+      "boop.glb at repository root (duplicate source copy; the package ships assets/3d/boop.glb only)"
+    ],
+    "verifiedAbsentFromTarball": true,
+    "verification": "tools/package-boop.mjs refuses these categories; see docs/development/evidence/e07-02/package-manifest.json checks"
+  },
+  "licenseDecision": {
+    "projectLicense": "Apache-2.0",
+    "licenseText": "LICENSE (canonical Apache License 2.0 text, 11,558 bytes)",
+    "notice": "NOTICE (project, upstream rewrite attribution, user-provided visual assets, host-provided dependency licences)",
+    "reviewStatus": "NOT_RUN — final open-source/legal review and M3 release decision are outside E07-02 preparation; no public release is claimed",
+    "spdx": "Apache-2.0"
+  },
+  "notVerified": [
+    "real install into a user profile, upgrade and rollback drills (runbooks only; NOT_RUN pending E07-01)",
+    "public registry/marketplace publication (not requested)",
+    "Desktop Electron GUI install/UI (NOT_RUN)",
+    "macOS/Linux packaging, install or runtime (NOT_RUN; not claimed in the support matrix)",
+    "independent legal review of the NOTICE/licence position (NOT_RUN)"
+  ]
+}

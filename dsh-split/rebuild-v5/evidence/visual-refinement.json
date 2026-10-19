@@ -1,0 +1,426 @@
+{
+  "verifiedAt": "2026-10-16T09:24:23.664Z",
+  "version": "0.5.0-rebuild.6",
+  "release": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.6-f543522cfe6b",
+  "releaseSha256": "00d542cd60ae29045d1a38a364de329497972bfead0a1aa2a7bb4cb46daf4bdb",
+  "staticTests": 101,
+  "nativeBootModes": [
+    {
+      "mode": "baseline",
+      "passed": true,
+      "errorCount": 0
+    },
+    {
+      "mode": "enabled",
+      "passed": true,
+      "errorCount": 0
+    },
+    {
+      "mode": "restart",
+      "passed": true,
+      "errorCount": 0
+    },
+    {
+      "mode": "disabled",
+      "passed": true,
+      "errorCount": 0
+    },
+    {
+      "mode": "without-patches",
+      "passed": true,
+      "errorCount": 0
+    }
+  ],
+  "refinement": {
+    "nativeSidebarControls": true,
+    "fullscreenIsLocal": true,
+    "fourSidebarPositions": true,
+    "sidebarFourSideChrome": true,
+    "visual": [
+      {
+        "theme": "light",
+        "outer": "rgb(255, 255, 255)",
+        "sidebar": "rgb(255, 255, 255)",
+        "native": "rgb(255, 255, 255)",
+        "base": "#fff",
+        "dragHeight": 8,
+        "duplicateTitles": 0,
+        "controlsInSidebar": 2,
+        "veil": [
+          {
+            "opacity": "0.16",
+            "color": "color(srgb 0.990588 0.992157 0.993725)",
+            "pointerEvents": "none"
+          },
+          {
+            "opacity": "0.16",
+            "color": "color(srgb 0.990588 0.992157 0.993725)",
+            "pointerEvents": "none"
+          }
+        ],
+        "backgrounds": {
+          "threeBackgroundLayers": true,
+          "nativeSidebarCanvas": true,
+          "singleSidebarEdge": true,
+          "focusTransfer": true,
+          "transparentDragTargets": true,
+          "keyboardHint": true,
+          "workspaceInsets": true,
+          "sidebarChrome": true,
+          "chrome": {
+            "side": "right",
+            "gap": 12,
+            "radius": "12px",
+            "border": "1px",
+            "borderColor": "color(srgb 0 0 0 / 0.0668627)",
+            "edges": [
+              "0px"
+            ],
+            "shadow": "rgba(24, 28, 21, 0.035) 0px 1px 2px 0px, rgba(24, 28, 21, 0.067) 0px 4px 12px -4px",
+            "top": 8,
+            "bottom": 8,
+            "overflow": false
+          },
+          "first": {
+            "page": "255,255,255,255",
+            "workspace": "249,250,251,255",
+            "navigation": "249,250,251,255",
+            "sidebarToken": "249,250,251,255",
+            "theme": "light",
+            "panes": [
+              {
+                "id": "session-boot-check-A",
+                "active": true,
+                "outer": "255,255,255,255",
+                "sidebar": "255,255,255,255",
+                "native": "255,255,255,255",
+                "veil": {
+                  "opacity": 0,
+                  "color": "255,255,255,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-B",
+                "active": false,
+                "outer": "253,253,253,255",
+                "sidebar": "253,253,253,255",
+                "native": "253,253,253,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "253,253,253,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-C",
+                "active": false,
+                "outer": "253,253,253,255",
+                "sidebar": "253,253,253,255",
+                "native": "253,253,253,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "253,253,253,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              }
+            ]
+          },
+          "switched": {
+            "page": "255,255,255,255",
+            "workspace": "249,250,251,255",
+            "navigation": "249,250,251,255",
+            "sidebarToken": "249,250,251,255",
+            "theme": "light",
+            "panes": [
+              {
+                "id": "session-boot-check-A",
+                "active": false,
+                "outer": "253,253,253,255",
+                "sidebar": "253,253,253,255",
+                "native": "253,253,253,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "253,253,253,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-B",
+                "active": true,
+                "outer": "255,255,255,255",
+                "sidebar": "255,255,255,255",
+                "native": "255,255,255,255",
+                "veil": {
+                  "opacity": 0,
+                  "color": "255,255,255,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-C",
+                "active": false,
+                "outer": "253,253,253,255",
+                "sidebar": "253,253,253,255",
+                "native": "253,253,253,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "253,253,253,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              }
+            ]
+          },
+          "handles": [
+            {
+              "keyboard": true,
+              "outline": "none",
+              "border": "0px",
+              "background": "rgba(0, 0, 0, 0)",
+              "height": 8,
+              "hint": "1"
+            },
+            {
+              "keyboard": true,
+              "outline": "none",
+              "border": "0px",
+              "background": "rgba(0, 0, 0, 0)",
+              "height": 8,
+              "hint": "1"
+            }
+          ]
+        }
+      },
+      {
+        "theme": "dark",
+        "outer": "rgb(21, 21, 23)",
+        "sidebar": "rgb(21, 21, 23)",
+        "native": "rgb(21, 21, 23)",
+        "base": "#151517",
+        "dragHeight": 8,
+        "duplicateTitles": 0,
+        "controlsInSidebar": 2,
+        "veil": [
+          {
+            "opacity": "0.16",
+            "color": "color(srgb 0.0917647 0.0917647 0.0980392)",
+            "pointerEvents": "none"
+          },
+          {
+            "opacity": "0.16",
+            "color": "color(srgb 0.0917647 0.0917647 0.0980392)",
+            "pointerEvents": "none"
+          }
+        ],
+        "backgrounds": {
+          "threeBackgroundLayers": true,
+          "nativeSidebarCanvas": true,
+          "singleSidebarEdge": true,
+          "focusTransfer": true,
+          "transparentDragTargets": true,
+          "keyboardHint": true,
+          "workspaceInsets": true,
+          "sidebarChrome": true,
+          "chrome": {
+            "side": "right",
+            "gap": 12,
+            "radius": "12px",
+            "border": "1px",
+            "borderColor": "color(srgb 1 1 1 / 0.0884314)",
+            "edges": [
+              "0px"
+            ],
+            "shadow": "rgba(0, 0, 0, 0.12) 0px 1px 2px 0px, rgba(0, 0, 0, 0.2) 0px 4px 12px -4px",
+            "top": 8,
+            "bottom": 8,
+            "overflow": false
+          },
+          "first": {
+            "page": "21,21,23,255",
+            "workspace": "27,27,28,255",
+            "navigation": "27,27,28,255",
+            "sidebarToken": "27,27,28,255",
+            "theme": "dark",
+            "panes": [
+              {
+                "id": "session-boot-check-A",
+                "active": true,
+                "outer": "21,21,23,255",
+                "sidebar": "21,21,23,255",
+                "native": "21,21,23,255",
+                "veil": {
+                  "opacity": 0,
+                  "color": "21,21,23,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-B",
+                "active": false,
+                "outer": "23,23,25,255",
+                "sidebar": "23,23,25,255",
+                "native": "23,23,25,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "23,23,25,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-C",
+                "active": false,
+                "outer": "23,23,25,255",
+                "sidebar": "23,23,25,255",
+                "native": "23,23,25,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "23,23,25,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              }
+            ]
+          },
+          "switched": {
+            "page": "21,21,23,255",
+            "workspace": "27,27,28,255",
+            "navigation": "27,27,28,255",
+            "sidebarToken": "27,27,28,255",
+            "theme": "dark",
+            "panes": [
+              {
+                "id": "session-boot-check-A",
+                "active": false,
+                "outer": "23,23,25,255",
+                "sidebar": "23,23,25,255",
+                "native": "23,23,25,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "23,23,25,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-B",
+                "active": true,
+                "outer": "21,21,23,255",
+                "sidebar": "21,21,23,255",
+                "native": "21,21,23,255",
+                "veil": {
+                  "opacity": 0,
+                  "color": "21,21,23,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              },
+              {
+                "id": "session-boot-check-C",
+                "active": false,
+                "outer": "23,23,25,255",
+                "sidebar": "23,23,25,255",
+                "native": "23,23,25,255",
+                "veil": {
+                  "opacity": 0.16,
+                  "color": "23,23,25,255",
+                  "pointerEvents": "none",
+                  "content": "\"\""
+                }
+              }
+            ]
+          },
+          "handles": [
+            {
+              "keyboard": true,
+              "outline": "none",
+              "border": "0px",
+              "background": "rgba(0, 0, 0, 0)",
+              "height": 8,
+              "hint": "1"
+            },
+            {
+              "keyboard": true,
+              "outline": "none",
+              "border": "0px",
+              "background": "rgba(0, 0, 0, 0)",
+              "height": 8,
+              "hint": "1"
+            }
+          ]
+        }
+      }
+    ],
+    "nativeMoveAndClose": true,
+    "thinEdgeDragCancel": true,
+    "narrowRestore": true
+  },
+  "performance": {
+    "scenarios": [
+      {
+        "name": "outer-resize",
+        "baseline": {
+          "scriptMs": 1150.18,
+          "layoutMs": 593.29,
+          "layoutCount": 240,
+          "p95FrameMs": 100
+        },
+        "updated": {
+          "scriptMs": 126.78,
+          "layoutMs": 439.46,
+          "layoutCount": 194,
+          "p95FrameMs": 50.1
+        },
+        "scriptReductionPercent": 89
+      },
+      {
+        "name": "sidebar-resize",
+        "baseline": {
+          "scriptMs": 852.98,
+          "layoutMs": 141.65,
+          "layoutCount": 28,
+          "p95FrameMs": 50
+        },
+        "updated": {
+          "scriptMs": 97.03,
+          "layoutMs": 94.88,
+          "layoutCount": 32,
+          "p95FrameMs": 16.8
+        },
+        "scriptReductionPercent": 88.6
+      },
+      {
+        "name": "left-sidebar-toggle",
+        "baseline": {
+          "scriptMs": 445.08,
+          "layoutMs": 247.18,
+          "layoutCount": 121,
+          "p95FrameMs": 100
+        },
+        "updated": {
+          "scriptMs": 135.86,
+          "layoutMs": 306.58,
+          "layoutCount": 201,
+          "p95FrameMs": 50.1
+        },
+        "scriptReductionPercent": 69.5
+      }
+    ],
+    "reference": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-o6jTDQ\\result.json",
+    "candidate": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\.boot-check\\enabled-Az8Ill\\result.json",
+    "scope": "Same isolated native DSH host; 3 actual editors, 120 synthetic paragraphs per pane, 48 pointer samples per drag, 3 repeats. Chrome headless; not a guarantee for arbitrary user histories.",
+    "qualification": "Measurements ran while the desktop was in use. Frame intervals vary with machine load; reduced script work is verified, a universal frame-rate guarantee is not claimed."
+  },
+  "nativeEditorsPreserved": true,
+  "desktopRestartPerformed": false,
+  "activation": "Existing DSH instance stays on the previous loaded release. This upgrade takes effect at the next normal launch; no reload or restart is invoked.",
+  "receiptPath": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\backups\\install-2026-10-16T09-24-24-199Z\\receipt.json",
+  "installedAt": "2026-10-16T09:24:24.278Z"
+}

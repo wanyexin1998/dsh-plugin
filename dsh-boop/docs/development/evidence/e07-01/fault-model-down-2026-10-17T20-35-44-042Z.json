@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "task": "E07-01",
+  "scenario": "model-unreachable",
+  "capturedAt": "2026-10-17T20:36:09.325Z",
+  "host": {
+    "profile": "boop-e07-fault-model-down",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-model-down-1792269344043\\dsh-home",
+    "work": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-model-down-1792269344043"
+  },
+  "route": {
+    "provider": "e07-unreachable",
+    "api": "openai-completions",
+    "model": "qwen-unreachable-e07",
+    "baseURL": "http://127.0.0.1:9/v1 (closed port, local)",
+    "credential": "env:BOOP_E07_FAULT_KEY (placeholder only)"
+  },
+  "dispatch": {
+    "messageId": "msg_act_dba4e62c-8958-4987-964a-e6433da27239",
+    "actionId": "act_dba4e62c-8958-4987-964a-e6433da27239",
+    "accepted": true,
+    "sourceKind": "boop-command"
+  },
+  "session": {
+    "sessionId": "session-2775ae01-f217-4dbb-a774-f7da3d1b2c10",
+    "userSession": "session-636eac84-6077-440d-b5dc-eb7fb2e080c5"
+  },
+  "turn": {
+    "end": {
+      "seq": 31,
+      "type": "turn/end",
+      "time": 1792269368366,
+      "messageId": null,
+      "sourceKind": null,
+      "actionId": null,
+      "provider": null,
+      "model": null,
+      "text": null,
+      "turnEnd": "error: Connection error.",
+      "turn": 1,
+      "spliceTarget": null,
+      "insertedIds": null,
+      "removedCount": null
+    },
+    "turnStarts": 1,
+    "llmRetries": 5,
+    "assistantCount": 0,
+    "claimsForDispatch": 1
+  },
+  "writeMode": {
+    "enabled": false,
+    "note": "read-only while no model is usable; Stop remains deterministic (no model)"
+  },
+  "knownUnknown": {
+    "retryPolicy": "bounded Host retry (recorded count above); exact policy is Host-owned and asserted as a bound, never an exact count",
+    "failureTaxonomy": "Host turn/end text recorded verbatim (error: …); not translated into a BOOP claim",
+    "runtimePreStepEnforcement": "not exercised here; see E07-01 report NOT_RUN list"
+  }
+}

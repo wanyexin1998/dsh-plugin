@@ -1,0 +1,54 @@
+{
+  "scope": "仅列明颜色对的公式校验，不是完整无障碍验收",
+  "results": [
+    {
+      "name": "light text",
+      "foreground": "#0B2637",
+      "background": "#FFFFFF",
+      "contrast": 15.59,
+      "meets4_5": true
+    },
+    {
+      "name": "light secondary",
+      "foreground": "#526978",
+      "background": "#FFFFFF",
+      "contrast": 5.75,
+      "meets4_5": true
+    },
+    {
+      "name": "light button white",
+      "foreground": "#FFFFFF",
+      "background": "#17648B",
+      "contrast": 6.5,
+      "meets4_5": true
+    },
+    {
+      "name": "dark text",
+      "foreground": "#E6F1F6",
+      "background": "#172731",
+      "contrast": 13.33,
+      "meets4_5": true
+    },
+    {
+      "name": "dark secondary",
+      "foreground": "#A7BBC7",
+      "background": "#172731",
+      "contrast": 7.71,
+      "meets4_5": true
+    },
+    {
+      "name": "dark accent",
+      "foreground": "#ADDDEB",
+      "background": "#172731",
+      "contrast": 10.44,
+      "meets4_5": true
+    },
+    {
+      "name": "kv white",
+      "foreground": "#F8F7F2",
+      "background": "#073F5C",
+      "contrast": 10.44,
+      "meets4_5": true
+    }
+  ]
+}

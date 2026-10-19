@@ -1,0 +1,32 @@
+{
+  "baseline": "723c400eec86c454c1ffa56ee1b500746d41e142",
+  "mode": "selective-source-port",
+  "status": "design-only",
+  "targetDsh": "0.2.0-rc.2",
+  "authoritativeStore": "BOOP task/action/approval",
+  "reuse": [
+    "BoardColumn",
+    "TaskCard",
+    "IssueListView",
+    "filters and sorting",
+    "drag preview",
+    "selected TaskDetail presentation"
+  ],
+  "replace": [
+    "App assembly",
+    "API client",
+    "actor and session mapping",
+    "mutation semantics",
+    "global CSS",
+    "DSH iframe wrapper"
+  ],
+  "exclude": [
+    "Codex AI Chat",
+    "CDP injector",
+    "Tauri launcher",
+    "standalone taskboard database/server",
+    "Cloudflare",
+    "Jira",
+    "Gantt for first release"
+  ]
+}

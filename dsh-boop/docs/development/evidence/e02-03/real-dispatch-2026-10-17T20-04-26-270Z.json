@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-17T20:05:22.701Z",
+  "route": {
+    "provider": "qwen-local",
+    "api": "openai-completions",
+    "model": "qwen3.8-27b",
+    "baseURL": "http://172.26.0.49:8000/v1",
+    "credential": "env:BOOP_QWEN_KEY (placeholder value only; the service is keyless)",
+    "contextWindowDeclared": 196608
+  },
+  "host": {
+    "profile": "boop-poc-real",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e02-03-real-1792267466271\\dsh-home",
+    "project": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e02-03-real-1792267466271\\project"
+  },
+  "session": {
+    "sessionId": "session-97ad7533-0b32-4888-8c26-caf0ec6bef42",
+    "headSeq": 16,
+    "turnMs": 10093
+  },
+  "dispatch": {
+    "accepted": true,
+    "messageId": "msg_act_efe32294-89c9-43f9-9a39-a2b135f3d3d5",
+    "actionId": "act_efe32294-89c9-43f9-9a39-a2b135f3d3d5",
+    "sourceKind": "boop-command",
+    "mode": "queue",
+    "gateState": "released",
+    "durationMs": 137
+  },
+  "claims": [
+    {
+      "sessionId": "session-97ad7533-0b32-4888-8c26-caf0ec6bef42",
+      "messageId": "msg_act_efe32294-89c9-43f9-9a39-a2b135f3d3d5",
+      "sourceKind": "boop-command",
+      "actionId": "act_efe32294-89c9-43f9-9a39-a2b135f3d3d5",
+      "turn": 1,
+      "at": "2026-10-17T20:05:12.484Z"
+    }
+  ],
+  "durable": {
+    "userMessages": [
+      {
+        "seq": 8,
+        "messageId": "msg_act_efe32294-89c9-43f9-9a39-a2b135f3d3d5",
+        "sourceKind": "boop-command",
+        "actionId": "act_efe32294-89c9-43f9-9a39-a2b135f3d3d5"
+      },
+      {
+        "seq": 9,
+        "messageId": "412807a2-1600-4cfa-98ad-5377c9776362",
+        "sourceKind": "runtime-context",
+        "actionId": null
+      },
+      {
+        "seq": 10,
+        "messageId": "96575fd5-9bf1-41cb-9f62-c9dd5b70529e",
+        "sourceKind": "skill-catalog",
+        "actionId": null
+      },
+      {
+        "seq": 11,
+        "messageId": "e6675982-492f-456d-acb7-9ac9682cb1f7",
+        "sourceKind": "time-context",
+        "actionId": null
+      }
+    ],
+    "splices": [
+      {
+        "seq": 3,
+        "target": "next-turn",
+        "inserted": [
+          "msg_act_efe32294-89c9-43f9-9a39-a2b135f3d3d5"
+        ],
+        "removedCount": 0
+      },
+      {
+        "seq": 5,
+        "target": "next-turn",
+        "inserted": [],
+        "removedCount": 1
+      }
+    ],
+    "assistant": [
+      {
+        "seq": 14,
+        "provider": "qwen-local",
+        "model": "qwen3.8-27b",
+        "text": "\n\nBOOP-OK"
+      }
+    ],
+    "turnEnds": [
+      {
+        "seq": 16,
+        "turn": 1,
+        "reason": "completed"
+      }
+    ],
+    "eventTypes": [
+      "0:permission/preset",
+      "1:sandbox/mode",
+      "2:approval/policy",
+      "3:agent/inbox/spliced",
+      "4:turn/start",
+      "5:agent/inbox/spliced",
+      "6:step/start",
+      "7:system/message",
+      "8:user/message",
+      "9:user/message",
+      "10:user/message",
+      "11:user/message",
+      "12:request/header",
+      "13:request/context",
+      "14:assistant/message",
+      "15:step/end",
+      "16:turn/end"
+    ]
+  },
+  "turnMs": 10093
+}

@@ -1,0 +1,17 @@
+sidebar retention evidence: {"file":"E:\\dsh-plugin\\dsh-split\\dist\\host-patches-fix\\dsh-client-ui-sidebar-right\\lib\\client.js","inputSha256":"eaf6a0b189421c3a62739ba466e916f2a98b98337bdddcfacdf9a3bf22af2f25","executedSha256":"eaf6a0b189421c3a62739ba466e916f2a98b98337bdddcfacdf9a3bf22af2f25","classSourceLine":5901,"effectSourceLine":9080,"store":{"asar":"E:/deepseek-harness/resources/app.asar","entry":"/dsh/node_modules/@deepseek-ai/dsh-client-store/lib/index.js","sha256":"7272e501f184fdee890b7a04646a6d8b38a09e3d5c6599687c79eb9d87063e3f"},"catalogContract":{"entry":"/dsh/node_modules/@deepseek-ai/dsh-client-ui-session/lib/client.js","sha256":"09e4fc1956d7679d876ede8c1e51712f00fb518e8dc2723855bb5f8ca34e270c"},"inMemoryEdits":false,"portalKeyRemoved":false}
+✔ all hosted sessions create Sidebar Views and focus/collapse keep their references (124.7982ms)
+✔ closing a hosted pane retires only it and waits for its committed root to unmount (14.387ms)
+✔ native keepMounted tab holds survive pane closure until their final cancellation (12.6926ms)
+✔ leaving split mode restores foreground-only ownership; unload removes listeners and releases views (12.159ms)
+✔ missing initial catalog entries recover on the verified sessions.list subscription (11.7829ms)
+✔ synchronous retain/release catalog callbacks cannot recursively create duplicate Views (11.8969ms)
+✔ a temporary hosted retain failure is bounded and retries on the next catalog event (16.9181ms)
+✔ real keyed React portals preserve Sidebar draft DOM when A/B insert or close before C (96.6691ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 307.1876

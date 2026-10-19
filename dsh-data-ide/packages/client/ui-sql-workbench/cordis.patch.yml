@@ -1,0 +1,42 @@
+# dsh-data-ide bundle patch
+#
+# `dsh.bundle.patch` in package.json points here. `dsh plugin --profile <p> add …`
+# appends this package to `dsh.profile.bundles` and merges this layer into the
+# profile tree — no profile file edits are needed.
+#
+# Two rows are inserted:
+#   1. dsh-data-ide          — the plugin itself (node half + client half)
+#   2. mcp-sql               — an @deepseek-ai/dsh-mcp-client instance (serverName: sql)
+#
+# Install (development, from this repo):
+#   dsh plugin --profile dev-sql add link:E:\dsh-plugin\dsh-data-ide\packages\client\ui-sql-workbench
+- insert:
+    - id: dsh-data-ide
+      name: 'dsh-data-ide'
+    - id: mcp-sql
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: sql
+        transport: stdio
+        command: !!js process.execPath
+        # The MCP server ships inside this package, so its entry is resolved
+        # through the active profile's own node_modules. `!!js` expressions see
+        # `process` plus whatever the Loader context provides — in practice only
+        # `dshHomePath` (packages/boot/app-boot/src/index.ts:995) — so the
+        # profile name is read from the launch argv (`--profile <name>`), which
+        # is how dsh-desktop.exe starts the CLI.
+        args: !!js >-
+          (() => {
+            const at = process.argv.indexOf('--profile')
+            const profile = at >= 0 ? process.argv[at + 1] : 'web'
+            const home = typeof dshHomePath === 'function'
+              ? dshHomePath()
+              : (process.env.DSH_HOME || ((process.env.USERPROFILE || process.env.HOME) + '/.dsh'))
+            const specs = home + '/data-ide-runtime/conn-specs.json'
+            return [home + '/profiles/' + profile + '/node_modules/dsh-data-ide/lib/mcp/server.js',
+                    '--dsh-data-ide-specs', specs]
+          })()
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+        reconnect:
+          enabled: true

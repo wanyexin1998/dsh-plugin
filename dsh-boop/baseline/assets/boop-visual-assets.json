@@ -1,0 +1,37 @@
+{
+  "version": "1.2",
+  "assets": [
+    {
+      "id": "kv",
+      "title": "BOOP（波波）KV / VI 品牌板",
+      "file": "boop-kv-approved.png",
+      "original_filename": "波波鲸鱼_ai_品牌设计板.png",
+      "source": "本次对话生成图；用户确认“可以可以放到文档中”",
+      "status": "user-approved-visual",
+      "version": "1.2",
+      "width": 1536,
+      "height": 1024,
+      "format": "PNG",
+      "mode": "RGB",
+      "transparent": false,
+      "sha256": "8441a468bc524ffcc783f0d2cc8ae9fbdc270d310d57103fb575cadc749c55b2",
+      "notes": "原始 PNG 原样保存；非矢量文件、非三维模型源文件。"
+    },
+    {
+      "id": "character",
+      "title": "BOOP（波波）角色实体图",
+      "file": "boop-character-approved.png",
+      "original_filename": "深海蓝色q版鲸鱼玩偶.png",
+      "source": "本次对话生成图；用户确认“可以可以放到文档中”",
+      "status": "user-approved-visual",
+      "version": "1.2",
+      "width": 1254,
+      "height": 1254,
+      "format": "PNG",
+      "mode": "RGB",
+      "transparent": false,
+      "sha256": "7652b44586111b86047fa86ffe883069570990763ec446f66aad568a4c23e71e",
+      "notes": "原始 PNG 原样保存；非矢量文件、非三维模型源文件。"
+    }
+  ]
+}

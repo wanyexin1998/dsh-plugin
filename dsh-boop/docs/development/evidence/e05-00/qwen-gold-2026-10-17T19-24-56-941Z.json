@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-17T19:24:56.941Z",
+  "elapsedMs": 8549,
+  "config": {
+    "providerId": "qwen-vllm-local",
+    "modelId": "qwen3.8-27b",
+    "baseUrl": "http://172.26.0.49:8000/v1",
+    "credential": "none",
+    "declaredContext": "196k",
+    "quantization": "4bit",
+    "externalFallbackAllowed": false
+  },
+  "server": {
+    "servedModelIds": [
+      "Qwen3.8-27B",
+      "qwen3.8-27b",
+      "qwen3.8"
+    ],
+    "modelFound": true,
+    "maxModelLen": 196608,
+    "root": "./Qwen3.8-27B-AWQ-INT4"
+  },
+  "contextWindowTokens": 196608,
+  "steps": [
+    {
+      "id": "basic-response",
+      "state": "PASS",
+      "detail": "answered in 458ms; reasoning separated from final text",
+      "measured": {
+        "elapsedMs": 458,
+        "finish": "stop",
+        "promptTokens": 19,
+        "completionTokens": 19,
+        "totalTokens": 38,
+        "reasoningSeparated": false
+      }
+    },
+    {
+      "id": "tool-call",
+      "state": "PASS",
+      "detail": "echo proposed in 1091ms; BOOP would execute it",
+      "measured": {
+        "elapsedMs": 1091,
+        "finish": "tool_calls",
+        "promptTokens": 377,
+        "completionTokens": 60,
+        "totalTokens": 437,
+        "reasoningSeparated": false,
+        "argumentBytes": 70
+      }
+    },
+    {
+      "id": "unicode-arguments",
+      "state": "PASS",
+      "detail": "Chinese + Unicode arguments round-tripped losslessly",
+      "measured": {
+        "text": "你好，波波 🐳 — ünïcode",
+        "tag": "中文标签",
+        "emoji": "🐳"
+      }
+    },
+    {
+      "id": "multi-step",
+      "state": "PASS",
+      "detail": "two-step chain completed; BOOP executed the side-effect-free tool",
+      "measured": {
+        "stepOne": {
+          "elapsedMs": 841,
+          "finish": "tool_calls",
+          "promptTokens": 358,
+          "completionTokens": 43,
+          "totalTokens": 401,
+          "reasoningSeparated": false
+        },
+        "stepTwo": {
+          "elapsedMs": 279,
+          "finish": "stop",
+          "promptTokens": 429,
+          "completionTokens": 6,
+          "totalTokens": 435,
+          "reasoningSeparated": true
+        }
+      }
+    },
+    {
+      "id": "strict-json",
+      "state": "PASS",
+      "detail": "schema-constrained JSON parsed and validated; tiny-budget finish=length parsed=false guard=ok",
+      "measured": {
+        "elapsedMs": 1341,
+        "finish": "stop",
+        "promptTokens": 32,
+        "completionTokens": 76,
+        "totalTokens": 108,
+        "reasoningSeparated": false,
+        "contentPreview": "{\n  \"facts\": [\n    {\n      \"text\": \"波波喜欢在周一下午整理项目\",\n      \"confidence\": 0.85\n    },\n    {\n      \"text\": \"波波是否每周都在周一下午整理项目是不确定的\",\n      \"confidence\": 0.9\n    }\n "
+      }
+    },
+    {
+      "id": "cancel",
+      "state": "PASS",
+      "detail": "client aborted after 3 chunks (first in 186ms); server-side release is not claimed",
+      "measured": {
+        "aborted": true,
+        "chunks": 3,
+        "firstChunkMs": 186,
+        "contentPreview": "写一段"
+      }
+    },
+    {
+      "id": "context-ladder",
+      "state": "PASS",
+      "detail": "8k/32k/64k requests accepted with observed prompt tokens 8288/33116/66219",
+      "measured": {
+        "targets": [
+          8000,
+          32000,
+          64000
+        ],
+        "observed": [
+          8288,
+          33116,
+          66219
+        ]
+      }
+    },
+    {
+      "id": "token-accounting",
+      "state": "PASS",
+      "detail": "usage present and consistent (ratio 1.095 vs 1.036 per target-token)",
+      "measured": {
+        "small": {
+          "promptTokens": 219,
+          "completionTokens": 4,
+          "totalTokens": 223
+        },
+        "large": {
+          "promptTokens": 8288,
+          "completionTokens": 4,
+          "totalTokens": 8292
+        }
+      }
+    }
+  ],
+  "outcome": {
+    "effectiveContextLimit": 196608,
+    "allowed": {
+      "readOnlyChat": true,
+      "memoryJobs": true,
+      "autonomousDispatch": true,
+      "historyBatchLearning": true
+    },
+    "capabilities": [
+      {
+        "id": "basic-response",
+        "state": "PASS",
+        "detail": "answered in 458ms; reasoning separated from final text",
+        "measured": {
+          "elapsedMs": 458,
+          "finish": "stop",
+          "promptTokens": 19,
+          "completionTokens": 19,
+          "totalTokens": 38,
+          "reasoningSeparated": false
+        }
+      },
+      {
+        "id": "tool-call",
+        "state": "PASS",
+        "detail": "echo proposed in 1091ms; BOOP would execute it",
+        "measured": {
+          "elapsedMs": 1091,
+          "finish": "tool_calls",
+          "promptTokens": 377,
+          "completionTokens": 60,
+          "totalTokens": 437,
+          "reasoningSeparated": false,
+          "argumentBytes": 70
+        }
+      },
+      {
+        "id": "unicode-arguments",
+        "state": "PASS",
+        "detail": "Chinese + Unicode arguments round-tripped losslessly",
+        "measured": {
+          "text": "你好，波波 🐳 — ünïcode",
+          "tag": "中文标签",
+          "emoji": "🐳"
+        }
+      },
+      {
+        "id": "multi-step",
+        "state": "PASS",
+        "detail": "two-step chain completed; BOOP executed the side-effect-free tool",
+        "measured": {
+          "stepOne": {
+            "elapsedMs": 841,
+            "finish": "tool_calls",
+            "promptTokens": 358,
+            "completionTokens": 43,
+            "totalTokens": 401,
+            "reasoningSeparated": false
+          },
+          "stepTwo": {
+            "elapsedMs": 279,
+            "finish": "stop",
+            "promptTokens": 429,
+            "completionTokens": 6,
+            "totalTokens": 435,
+            "reasoningSeparated": true
+          }
+        }
+      },
+      {
+        "id": "strict-json",
+        "state": "PASS",
+        "detail": "schema-constrained JSON parsed and validated; tiny-budget finish=length parsed=false guard=ok",
+        "measured": {
+          "elapsedMs": 1341,
+          "finish": "stop",
+          "promptTokens": 32,
+          "completionTokens": 76,
+          "totalTokens": 108,
+          "reasoningSeparated": false,
+          "contentPreview": "{\n  \"facts\": [\n    {\n      \"text\": \"波波喜欢在周一下午整理项目\",\n      \"confidence\": 0.85\n    },\n    {\n      \"text\": \"波波是否每周都在周一下午整理项目是不确定的\",\n      \"confidence\": 0.9\n    }\n "
+        }
+      },
+      {
+        "id": "cancel",
+        "state": "PASS",
+        "detail": "client aborted after 3 chunks (first in 186ms); server-side release is not claimed",
+        "measured": {
+          "aborted": true,
+          "chunks": 3,
+          "firstChunkMs": 186,
+          "contentPreview": "写一段"
+        }
+      },
+      {
+        "id": "context-ladder",
+        "state": "PASS",
+        "detail": "8k/32k/64k requests accepted with observed prompt tokens 8288/33116/66219",
+        "measured": {
+          "targets": [
+            8000,
+            32000,
+            64000
+          ],
+          "observed": [
+            8288,
+            33116,
+            66219
+          ]
+        }
+      },
+      {
+        "id": "token-accounting",
+        "state": "PASS",
+        "detail": "usage present and consistent (ratio 1.095 vs 1.036 per target-token)",
+        "measured": {
+          "small": {
+            "promptTokens": 219,
+            "completionTokens": 4,
+            "totalTokens": 223
+          },
+          "large": {
+            "promptTokens": 8288,
+            "completionTokens": 4,
+            "totalTokens": 8292
+          }
+        }
+      }
+    ]
+  },
+  "observations": {
+    "ladderPromptTokens": [
+      8288,
+      33116,
+      66219
+    ],
+    "overLimit": {
+      "requestedTokens": 210000,
+      "status": 400,
+      "promptTokens": null,
+      "behavior": "service rejected the over-limit request: MODEL_BAD_REQUEST 400: This model's maximum context length is 196608 tokens. However, you requested 8 output tokens and your prompt contains at least 196601 input tokens, for a total of at least 196609 tokens. Please reduce the length of the input prompt or the number of requested output tokens. (parameter=input_tokens, value=196601)"
+    },
+    "nearLimit": {
+      "requestedTokens": 180000,
+      "status": 200,
+      "promptTokens": 186219,
+      "finish": "stop",
+      "elapsedMs": 1322
+    }
+  }
+}

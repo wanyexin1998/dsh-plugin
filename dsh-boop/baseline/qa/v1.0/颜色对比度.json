@@ -1,0 +1,98 @@
+[
+  {
+    "theme": "light",
+    "foreground": "text",
+    "background": "surface",
+    "ratio": 14.85,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "foreground": "text-secondary",
+    "background": "surface",
+    "ratio": 5.85,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "foreground": "brand-strong",
+    "background": "brand-soft",
+    "ratio": 5.38,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "foreground": "success-text",
+    "background": "success-surface",
+    "ratio": 6.64,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "foreground": "warning-text",
+    "background": "warning-surface",
+    "ratio": 6.07,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "light",
+    "foreground": "danger-text",
+    "background": "danger-surface",
+    "ratio": 5.93,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "text",
+    "background": "surface",
+    "ratio": 14.78,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "text-secondary",
+    "background": "surface",
+    "ratio": 8.43,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "brand-strong",
+    "background": "brand-soft",
+    "ratio": 7.92,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "success-text",
+    "background": "success-surface",
+    "ratio": 8.44,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "warning-text",
+    "background": "warning-surface",
+    "ratio": 8.76,
+    "target": 4.5,
+    "passed": true
+  },
+  {
+    "theme": "dark",
+    "foreground": "danger-text",
+    "background": "danger-surface",
+    "ratio": 8.36,
+    "target": 4.5,
+    "passed": true
+  }
+]

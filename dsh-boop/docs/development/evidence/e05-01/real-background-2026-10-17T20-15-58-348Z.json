@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "occurredAt": "2026-10-17T20:16:24.456Z",
+  "route": {
+    "providerId": "qwen-local",
+    "modelId": "qwen3.8-27b",
+    "service": "http://172.26.0.49:8000/v1",
+    "credential": "none (keyless)"
+  },
+  "fixture": {
+    "sessionId": "session-0d6650ab-0426-4f0e-ae7a-4a272566de05",
+    "headSeq": 17,
+    "userMessageSeq": 8,
+    "foregroundObserved": true
+  },
+  "batch": {
+    "status": "committed",
+    "applied": [
+      "fact_853010d3",
+      "fact_fbaa7bf1",
+      "fact_57860f0e"
+    ],
+    "watermark": {
+      "before": -1,
+      "after": 17
+    },
+    "model": {
+      "providerId": "qwen-local",
+      "modelId": "qwen3.8-27b",
+      "attempts": 1,
+      "elapsedMs": null
+    },
+    "modelCalls": 1,
+    "elapsedMs": 3841
+  },
+  "ledger": {
+    "facts": [
+      {
+        "id": "fact_57860f0e",
+        "kind": "open_item",
+        "text": "当前唯一阻塞是共享 GPU 排队",
+        "status": "active"
+      },
+      {
+        "id": "fact_853010d3",
+        "kind": "decision",
+        "text": "BOOP 项目本阶段不部署生产环境",
+        "status": "disputed"
+      },
+      {
+        "id": "fact_fbaa7bf1",
+        "kind": "decision",
+        "text": "下周五之前要完成 E05-01 调度验收",
+        "status": "disputed"
+      }
+    ],
+    "evidence": [
+      {
+        "fact_id": "fact_853010d3",
+        "session_id": "session-0d6650ab-0426-4f0e-ae7a-4a272566de05",
+        "seq": 8
+      },
+      {
+        "fact_id": "fact_fbaa7bf1",
+        "session_id": "session-0d6650ab-0426-4f0e-ae7a-4a272566de05",
+        "seq": 8
+      },
+      {
+        "fact_id": "fact_57860f0e",
+        "session_id": "session-0d6650ab-0426-4f0e-ae7a-4a272566de05",
+        "seq": 8
+      }
+    ],
+    "snapshots": [
+      {
+        "version": 1
+      }
+    ],
+    "cursors": [
+      {
+        "through_seq": 17,
+        "state": "dirty"
+      }
+    ]
+  },
+  "modelCalls": {
+    "hostTurn": 1,
+    "backgroundBatch": 1
+  }
+}

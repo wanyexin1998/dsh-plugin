@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-18T04:46:31.969Z",
+  "host": {
+    "payload": "E:\\dsh-plugin\\dsh-boop\\.work\\test-host\\payload-0.2.1\\dsh",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-02-rehearsal-1792298770770\\dsh-home",
+    "profile": "boop-install"
+  },
+  "tarball": {
+    "path": "E:\\dsh-plugin\\dsh-boop\\dist\\dsh-boop-0.1.0.tgz",
+    "bytes": 1102402
+  },
+  "note": "exported data dirs (ledger) are kept on uninstall; a true version-to-version upgrade rehearsal still needs a second built version (NOT_RUN)",
+  "stages": [
+    {
+      "name": "tarball exists",
+      "ok": true,
+      "detail": "E:\\dsh-plugin\\dsh-boop\\dist\\dsh-boop-0.1.0.tgz"
+    },
+    {
+      "name": "initialize a private web profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "install the tarball into a private profile",
+      "ok": true,
+      "detail": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-02-rehearsal-1792298770770\\dsh-home\\profiles\\boop-install"
+    },
+    {
+      "name": "installed package version matches the tarball",
+      "ok": true,
+      "detail": "0.1.0"
+    },
+    {
+      "name": "installed package contains lib/index.js",
+      "ok": true
+    },
+    {
+      "name": "installed package contains lib/client.js",
+      "ok": true
+    },
+    {
+      "name": "installed package contains cordis.patch.yml",
+      "ok": true
+    },
+    {
+      "name": "installed package contains assets/3d/boop.glb",
+      "ok": true
+    },
+    {
+      "name": "fresh install: BOOP rows load and /api/boop/bootstrap answers",
+      "ok": true,
+      "detail": "HTTP 200; scope=0.2.1-rc.2"
+    },
+    {
+      "name": "fresh install: packaged 3D asset route serves the shipped GLB",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "fresh install: gate ledger still keeps write mode OFF",
+      "ok": true,
+      "detail": "blockedBy=G05,G08,G09"
+    },
+    {
+      "name": "fresh install opened the BOOP ledger under the private DSH_HOME",
+      "ok": true,
+      "detail": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-02-rehearsal-1792298770770\\dsh-home\\boop\\boop.sqlite"
+    },
+    {
+      "name": "reinstall the same tarball (upgrade primitive) succeeds",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "reinstall: BOOP rows load and /api/boop/bootstrap answers",
+      "ok": true,
+      "detail": "HTTP 200; scope=0.2.1-rc.2"
+    },
+    {
+      "name": "reinstall: packaged 3D asset route serves the shipped GLB",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "reinstall: gate ledger still keeps write mode OFF",
+      "ok": true,
+      "detail": "blockedBy=G05,G08,G09"
+    },
+    {
+      "name": "remove the bundle from the private profile",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "after uninstall the BOOP endpoint is gone (404)",
+      "ok": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "uninstall keeps the BOOP ledger file (no user data deleted)",
+      "ok": true,
+      "detail": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-02-rehearsal-1792298770770\\dsh-home\\boop\\boop.sqlite"
+    },
+    {
+      "name": "uninstall keeps the ledger size stable",
+      "ok": true,
+      "detail": "4096 -> 4096"
+    }
+  ]
+}

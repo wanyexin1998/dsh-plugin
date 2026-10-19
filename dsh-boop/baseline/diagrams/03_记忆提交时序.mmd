@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant S as 原Session
+  participant O as 观察器
+  participant Q as 记忆队列
+  participant L as 受限模型
+  participant D as BOOP数据库
+  participant W as 工作区聚合器
+  participant B as BOOP
+  S->>O: 执行事件 / 轮次落定
+  O->>Q: 标记dirty（不触发业务）
+  Q->>S: 读取持久化固定范围与证据
+  Q->>L: 旧快照 + 未处理增量
+  L-->>Q: 候选JSON，不执行任何工具
+  Q->>D: CAS检查 + facts/版本/cursor事务
+  alt 校验或事务失败
+    D-->>Q: 保留旧版本和旧水位
+  else 提交成功
+    D-->>W: workspace_dirty
+    W->>D: 带输入版本向量的聚合提交
+    D-->>B: 最新项目快照；影响标记
+  end

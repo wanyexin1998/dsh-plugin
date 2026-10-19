@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-17T20:07:55.482Z",
+  "route": {
+    "providerId": "qwen-local",
+    "modelId": "qwen3.8-27b",
+    "service": "http://172.26.0.49:8000/v1",
+    "credential": "none (keyless)"
+  },
+  "fixture": {
+    "sessionId": "session-7badd6ac-149e-42dc-8d95-89d1665c829d",
+    "generation": "session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:",
+    "headSeq": 17,
+    "userMessageSeq": 8,
+    "assistantMessageSeq": 15,
+    "assistantText": "\n\nOK",
+    "logFileSha256": "2ff67971911f47a9684ab64145fbb6d539989de3d7b0c31f5489a5ede445ec1d"
+  },
+  "extraction": {
+    "status": "committed",
+    "fromSeq": -1,
+    "toSeq": 17,
+    "version": 1,
+    "applied": [
+      "fact_853010d3",
+      "fact_61bea19a",
+      "fact_57860f0e"
+    ],
+    "inputTokensEstimated": 420,
+    "outputBudget": 2048,
+    "attempts": [
+      {
+        "attempt": 1,
+        "providerId": "qwen-local",
+        "modelId": "qwen3.8-27b",
+        "elapsedMs": 3740,
+        "finishReason": "stop",
+        "usage": {
+          "promptTokens": 496,
+          "completionTokens": 237,
+          "totalTokens": 733
+        },
+        "reasoningSeparated": false,
+        "error": null
+      }
+    ],
+    "elapsedMs": 3809
+  },
+  "facts": [
+    {
+      "factId": "fact_57860f0e",
+      "kind": "open_item",
+      "text": "当前唯一阻塞是共享 GPU 排队",
+      "authority": "user_confirmed",
+      "status": "active"
+    },
+    {
+      "factId": "fact_61bea19a",
+      "kind": "decision",
+      "text": "下周五之前要完成 E03-02 记忆抽取验收",
+      "authority": "inference",
+      "status": "disputed"
+    },
+    {
+      "factId": "fact_853010d3",
+      "kind": "decision",
+      "text": "BOOP 项目本阶段不部署生产环境",
+      "authority": "inference",
+      "status": "disputed"
+    }
+  ],
+  "evidence": [
+    {
+      "factId": "fact_853010d3",
+      "seq": 8,
+      "sourceHash": "session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:#8"
+    },
+    {
+      "factId": "fact_61bea19a",
+      "seq": 8,
+      "sourceHash": "session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:#8"
+    },
+    {
+      "factId": "fact_57860f0e",
+      "seq": 8,
+      "sourceHash": "session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:#8"
+    }
+  ],
+  "snapshot": {
+    "version": 1,
+    "coverage": {
+      "session-7badd6ac-149e-42dc-8d95-89d1665c829d#session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:": {
+        "sourceGeneration": "session-7badd6ac-149e-42dc-8d95-89d1665c829d@4:1792267662647:",
+        "throughSeq": 17
+      }
+    },
+    "body": "- [active] open_item: 当前唯一阻塞是共享 GPU 排队 (user_confirmed v1)\n- [disputed] decision: 下周五之前要完成 E03-02 记忆抽取验收 (inference v3)\n- [disputed] decision: BOOP 项目本阶段不部署生产环境 (inference v3)"
+  },
+  "modelCalls": {
+    "hostTurn": 1,
+    "extraction": 1
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-10-16T05:55:58.8508782Z",
+  "version": "0.5.0-rebuild.2",
+  "release": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.2-256513ff9e1d",
+  "releaseSha256": "e944060c4152525741d628f9b6a18605427ab852b89a0e2273af49d921121613",
+  "staticTests": {
+    "passed": 99,
+    "total": 99,
+    "report": "evidence/verification.json"
+  },
+  "nativeBootValidation": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.2-256513ff9e1d\\boot-validation.json",
+  "desktop": {
+    "protocol": "dsh-app://app/",
+    "uiCheckedAt": "2026-10-16T05:54:49.926Z",
+    "processId": 48940,
+    "nativeWindowId": 19796912,
+    "initialLaunchPassed": true,
+    "nativeMenuRightSplitPassed": true,
+    "gracefulFullRestartPassed": true,
+    "restoredSplitPanels": 2,
+    "nativeEditors": 2,
+    "visibleComponentFailure": false,
+    "newCrashReports": 0,
+    "latestCrashBeforeRepair": "crash-2026-10-16T05-07-49-463Z-web-boot.log",
+    "leftOpen": true
+  },
+  "rollbackReceipt": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\backups\\install-2026-10-16T05-52-31-604Z\\receipt.json",
+  "dataHandling": "Existing sessions opened through native UI. No user prompt submitted, no session/message deletion. Installation changed profile dependency configuration and package junctions with backups.",
+  "limitations": "Validated against this installed DSH 0.2.0-rc.2 baseline. Native application upgrades require fresh patch and boot validation."
+}

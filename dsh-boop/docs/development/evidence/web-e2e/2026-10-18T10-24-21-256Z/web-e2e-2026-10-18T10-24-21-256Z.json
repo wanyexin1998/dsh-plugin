@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-18T10:24:53.901Z",
+  "browser": {
+    "channel": "msedge",
+    "version": "155.0.4283.62"
+  },
+  "host": {
+    "url": "http://127.0.0.1:63716/",
+    "port": 63716,
+    "dshHome": ".work/test-runs/web-e2e-1792319061256/dsh-home",
+    "profile": "boop-web-e2e"
+  },
+  "shots": {
+    "shell": "docs/development/evidence/web-e2e/2026-10-18T10-24-21-256Z/screens/01-shell-1280x800.png",
+    "panel": "docs/development/evidence/web-e2e/2026-10-18T10-24-21-256Z/screens/02-board-1280x800.png",
+    "main": "docs/development/evidence/web-e2e/2026-10-18T10-24-21-256Z/screens/03-main-session-1280x800.png",
+    "initResult": "docs/development/evidence/web-e2e/2026-10-18T10-24-21-256Z/screens/04-init-card-result-1280x800.png"
+  },
+  "sample": {
+    "body": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\nBOOP 任务板\n工作区\n默认工作区\n新会话\nBOOP · 波波\n已连接\n更多\n探索未至之境\n预览版\n默认工作区\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\n工作区内修改\nQwen 3.8 27B (self-hosted vLLM)",
+    "panel": "有些门禁被阻断，需要你处理。\nBOOP · 波波\n\n你的 AI 项目助理\n\n恢复门禁已装备\n写模式关闭\n账本在位（单写者）\nBOOP 主会话（原生 Conversation）\n会话\nboop-main（点击“回到主聊天”由原生导航打开）\n身份\n已绑定（账本）\n数据域\nboop-25dd741108c119ef\n账本\ndsh-home/boop/boop.sqlite\n回到主聊天\n刷新身份\n来源\n已发现 1\n账本记录 0\n刷新\n未命名会话\n查看原会话\nsession-af…10a72f\n尚未读取（只有发现记录）\n覆盖：未读\n世代 session-af…072857\n状态 unseen\n\n来源标签",
+    "init": "BOOP · 波波\n\n我会在这里帮你管理 DSH 项目。先选一种记忆起点：从现在开始、学习已有会话，或导入你的记忆。\n\n从现在开始\n学习已有会话\n导入记忆",
+    "initResult": "写模式在 G01–G06 全部通过前保持关闭，初始化不会写入任何数据。\n\n写模式在 G01–G06 全部通过前保持关闭；本次初始化不会写入任何数据。\n\n账本：在位（单写者）\n写模式：关闭\n门禁：G05 NOT_RUN · G06 PASS\n已发现会话：2\n已执行：否（0 写入）\n\nreason: write-mode-disabled\n\n重新选择\n重试\n查看任务板\n\n这条卡片不会自动发送消息；原生输入框仍归 DSH 所有。"
+  },
+  "apiCalls": [],
+  "consoleNotes": [],
+  "steps": [
+    {
+      "name": "private web profile + BOOP bundle + declared local model route prepared",
+      "ok": true,
+      "detail": "boop-web-e2e"
+    },
+    {
+      "name": "web Host booted on 127.0.0.1",
+      "ok": true,
+      "detail": "port 63716"
+    },
+    {
+      "name": "first-run dialogs dismissed (no click-blocking mask)",
+      "ok": true,
+      "detail": "masks=0 "
+    },
+    {
+      "name": "a real workspace is available for the conversation",
+      "ok": true,
+      "detail": "url=http://127.0.0.1:63716/"
+    },
+    {
+      "name": "real Edge renders the DSH web shell",
+      "ok": true,
+      "detail": "title=\"DeepSeek Harness\""
+    },
+    {
+      "name": "shell is not empty",
+      "ok": true,
+      "detail": "\"新会话\\nCtrl\\n+\\nAlt\\n+\\nN\\n插件\\n自动化任务\\nBOOP 任务板\\n工作区\\n默认工作区\\n新会话\\nBOOP · 波波\\n已连接\\n更多\\n探索未至之境\\n预览版\\n默认工作区\\n标准模式\\n描述你想要构建的内容, / 调用指令, @ 文件或对话\\n工作区内修改\\nQwen 3.8 27B (s\""
+    },
+    {
+      "name": "BOOP board entry is registered in the real shell",
+      "ok": true,
+      "detail": "count=1"
+    },
+    {
+      "name": "BOOP panel renders real facts from the Host",
+      "ok": true,
+      "detail": "\"有些门禁被阻断，需要你处理。\\nBOOP · 波波\\n\\n你的 AI 项目助理\\n\\n恢复门禁已装备\\n写模式关闭\\n账本在位（单写者）\\nBOOP 主会话（原生 Conversation）\\n会话\\nboop-main（点击“回到主聊天”由原生导航打开）\\n身份\\n已绑定（账本）\\n数据域\\nboop-25dd741108c119ef\\n账本\\nd\""
+    },
+    {
+      "name": "BOOP panel shows the real taskboard groups",
+      "ok": true,
+      "detail": "\"有些门禁被阻断，需要你处理。\\nBOOP · 波波\\n\\n你的 AI 项目助理\\n\\n恢复门禁已装备\\n写模式关闭\\n账本在位（单写者）\\nBOOP 主会话（原生 Conver\""
+    },
+    {
+      "name": "BOOP panel shows the human-control area (approval / stop / recovery)",
+      "ok": true,
+      "detail": "\"有些门禁被阻断，需要你处理。\\nBOOP · 波波\\n\\n你的 AI 项目助理\\n\\n恢复门禁已装备\\n写模式关闭\\n账本在位（单写者）\\nBOOP 主会话（原生 Conver\""
+    },
+    {
+      "name": "BOOP board follows the real dark theme",
+      "ok": true,
+      "detail": "{\"bodyDarkAttr\":true,\"background\":\"rgb(21, 21, 23)\",\"panelBackground\":\"rgba(0, 0, 0, 0)\"}"
+    },
+    {
+      "name": "BOOP main Session opens natively and shows the init dock",
+      "ok": true,
+      "detail": "url=http://127.0.0.1:63716/"
+    },
+    {
+      "name": "main-session header identity is composed when the conversation header exists",
+      "ok": true,
+      "detail": "visible=false"
+    },
+    {
+      "name": "initialization card states the three modes honestly",
+      "ok": true,
+      "detail": "\"BOOP · 波波\\n\\n我会在这里帮你管理 DSH 项目。先选一种记忆起点：从现在开始、学习已有会话，或导入你的记忆。\\n\\n从现在开始\\n学习已有会话\\n导入记忆\""
+    },
+    {
+      "name": "choosing a mode reports the real read-only result, never a fake success",
+      "ok": true,
+      "detail": "\"写模式在 G01–G06 全部通过前保持关闭，初始化不会写入任何数据。\\n\\n写模式在 G01–G06 全部通过前保持关闭；本次初始化不会写入任何数据。\\n\\n账本：在位（单写者）\\n写模式：关闭\\n门禁：G05 NOT_RUN · G06 PASS\\n已发现会话：2\\n已执行：否（0 写入）\\n\\nreason: write-mode-disabled\\n\\n重新选择\\n重试\\n查看\""
+    },
+    {
+      "name": "dark color scheme is applied in the real browser",
+      "ok": true,
+      "detail": "{\"bodyDarkAttr\":true,\"colorScheme\":\"dark\",\"background\":\"rgb(21, 21, 23)\"}"
+    },
+    {
+      "name": "an ordinary Session does not get the BOOP init dock/panel",
+      "ok": true,
+      "detail": "{\"panel\":0,\"dock\":0,\"boopStyles\":2,\"text\":\"新会话\\nCtrl\\n+\\nAlt\\n+\\nN\\n插件\\n自动化任务\\nBOOP 任务板\\n工作区\\n默认工作区\\n新会话\\nBOOP · 波波\\n已连接\\n更多\\n探索未至之境\\n预览版\\n默认工作区\\n标准模式\\n描述你想要构建的内容, / 调用指令, @ 文件或对话\\n工作\"}"
+    },
+    {
+      "name": "BOOP scoped styles stay present but do not replace native UI (additive only)",
+      "ok": true,
+      "detail": "boop style tags=2"
+    },
+    {
+      "name": "no unexpected console/page errors in the real browser",
+      "ok": true,
+      "detail": "[]"
+    }
+  ]
+}

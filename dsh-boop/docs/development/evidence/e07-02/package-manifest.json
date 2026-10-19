@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "tool": "tools/package-boop.mjs",
+  "generatedFor": "E07-02",
+  "generatedAt": "2026-10-18T04:46:43.853Z",
+  "command": "npm pack --json --ignore-scripts --pack-destination <out>",
+  "environment": {
+    "node": "v24.18.0",
+    "npm": "11.16.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "package": {
+    "name": "dsh-boop",
+    "version": "0.1.0",
+    "license": "Apache-2.0",
+    "private": true,
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0",
+      "dsh": "0.2.1-rc.2"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+      "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2"
+    }
+  },
+  "tarball": {
+    "filename": "dsh-boop-0.1.0.tgz",
+    "bytes": 1102402,
+    "sha256": "0cbd2f7e324a2b113d44a24ca52e4ce12204cb99dee7bcad08cb73e0a8b71e8a",
+    "sha512Integrity": "sha512-g1GtlVSIlJmegv4DH56k6oTHB/9temKbDPUwGkWi2BXGBNgjqopRmTOH0V7cSzT5nlzc9Ywt4Aa74T8HZ7iqSQ==",
+    "unpackedBytes": 2456342,
+    "fileCount": 26
+  },
+  "files": [
+    {
+      "path": "assets/3d/boop-assistant.d.ts",
+      "bytes": 937,
+      "sha256": "683797ffb69d3179a2a529005e3ce62d2dc9dd9478b4a92d80936186db170e1a"
+    },
+    {
+      "path": "assets/3d/boop-assistant.js",
+      "bytes": 14902,
+      "sha256": "fcb546fe430169d35e9c6b43364613a2eafa245ccf1a8a152c51e519e4711e65"
+    },
+    {
+      "path": "assets/3d/boop.glb",
+      "bytes": 1389436,
+      "sha256": "379e9845c597681f53b90e851bcb88ee31a01a1ace80b3e63478539f4807b56b"
+    },
+    {
+      "path": "assets/3d/README.md",
+      "bytes": 1020,
+      "sha256": "63ca7a9454d9e9121697d0bc26fa9ba61e590d28b9376849104a8d5632d270c7"
+    },
+    {
+      "path": "assets/3d/states/boop-error-256.png",
+      "bytes": 34847,
+      "sha256": "d351dd748c9c6ad6f278e0fbae230d31425671716566b5dcccb459b7f1245bab"
+    },
+    {
+      "path": "assets/3d/states/boop-idle-256.png",
+      "bytes": 35390,
+      "sha256": "2e00b9ea7dfca4c322392b2ad4205ce12d7188d45827e9e292a30b78bebab15e"
+    },
+    {
+      "path": "assets/3d/states/boop-listen-256.png",
+      "bytes": 36005,
+      "sha256": "eb83ae65d793f0f2cd8c7a65785061069b98c3068f40f09c025bb6c9e4af57e6"
+    },
+    {
+      "path": "assets/3d/states/boop-success-256.png",
+      "bytes": 35428,
+      "sha256": "3c83b829ea0e2d182f3f46dbc2867cb275cd0af01f00ba7ae8425b3fe68da312"
+    },
+    {
+      "path": "assets/3d/states/boop-think-256.png",
+      "bytes": 35765,
+      "sha256": "846fe157dc04e04b97c61f2247a9e3c74db316b3234d448ef463cd613852379a"
+    },
+    {
+      "path": "cordis.patch.yml",
+      "bytes": 6349,
+      "sha256": "26bce4572981daba42d7ce35531b0e40ef2bc9f9463afac15eb94c2664c62f0c"
+    },
+    {
+      "path": "lib/api.js",
+      "bytes": 81498,
+      "sha256": "3a9f6e81d1b2f433d5cca0a973e8b2933c5d0b5dc306dcf951ee0755602e62e8"
+    },
+    {
+      "path": "lib/assets.js",
+      "bytes": 3564,
+      "sha256": "08ad623b8ef050f9d7426bfce79e29584181e1e8a33b0784c7f12bfe3e292907"
+    },
+    {
+      "path": "lib/client.js",
+      "bytes": 268061,
+      "sha256": "695405b22aa186d7a9450f0aea25c4678fcebd304952d16296c2da3e74ef3e24"
+    },
+    {
+      "path": "lib/control-api.js",
+      "bytes": 50798,
+      "sha256": "0693ee51fff07c4509f9f085e268977697e0b701dc4f5e2e97ca566defd83c42"
+    },
+    {
+      "path": "lib/index.js",
+      "bytes": 92613,
+      "sha256": "896a9a37781c0a77bf09c8702aa5e85dbc34f16016d0910a7f6ece8409f4bb4d"
+    },
+    {
+      "path": "lib/pre-step-api.js",
+      "bytes": 12160,
+      "sha256": "4d13958ff59d100b330e8d8587ea2fec9979a8248f5308b7017afbd98708bf82"
+    },
+    {
+      "path": "lib/scheduler-api.js",
+      "bytes": 129051,
+      "sha256": "6bb8c59724a70d2e7fdd12d860f30565f08e27b0c536dc8e6b46f980ed29847d"
+    },
+    {
+      "path": "lib/tasks-api.js",
+      "bytes": 32051,
+      "sha256": "c2db74e5409dd380c1c4cb3457932aba44de2d460a9eea01ddcf69e956c68608"
+    },
+    {
+      "path": "lib/tools.js",
+      "bytes": 46895,
+      "sha256": "d4af3f9eec63b90f9a7abfaf095283ae37a0f429ee5626b19e836e9e9d427d0c"
+    },
+    {
+      "path": "lib/verify-api.js",
+      "bytes": 42744,
+      "sha256": "8d68d54559a56d17d56592bd917a3ecee8c321d68dce64a281f4f89dd2cf4731"
+    },
+    {
+      "path": "lib/workspace-api.js",
+      "bytes": 81845,
+      "sha256": "ced939ca920c8495aab6f1b814dca69e77f59bd01576efad7138f834cd158a05"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 11558,
+      "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 4063,
+      "sha256": "744e417c462c0d29411a2e81b63ca36ecd70007af5a26c038dc9e77dcfa93fd2"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1930,
+      "sha256": "73a6943ab0c7d25c8d04994ea9147053bb71f189c5e4af32a30d553aa142e504"
+    },
+    {
+      "path": "presets/boop.patch.yml",
+      "bytes": 1900,
+      "sha256": "fe3fa04dbce5676d3bc83e51adcb40b4f25a29e168bebbe049651b63ae9c09a0"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5532,
+      "sha256": "86d5b5c215599ac5600db6a6e230958f4afc64a77a9fc246f074de01d8542152"
+    }
+  ],
+  "checks": {
+    "dryRunEntries": 26,
+    "requiredEntries": 26,
+    "requiredComplete": true,
+    "forbiddenAbsent": true,
+    "testBundlesAbsent": true,
+    "allEntriesUnderPackageDir": true,
+    "integrityVerified": true,
+    "reproducible": true,
+    "extraEntries": [],
+    "notes": []
+  },
+  "notVerified": [
+    "real install into a user profile (runbook steps only; NOT_RUN pending E07-01)",
+    "upgrade/rollback drill on a real profile (NOT_RUN)",
+    "DSH Desktop Electron install/UI (NOT_RUN)",
+    "public registry / marketplace publication (not requested)",
+    "macOS/Linux packaging and install (NOT_RUN; not claimed)"
+  ]
+}

@@ -1,0 +1,8 @@
+.native-source/
+.test-build/
+dist/
+lib/
+host-patches/
+releases/
+backups/
+installed.json

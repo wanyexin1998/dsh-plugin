@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "task": "E07-01",
+  "scenario": "sigkill-mid-turn-restart-restore",
+  "capturedAt": "2026-10-18T04:38:48.746Z",
+  "host": {
+    "profile": "boop-e07-fault-kill",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-kill-restart-1792298311782\\dsh-home",
+    "work": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-kill-restart-1792298311782"
+  },
+  "session": {
+    "sessionId": "session-80f235ae-7ffa-4595-8a21-26e9c27fb1dd",
+    "userSession": "session-ef58b03f-c136-4040-980c-fe0c5fb99fe7"
+  },
+  "dispatch": {
+    "messageId": "msg_act_62a27bd1-f39b-44e8-872c-768472af8147",
+    "actionId": "act_62a27bd1-f39b-44e8-872c-768472af8147",
+    "accepted": true,
+    "sourceKind": "boop-command"
+  },
+  "killed": {
+    "accepted": true,
+    "code": null,
+    "signal": "SIGKILL"
+  },
+  "durable": {
+    "headBeforeKill": 5,
+    "headAfterRestart": 6,
+    "durablePrefixPreserved": true,
+    "preKillEvents": [
+      "0:permission/preset",
+      "1:sandbox/mode",
+      "2:approval/policy",
+      "3:agent/inbox/spliced",
+      "4:turn/start",
+      "5:agent/inbox/spliced"
+    ],
+    "postRestartEvents": [
+      "0:permission/preset",
+      "1:sandbox/mode",
+      "2:approval/policy",
+      "3:agent/inbox/spliced",
+      "4:turn/start",
+      "5:agent/inbox/spliced",
+      "6:turn/end"
+    ],
+    "assistantCount": 0,
+    "lastTurnEnd": {
+      "seq": 6,
+      "type": "turn/end",
+      "time": 1792298318134,
+      "messageId": null,
+      "sourceKind": null,
+      "actionId": null,
+      "provider": null,
+      "model": null,
+      "text": null,
+      "turnEnd": "interrupted",
+      "turn": 1,
+      "spliceTarget": null,
+      "insertedIds": null,
+      "removedCount": null
+    },
+    "ownMessageCount": 0,
+    "claimsAfterRestart": [],
+    "unknownResultWindows": []
+  },
+  "automation": {
+    "frozenHeadBeforeResolve": 6,
+    "headAfterExplicitResolve": 7,
+    "executedAfterRestart": [],
+    "claimsAfterResolve": []
+  },
+  "restored": {
+    "scopeIdBefore": "boop-724dddf455a77921",
+    "schemaVersionBefore": 1,
+    "scopeIdAfter": "boop-724dddf455a77921",
+    "schemaVersionAfter": 1,
+    "storageOk": false,
+    "leaseHeld": false,
+    "ledgerWritableAfterRestart": false,
+    "auditSinkAfterRestart": "memory",
+    "readableAfterRestart": true,
+    "restoredTaskReadable": true,
+    "stopAfterRestore": {
+      "accepted": false,
+      "code": "CAPABILITY_UNAVAILABLE",
+      "noop": false
+    }
+  },
+  "userSession": {
+    "sessionId": "session-ef58b03f-c136-4040-980c-fe0c5fb99fe7",
+    "headBefore": 2,
+    "headAfter": 2,
+    "headAfterStopAttempt": 2,
+    "stopResponse": {
+      "accepted": false,
+      "code": "CAPABILITY_UNAVAILABLE",
+      "stopped": 0
+    },
+    "userTurnsStopped": null
+  },
+  "integrity": {
+    "liveBeforeKill": {
+      "ok": true,
+      "integrity": "ok",
+      "foreignKeys": []
+    },
+    "snapshot": {
+      "ok": true,
+      "integrity": "ok",
+      "foreignKeys": []
+    },
+    "killedLive": {
+      "ok": true,
+      "integrity": "ok",
+      "foreignKeys": []
+    },
+    "restored": {
+      "ok": true,
+      "integrity": "ok",
+      "foreignKeys": []
+    }
+  },
+  "knownUnknown": {
+    "interruptedTurnOutcome": "known: durable turn/end interrupted; no assistant reply was observed",
+    "recoveryGateAdoption": "known: new process adopts no gate entry and makes no claim",
+    "runtimePreStepEnforcement": "KNOWN RISK: RecoveryGate.decide is fail-closed but agent/pre-step wiring is NOT composed; this run proves no AUTOMATIC replay/claim, not a runtime block",
+    "writerLeaseAfterUncleanKill": "the restarted Host reports the writer lease facts above; automated lease takeover after an unclean kill is NOT claimed by this test"
+  }
+}

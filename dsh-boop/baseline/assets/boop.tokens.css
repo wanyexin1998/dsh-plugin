@@ -1,0 +1,35 @@
+/* BOOP v1.1 local values; use tested ThemeAdapter for native DSH surfaces. */
+[data-boop-theme="light"] {
+  --boop-brand: #449BCC;
+  --boop-brand-strong: #17648B;
+  --boop-brand-soft: #EAF5FB;
+  --boop-surface: #FFFFFF;
+  --boop-canvas: #F3F7FA;
+  --boop-text: #0B2637;
+  --boop-text-secondary: #526978;
+  --boop-border: #DCE6EB;
+  --boop-success-text: #176340;
+  --boop-success-surface: #EBF8F0;
+  --boop-warning-text: #825300;
+  --boop-warning-surface: #FFF5DB;
+  --boop-danger-text: #B42318;
+  --boop-danger-surface: #FFF0EE;
+}
+[data-boop-theme="dark"] {
+  --boop-brand: #86C9EE;
+  --boop-brand-strong: #ADDDEB;
+  --boop-brand-soft: #203B4B;
+  --boop-surface: #172731;
+  --boop-canvas: #101B23;
+  --boop-text: #E6F1F6;
+  --boop-text-secondary: #A7BBC7;
+  --boop-border: #324853;
+  --boop-success-text: #86DDB1;
+  --boop-success-surface: #173327;
+  --boop-warning-text: #F3CC79;
+  --boop-warning-surface: #3A2D15;
+  --boop-danger-text: #FFAEA7;
+  --boop-danger-surface: #3C201F;
+}
+[data-boop-root]{--boop-radius-sm:8px;--boop-radius-md:12px;--boop-radius-lg:16px}
+@media(prefers-reduced-motion:reduce){[data-boop-root] *,[data-boop-root] *::before,[data-boop-root] *::after{animation:none!important;transition:none!important}}

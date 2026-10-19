@@ -1,0 +1,21 @@
+attachment artifact: E:\dsh-plugin\dsh-split\dist\host-patches-fix\dsh-client-ui-attachment\lib\client.js
+sha256: 0f54931521da35fb27a8279773cbd200ec3aa3e6ebeea2f0b0efd1b95452ab92
+✔ actual Composer routes A/B by DOM target with listener order A -> B (1150.1587ms)
+✔ actual Composer routes A/B by DOM target with listener order B -> A (234.9801ms)
+✔ a disabled target rejects files instead of falling through to the enabled foreground (124.3789ms)
+✔ split titlebar, Sidebar blank, body gutter and external targets reject rather than misroute (158.7828ms)
+✔ capture-phase veto clears every overlay without intake; viewport leave and dragend clean up (170.0482ms)
+✔ Sidebar subagent conversations receive their own files, never their containing pane (76.9999ms)
+✔ native single-view document drop stays available; multiple native views require a concrete target (52.3163ms)
+✔ multiple native composers do not arbitrate an external target by listener order (55.7972ms)
+✔ native directory detection preserves original File objects, order and entry-API fallback (86.2572ms)
+✔ effect rebind and unmount remove old listeners and invitations, without duplicate intake (92.1103ms)
+✔ a host without conversation markers falls back only to the split body content (92.138ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2325.9798

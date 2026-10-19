@@ -1,0 +1,349 @@
+{
+  "generatedAt": "2026-10-16T02:58:02.812Z",
+  "baseManifest": "patches/originals/MANIFEST.json",
+  "markerContract": "data-dsh-plugin-main-host",
+  "edits": [
+    {
+      "id": "P-1a",
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/client.js",
+      "why": "clearMain() 不再把面板选择强拉回会话界面（插件占用 main 键位时）"
+    },
+    {
+      "id": "P-1b",
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/client.js",
+      "why": "reveal 导航不再把面板选择强拉回会话界面"
+    },
+    {
+      "id": "P-1c",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "插件占用主内容宿主期间右栏保持可见（原判定只看 activePanelId === null）"
+    },
+    {
+      "id": "P-1d",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "侧栏控制器的 show() 用同一判定，否则轨道被释放"
+    },
+    {
+      "id": "P-3a",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "尊重捕获阶段的 veto（插件拦截本次拖放）"
+    },
+    {
+      "id": "P-3b",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "同上：不显示\"可放下\"覆盖层"
+    },
+    {
+      "id": "P-3c",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "本次放下已由插件定向到一个会话，原生 intake 不再处理"
+    },
+    {
+      "id": "P-2a",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "SessionView 接受 hosted：宿主内呈现的会话侧栏不受\"只显示前台\"判定约束"
+    },
+    {
+      "id": "P-2b",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "hosted 时按会话自身是否在屏判定 active（每格一块侧栏同时可见）"
+    },
+    {
+      "id": "P-2c",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "每会话侧栏 portal 进 [data-dsh-sidebar-host=\"<sessionId>\"]（CSS.escape 防注入），按宿主实测宽度下发 width（0 宽回退轨道宽度），viewportWidth 保持应用视口以保住 autoFullscreen 启发式；响应 dsh-sidebar-host-change 与窗口 resize"
+    },
+    {
+      "id": "P-2d",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "F07/V02：分屏视图下 PanelChrome 整体不渲染（返回 null 于组件级，绝不把 null 传进 Tooltip 子节点）"
+    },
+    {
+      "id": "P-2g",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "W014/P-2「内容与 frame 呈现分离」：分屏期间 frame 右栏轨道不再打开（内容已 portal 进各会话宿主），回到单窗口时原生行为原样恢复"
+    },
+    {
+      "id": "P-2h",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "F07：宿主内呈现时侧栏内容的显隐由插件拥有（data-dsh-sidebar-collapsed），不再被原生 expanded 状态滑出屏幕"
+    },
+    {
+      "id": "P-2i",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "每个在屏分屏会话都有独立 Sidebar View 持有，与前台会话选择分离"
+    },
+    {
+      "id": "P-2j",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "创建全部已知宿主 View，目录就绪可重试；retain/release 同步通知不会重入创建"
+    },
+    {
+      "id": "P-2k",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "只剪枝既非前台、非分屏宿主、也无 keepMounted tab 的 View；保留延后释放语义"
+    },
+    {
+      "id": "P-2l",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "会话目录的无关更新不重发等价 View 快照，避免控制器通知反馈循环"
+    },
+    {
+      "id": "P-2m",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "Sidebar 卸载清除宿主持有，引用只释放一次"
+    },
+    {
+      "id": "P-2n",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "监听分屏宿主集合与真实 sessions.list，首次目录未到时自动恢复，关闭分屏或卸载时撤销监听"
+    },
+    {
+      "id": "P-2o",
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "why": "以会话 ID 固定 Sidebar portal 身份，插入或关闭前序会话不重挂载其余会话的草稿 DOM"
+    },
+    {
+      "id": "P-3d",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "文件拖放按实际 conversation DOM 目标选唯一 Composer；非焦点、监听顺序、嵌套子会话不改变收件人；外部/歧义目标拒收，veto/离开/卸载清理覆盖层"
+    },
+    {
+      "id": "P-3e",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "每个原生 Composer 持有独立 DOM 锚点，保留原 onAddFiles 与目录识别链"
+    },
+    {
+      "id": "P-3f",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "原生 Composer 的监听器绑定到自身 DOM 实例，不读取全局焦点"
+    },
+    {
+      "id": "P-3g",
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "why": "在真实 conversation 子树放置零布局锚点；DropOverlay 保持原生外观和单窗行为"
+    }
+  ],
+  "files": [
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "LICENSE",
+      "originalSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "patchedSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "bytes": 1065
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.i18n.yaml",
+      "originalSha256": "63a6024aa96aefc3127b459fe09ed7f59c170bc672de9994cbd275384a407f57",
+      "patchedSha256": "63a6024aa96aefc3127b459fe09ed7f59c170bc672de9994cbd275384a407f57",
+      "bytes": 1831
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.md",
+      "originalSha256": "c4270eb1b909ccafb46440c1a834b2ec750ac4bc512d35a9b8a6e14ae99f0a80",
+      "patchedSha256": "c4270eb1b909ccafb46440c1a834b2ec750ac4bc512d35a9b8a6e14ae99f0a80",
+      "bytes": 6923
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "README.zh.md",
+      "originalSha256": "7dd37f8adc19aa70609a56fd104ee5b7188b91c83e783722ece7d0dde42c4c11",
+      "patchedSha256": "7dd37f8adc19aa70609a56fd104ee5b7188b91c83e783722ece7d0dde42c4c11",
+      "bytes": 6312
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/client.js",
+      "originalSha256": "ee6cd9e7010faec1d94ec4e6a711bb6d69e84005bf97a1962fa28433977c57b1",
+      "patchedSha256": "0f54931521da35fb27a8279773cbd200ec3aa3e6ebeea2f0b0efd1b95452ab92",
+      "bytes": 47731
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "lib/index.js",
+      "originalSha256": "ef16c813d42ad74dfd707e162af400f65ddd0f8cb1fd3b22e91bbd1f751fc80f",
+      "patchedSha256": "ef16c813d42ad74dfd707e162af400f65ddd0f8cb1fd3b22e91bbd1f751fc80f",
+      "bytes": 229
+    },
+    {
+      "pkg": "dsh-client-ui-attachment",
+      "file": "package.json",
+      "originalSha256": "2f6cd7347c9847ec98fee589e7de130200db4b05875b02889360220f3ac7b6ce",
+      "patchedSha256": "2f6cd7347c9847ec98fee589e7de130200db4b05875b02889360220f3ac7b6ce",
+      "bytes": 1922
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "LICENSE",
+      "originalSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "patchedSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "bytes": 1065
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.i18n.yaml",
+      "originalSha256": "d9e1a0d7963e4e882963f7f3f964c6e0b171c38a3a9c3a86e0df6ddb4b92e603",
+      "patchedSha256": "d9e1a0d7963e4e882963f7f3f964c6e0b171c38a3a9c3a86e0df6ddb4b92e603",
+      "bytes": 1652
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.md",
+      "originalSha256": "4750f70b0e69f1dd6025697a467b3bf7a99abf6abac42d0d5a96433dbe7bd9e3",
+      "patchedSha256": "4750f70b0e69f1dd6025697a467b3bf7a99abf6abac42d0d5a96433dbe7bd9e3",
+      "bytes": 9892
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "README.zh.md",
+      "originalSha256": "e7bcf134d80a3d78fd6d5f87326f045f58388537ccd824fb3b83da5dc21ad069",
+      "patchedSha256": "e7bcf134d80a3d78fd6d5f87326f045f58388537ccd824fb3b83da5dc21ad069",
+      "bytes": 8784
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "lib/client.js",
+      "originalSha256": "980ab8c5adccd46b46b655ba3016a5851661e932f27e89c5ef033c0ec6c62f84",
+      "patchedSha256": "980ab8c5adccd46b46b655ba3016a5851661e932f27e89c5ef033c0ec6c62f84",
+      "bytes": 31732
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "lib/index.js",
+      "originalSha256": "c62669c2bcf72075724aa3d4c90bb6064f8b5952322c7950640cc8ca95389859",
+      "patchedSha256": "c62669c2bcf72075724aa3d4c90bb6064f8b5952322c7950640cc8ca95389859",
+      "bytes": 180
+    },
+    {
+      "pkg": "dsh-client-ui-layout",
+      "file": "package.json",
+      "originalSha256": "615b22c04a33ffc221b4077a7cdf3bdd8fcbc82221638879db4d9cf6a8448623",
+      "patchedSha256": "615b22c04a33ffc221b4077a7cdf3bdd8fcbc82221638879db4d9cf6a8448623",
+      "bytes": 1803
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "LICENSE",
+      "originalSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "patchedSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "bytes": 1065
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.i18n.yaml",
+      "originalSha256": "d96f29a780ded7b5a1b9a92cb66f91333c7c8b409db0f48274e88669aa14062f",
+      "patchedSha256": "d96f29a780ded7b5a1b9a92cb66f91333c7c8b409db0f48274e88669aa14062f",
+      "bytes": 2091
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.md",
+      "originalSha256": "4db0d3726b9e860a6d216a00e4d55ea3f6bf731038604c6e345437c68efdc0f6",
+      "patchedSha256": "4db0d3726b9e860a6d216a00e4d55ea3f6bf731038604c6e345437c68efdc0f6",
+      "bytes": 26278
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "README.zh.md",
+      "originalSha256": "2078ff0dce21b19de5b229a7bcccfc5373d516ddaa4390de040d5b86e9633fbc",
+      "patchedSha256": "2078ff0dce21b19de5b229a7bcccfc5373d516ddaa4390de040d5b86e9633fbc",
+      "bytes": 23891
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/client.js",
+      "originalSha256": "5e8426c9378944050768abd3706009fe22aaae764ce4a9ede85e83a349464108",
+      "patchedSha256": "eaf6a0b189421c3a62739ba466e916f2a98b98337bdddcfacdf9a3bf22af2f25",
+      "bytes": 334430
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "lib/index.js",
+      "originalSha256": "c6edb0b0d3fd64404d353b7ac6502e82ed54919e2a2f5d59fd0f5fedd287bfce",
+      "patchedSha256": "c6edb0b0d3fd64404d353b7ac6502e82ed54919e2a2f5d59fd0f5fedd287bfce",
+      "bytes": 225
+    },
+    {
+      "pkg": "dsh-client-ui-sidebar-right",
+      "file": "package.json",
+      "originalSha256": "f2c0c85b515f2810c35828bd7c1eff19e99a7bffd33f171c37aa03ea9f026bd8",
+      "patchedSha256": "f2c0c85b515f2810c35828bd7c1eff19e99a7bffd33f171c37aa03ea9f026bd8",
+      "bytes": 2551
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "LICENSE",
+      "originalSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "patchedSha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be",
+      "bytes": 1065
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.i18n.yaml",
+      "originalSha256": "5c10edd2a8d0356ee3d60f94a05b6b0be565a8e2a4b4087cffb08163a179e9ac",
+      "patchedSha256": "5c10edd2a8d0356ee3d60f94a05b6b0be565a8e2a4b4087cffb08163a179e9ac",
+      "bytes": 3012
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.md",
+      "originalSha256": "870129c5356ba1c5fc70ee3617f74a64a66ae47bb6b0df60777f8048b0143869",
+      "patchedSha256": "870129c5356ba1c5fc70ee3617f74a64a66ae47bb6b0df60777f8048b0143869",
+      "bytes": 29127
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "README.zh.md",
+      "originalSha256": "ba829e7750450d387afcafaab48800a5bfbd44685f8036d48ee227919df565ef",
+      "patchedSha256": "ba829e7750450d387afcafaab48800a5bfbd44685f8036d48ee227919df565ef",
+      "bytes": 27159
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/client.js",
+      "originalSha256": "29c34ce1c2a437cf8a50ba35d1ae44741114439e37a17153dfd4b1aa942aa955",
+      "patchedSha256": "dba0645d1206400ba60c2c34e2e05dc1d02f207e93ccc981e543e6692329cd34",
+      "bytes": 200268
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "lib/index.js",
+      "originalSha256": "e6cdc4b725585354102a5c4598c9d8c79d6abac62d7979c09919821716370438",
+      "patchedSha256": "e6cdc4b725585354102a5c4598c9d8c79d6abac62d7979c09919821716370438",
+      "bytes": 453
+    },
+    {
+      "pkg": "dsh-client-ui-workspace",
+      "file": "package.json",
+      "originalSha256": "1664f6d24e2d5817d5d42cead5faa5fb1d0202358b300b338e791da0b4972951",
+      "patchedSha256": "1664f6d24e2d5817d5d42cead5faa5fb1d0202358b300b338e791da0b4972951",
+      "bytes": 2987
+    }
+  ]
+}

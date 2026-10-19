@@ -1,0 +1,34 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {openAsar,sha256} from './read-asar.mjs';
+import {stageNativePackage} from './native-package.mjs';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const patches=JSON.parse(fs.readFileSync(path.join(root,'host-patches/manifest.json'),'utf8'));
+const verification=JSON.parse(fs.readFileSync(path.join(root,'evidence/verification.json'),'utf8'));
+if(verification.passed!==verification.testCount||!verification.passed||verification.clientSha256!==sha256(fs.readFileSync(path.join(root,'lib/client.js')))||verification.nativeManifestSha256!==sha256(fs.readFileSync(path.join(root,'host-patches/manifest.json'))))throw new Error('Run verification against these exact candidate bytes before staging');
+const archivePath='E:/deepseek-harness/resources/app.asar';
+if(sha256(fs.readFileSync(archivePath))!==patches.asarSha256)throw new Error('Installed native baseline changed');
+const archive=openAsar(archivePath);
+const plugin=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+const inputs=['package.json','cordis.patch.yml',...fs.readdirSync(path.join(root,'lib')).sort().map(n=>`lib/${n}`)];
+const files=inputs.map(name=>({name,hash:sha256(fs.readFileSync(path.join(root,name)))}));
+const hostPackagingSha256=sha256(fs.readFileSync(path.join(root,'tools/native-package.mjs')));
+const releaseHash=sha256(JSON.stringify({files,patches,hostPackagingSha256})).slice(0,12);
+const release=path.join(root,'releases',`${plugin.version}-${releaseHash}`);
+if(fs.existsSync(path.join(release,'release.json')))throw new Error('Release already exists; use its existing validated manifest');
+fs.mkdirSync(path.join(release,'plugin/lib'),{recursive:true});
+for(const {name} of files)fs.copyFileSync(path.join(root,name),path.join(release,'plugin',name));
+const replacements=[];
+for(const entry of patches.files) {
+  const packageName=`@deepseek-ai/dsh-client-ui-${entry.name}`;
+  const destination=path.join(release,'native',packageName);
+  const candidate=fs.readFileSync(path.join(root,'host-patches',entry.output));
+  if(sha256(candidate)!==entry.patchedSha256)throw new Error(`Candidate hash changed: ${entry.name}`);
+  const native=stageNativePackage(archive,packageName,candidate,destination);
+  replacements.push({name:packageName,target:destination,clientSha256:entry.patchedSha256,...native});
+}
+replacements.push({name:'dsh-split',target:path.join(release,'plugin'),clientSha256:files.find(x=>x.name==='lib/client.js').hash,files:files.map(({name,hash})=>({name,sha256:hash}))});
+const manifest={version:plugin.version,release,createdAt:new Date().toISOString(),baselineAsar:patches.asarSha256,hostPackagingSha256,replacements,files,verification,legacySourcesRead:false};
+fs.writeFileSync(path.join(release,'release.json'),JSON.stringify(manifest,null,2));
+console.log(JSON.stringify({release,packages:replacements.length,version:plugin.version}));

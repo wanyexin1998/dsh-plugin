@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOOP（波波）· 交互体验预览</title>
+<!--
+  独立体验页：与插件内 BoopCompanion 组件同源设计（src/client/companion.tsx）。
+  状态必须对应真实证据 —— 这里是预览驱动，生产环境中每个状态由宿主事实驱动。
+-->
+<style>
+  :root {
+    --deep: #073F5C;
+    --boop-blue: #449BCC;
+    --light-wave: #ADDDEB;
+    --pearl: #F8F7F2;
+    --ink: #0B2637;
+    --interactive: #17648B;
+    --soft: #EAF5FB;
+    --line: rgba(11, 38, 55, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(160deg, #FDFDFC 0%, var(--soft) 55%, #D9EDF7 100%);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 20px 48px;
+  }
+  .stage {
+    background: linear-gradient(165deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35));
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: 0 24px 60px -30px rgba(7, 63, 92, 0.35);
+    padding: 40px 44px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 560px;
+    width: 100%;
+  }
+  h1 { font-size: 22px; font-weight: 650; letter-spacing: 0.01em; }
+  .sub { font-size: 13px; opacity: 0.66; margin-bottom: 18px; }
+  .companion-wrap { position: relative; }
+  .speech {
+    margin-top: 14px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: 13.5px;
+    line-height: 1.6;
+    text-align: center;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 18px;
+    max-width: 380px;
+    transition: border-color 0.25s ease;
+  }
+  .companion[data-state="attention"] ~ .speech { border-color: var(--interactive); }
+
+  .controls { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .controls button {
+    font: inherit;
+    font-size: 12.5px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    min-height: 36px;
+  }
+  .controls button:hover { border-color: var(--boop-blue); color: var(--interactive); transform: translateY(-1px); }
+  .controls button.active { background: var(--interactive); border-color: var(--interactive); color: #fff; }
+  .controls button[data-state="offline"] { color: #8A6D3B; }
+  .hint { margin-top: 22px; font-size: 12px; opacity: 0.62; text-align: center; line-height: 1.7; max-width: 420px; }
+  .reduce-toggle { margin-top: 10px; font-size: 12px; opacity: 0.7; }
+  .reduce-toggle label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  /* ── 波波本体：与 companion.tsx 同源 ── */
+  .companion { display: block; }
+  @keyframes boopBreathe {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.012); }
+  }
+  @keyframes boopTail {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(6deg); }
+  }
+  @keyframes boopFinL {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-7deg); }
+  }
+  @keyframes boopFinR {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(7deg); }
+  }
+  @keyframes boopDropSway {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+  .boop-breathe { animation: boopBreathe 4.2s ease-in-out infinite; }
+  .boop-tail { animation: boopTail 1.8s ease-in-out infinite; }
+  .boop-fin-l { animation: boopFinL 2.6s ease-in-out infinite; }
+  .boop-fin-r { animation: boopFinR 1.2s ease-in-out infinite; }
+  .boop-drop-sway { animation: boopDropSway 2.2s ease-in-out infinite; }
+  body.reduced .boop-breathe, body.reduced .boop-tail, body.reduced .boop-fin-l,
+  body.reduced .boop-fin-r, body.reduced .boop-drop-sway { animation: none; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <h1>BOOP · 波波</h1>
+    <p class="sub">你的 AI 项目助理 · Listen · Think · Deliver</p>
+
+    <div class="companion-wrap">
+      <svg class="companion" id="boop" data-state="idle" viewBox="0 0 240 250" width="220" height="229" aria-label="BOOP 波波交互角色">
+        <defs>
+          <radialGradient id="boopBody" cx="38%" cy="30%" r="80%">
+            <stop offset="0%" stop-color="#ADDDEB"/>
+            <stop offset="45%" stop-color="#449BCC"/>
+            <stop offset="100%" stop-color="#17648B"/>
+          </radialGradient>
+          <radialGradient id="boopBelly" cx="50%" cy="35%" r="75%">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#F8F7F2"/>
+          </radialGradient>
+          <radialGradient id="boopDrop" cx="35%" cy="25%" r="80%">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#ADDDEB"/>
+          </radialGradient>
+          <filter id="boopBlur" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="6"/>
+          </filter>
+        </defs>
+
+        <ellipse cx="120" cy="238" rx="70" ry="9" fill="#0B2637" opacity="0.14" filter="url(#boopBlur)"/>
+        <circle id="halo" cx="120" cy="128" r="86" fill="none" stroke="#17648B" stroke-width="2" opacity="0"/>
+
+        <g id="bodyGroup" class="boop-breathe" style="transform-origin:120px 150px">
+          <g id="tail" class="boop-tail" style="transform-origin:42px 168px">
+            <path d="M44 150 C30 138 18 140 14 152 C26 156 30 164 34 172 C22 178 20 192 30 198 C44 190 52 178 52 162 Z" fill="#17648B"/>
+            <path d="M40 158 C30 152 22 152 18 158" stroke="#ADDDEB" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.65"/>
+          </g>
+
+          <ellipse cx="124" cy="150" rx="86" ry="78" fill="url(#boopBody)"/>
+          <ellipse cx="96" cy="104" rx="46" ry="28" fill="#FFFFFF" opacity="0.35" filter="url(#boopBlur)"/>
+
+          <ellipse cx="132" cy="170" rx="58" ry="50" fill="url(#boopBelly)"/>
+          <ellipse cx="132" cy="182" rx="44" ry="30" fill="#FFFFFF" opacity="0.5"/>
+
+          <g id="finL" class="boop-fin-l" style="transform-origin:66px 176px">
+            <path d="M68 168 C52 170 44 182 50 194 C62 194 72 186 74 176 Z" fill="#17648B"/>
+          </g>
+          <g id="finR" class="boop-fin-r" style="transform-origin:188px 176px">
+            <path d="M186 168 C202 170 210 182 204 194 C192 194 182 186 180 176 Z" fill="#17648B"/>
+          </g>
+
+          <g id="drop" class="boop-drop-sway" style="transform-origin:124px 62px">
+            <path d="M124 30 C112 46 106 58 106 70 C106 82 114 90 124 90 C134 90 142 82 142 70 C142 58 136 46 124 30 Z" fill="url(#boopDrop)"/>
+            <circle cx="118" cy="64" r="4.5" fill="#FFFFFF" opacity="0.75"/>
+          </g>
+
+          <g id="eyes" style="transform-origin:132px 138px">
+            <g id="eyeL" style="transform-origin:112px 138px; transition: transform 90ms ease">
+              <rect x="100" y="120" width="20" height="36" rx="10" fill="#0B2637"/>
+              <circle cx="107" cy="130" r="3.4" fill="#FFFFFF" opacity="0.85"/>
+            </g>
+            <g id="eyeR" style="transform-origin:148px 138px; transition: transform 90ms ease">
+              <rect x="136" y="120" width="20" height="36" rx="10" fill="#0B2637"/>
+              <circle cx="143" cy="130" r="3.4" fill="#FFFFFF" opacity="0.85"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="speech" id="speech">我在这儿。把鼠标移过来，我会看你；点我一下，我会打个招呼。</div>
+
+    <div class="controls" id="controls">
+      <button data-state="idle" class="active">倾听 idle</button>
+      <button data-state="listening">在听 listening</button>
+      <button data-state="thinking">思考 thinking</button>
+      <button data-state="working">推进 working</button>
+      <button data-state="attention">待确认 attention</button>
+      <button data-state="delivered">已交付 delivered</button>
+      <button data-state="offline">离线 offline</button>
+    </div>
+
+    <p class="hint">
+      角色的每个状态对应一条真实状态：思考=模型确在运行；待确认=存在待决审批；离线=模型或宿主不可用（变暗、静止，不哭泣不闪烁）。
+      生产环境里，这些状态全部来自宿主 boop/bootstrap 与任务账本，不由动画自由发挥。
+    </p>
+    <p class="reduce-toggle">
+      <label><input type="checkbox" id="reduceMotion"> 模拟「减弱动态」（所有动画关闭，角色仍然可读）</label>
+    </p>
+  </div>
+
+<script>
+  const STATE_LINE = {
+    idle: '我在这儿。把鼠标移过来，我会看你；点我一下，我会打个招呼。',
+    listening: '在听你说。说完了我就接着干活。',
+    thinking: '正在处理当前请求…这个状态只有在模型真正运行时才会出现。',
+    working: '正在按计划推进。你可以随时喊停。',
+    attention: '有一件事需要你确认 —— 我不会用表情催你，也不会替你决定。',
+    delivered: '已交付，等你查看。验收没过我不会说"完成"。',
+    offline: '模型或宿主当前不可用，我不会假装在工作。',
+  }
+  const svg = document.getElementById('boop')
+  const speech = document.getElementById('speech')
+  const halo = document.getElementById('halo')
+  const eyes = document.getElementById('eyes')
+  const eyeL = document.getElementById('eyeL')
+  const eyeR = document.getElementById('eyeR')
+  const bodyGroup = document.getElementById('bodyGroup')
+  let state = 'idle'
+  let blinkTimer = 0
+  let reduced = false
+
+  function setState(next) {
+    state = next
+    svg.dataset.state = next
+    speech.textContent = STATE_LINE[next]
+    document.querySelectorAll('.controls button').forEach((b) => b.classList.toggle('active', b.dataset.state === next))
+    // Evidence-driven look: offline dims and stops; attention gets one calm ring.
+    bodyGroup.style.opacity = next === 'offline' ? '0.55' : '1'
+    halo.style.opacity = next === 'attention' ? '0.5' : '0'
+    eyes.style.transform = next === 'thinking' ? 'translate(0px,-2.2px)' : next === 'attention' ? 'translate(0px,0.8px)' : 'translate(0px,0px)'
+    scheduleBlink()
+  }
+
+  function scheduleBlink() {
+    clearTimeout(blinkTimer)
+    if (reduced || state === 'offline') { unblink(); return }
+    blinkTimer = setTimeout(() => {
+      eyeL.style.transform = 'scaleY(0.12)'
+      eyeR.style.transform = 'scaleY(0.12)'
+      setTimeout(unblink, 140)
+      scheduleBlink()
+    }, 2600 + Math.random() * 3000)
+  }
+  function unblink() { eyeL.style.transform = 'scaleY(1)'; eyeR.style.transform = 'scaleY(1)' }
+
+  // Gaze follows the pointer across the whole stage (subtle, clamped).
+  document.querySelector('.stage').addEventListener('pointermove', (event) => {
+    if (reduced || state === 'offline') return
+    const box = svg.getBoundingClientRect()
+    const cx = box.left + box.width / 2, cy = box.top + box.height / 2
+    const dx = Math.max(-1, Math.min(1, (event.clientX - cx) / 220))
+    const dy = Math.max(-1, Math.min(1, (event.clientY - cy) / 220))
+    const up = state === 'thinking' ? -2.2 : state === 'attention' ? 0.8 : 0
+    eyes.style.transform = `translate(${(dx * 2.4).toFixed(1)}px, ${(dy * 1.8 + up).toFixed(1)}px)`
+  })
+
+  // A small greeting bob on click — one bounce, not a loop.
+  svg.addEventListener('click', () => {
+    if (reduced || state === 'offline') return
+    bodyGroup.style.transition = 'transform 160ms ease'
+    bodyGroup.style.transform = 'translateY(-6px)'
+    setTimeout(() => { bodyGroup.style.transform = 'translateY(0)' }, 180)
+    if (state === 'idle') speech.textContent = '嗨，我是波波。状态由真实任务驱动，不由我的表演决定。'
+  })
+
+  document.querySelectorAll('.controls button').forEach((button) => {
+    button.addEventListener('click', () => setState(button.dataset.state))
+  })
+  document.getElementById('reduceMotion').addEventListener('change', (event) => {
+    reduced = event.target.checked
+    document.body.classList.toggle('reduced', reduced)
+    if (reduced) { unblink(); clearTimeout(blinkTimer) } else scheduleBlink()
+  })
+
+  scheduleBlink()
+</script>
+</body>
+</html>

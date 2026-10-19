@@ -1,0 +1,59 @@
+{
+  "meta": {
+    "name": "BOOP",
+    "version": "1.1",
+    "status": "design-proposal-not-runtime-tested",
+    "scope": "boop-owned-components-only",
+    "hostThemeFirst": true
+  },
+  "light": {
+    "brand": "#449BCC",
+    "brand-strong": "#17648B",
+    "brand-soft": "#EAF5FB",
+    "surface": "#FFFFFF",
+    "canvas": "#F3F7FA",
+    "text": "#0B2637",
+    "text-secondary": "#526978",
+    "border": "#DCE6EB",
+    "success-text": "#176340",
+    "success-surface": "#EBF8F0",
+    "warning-text": "#825300",
+    "warning-surface": "#FFF5DB",
+    "danger-text": "#B42318",
+    "danger-surface": "#FFF0EE"
+  },
+  "dark": {
+    "brand": "#86C9EE",
+    "brand-strong": "#ADDDEB",
+    "brand-soft": "#203B4B",
+    "surface": "#172731",
+    "canvas": "#101B23",
+    "text": "#E6F1F6",
+    "text-secondary": "#A7BBC7",
+    "border": "#324853",
+    "success-text": "#86DDB1",
+    "success-surface": "#173327",
+    "warning-text": "#F3CC79",
+    "warning-surface": "#3A2D15",
+    "danger-text": "#FFAEA7",
+    "danger-surface": "#3C201F"
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32
+  ],
+  "radius": {
+    "sm": 8,
+    "md": 12,
+    "lg": 16
+  },
+  "motion": {
+    "fast": 120,
+    "normal": 180,
+    "reduceMotion": true
+  }
+}

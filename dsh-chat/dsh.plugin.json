@@ -1,0 +1,16 @@
+{
+  "id": "dsh-external/dsh-chat",
+  "version": "0.1.0",
+  "main": "./lib/index.js",
+  "description": "在 DSH GUI 内无缝切换到 DeepSeek Chat 网页版，并展示 desktop 已登录的 DeepSeek 账号",
+  "engines": {
+    "dsh": ">=0.1.7"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  },
+  "client": {
+    "main": "./lib/client.js"
+  }
+}

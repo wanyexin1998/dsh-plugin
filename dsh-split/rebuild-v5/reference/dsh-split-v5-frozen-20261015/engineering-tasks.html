@@ -1,0 +1,1499 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>dsh-split v5 · 详细工程任务清单</title><style>
+:root{--ink:#262b26;--muted:#6a746b;--line:#e2e7de;--paper:#fff;--canvas:#f4f6f1;--accent:#3b5143;--soft:#edf2e9;font:15px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink)}*{box-sizing:border-box}body{margin:0;background:var(--canvas)}a{color:var(--accent);text-underline-offset:3px}button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-template-columns:235px minmax(0,1fr)}aside{position:sticky;top:0;height:100vh;padding:30px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column}.brand{font-weight:650;font-size:19px;margin:0 0 8px}.eyebrow{font:10px/1.6 ui-monospace,monospace;letter-spacing:1.5px;color:var(--muted)}aside nav{margin-top:28px;overflow:auto}aside nav a{display:block;font-size:12px;text-decoration:none;padding:9px 10px;border-radius:6px;margin:4px 0}aside nav a:hover{background:var(--soft)}.rail-note{font-size:11px;color:var(--muted);margin-top:auto;padding-top:22px;border-top:1px solid var(--line)}main{min-width:0}.topbar{position:sticky;top:0;z-index:10;min-height:60px;background:#f4f6f1f5;border-bottom:1px solid var(--line);padding:12px 30px;display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar .actions{display:flex;flex-wrap:wrap;gap:7px}.actions a,.actions button{font-size:11px;border:1px solid var(--line);background:var(--paper);padding:6px 10px;border-radius:6px;text-decoration:none;color:var(--ink)}.actions a:hover,.actions button:hover{background:var(--soft)}article{max-width:1200px;padding:48px 55px 70px;margin:auto;background:var(--paper)}h1{font-size:32px;line-height:1.35;font-weight:650;letter-spacing:-.7px;margin:0 0 20px}h2{font-size:24px;line-height:1.45;font-weight:600;margin:55px 0 20px;border-top:1px solid var(--line);padding-top:27px;scroll-margin-top:85px}h3{font-size:18px;line-height:1.6;margin:25px 0 14px;scroll-margin-top:85px}p{margin:13px 0}ul,ol{padding-left:24px;margin:10px 0 20px}li{padding-left:2px;margin:5px 0}strong{font-weight:600}.table-scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;margin:20px 0}table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.8}th,td{padding:11px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);min-width:62px}th{background:var(--soft);font-weight:600}td:first-child{white-space:nowrap}tr:last-child td{border-bottom:0}tr:nth-child(even) td{background:#fcfdfb}code{font:12px/1.8 ui-monospace,Consolas,"Microsoft YaHei",monospace;padding:2px 4px;border-radius:3px;background:var(--soft);overflow-wrap:anywhere}pre{padding:20px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;overflow:auto}pre code{padding:0;background:transparent;word-break:normal}blockquote{margin:22px 0;padding:14px 19px;border-left:3px solid var(--accent);background:var(--soft)}.metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 30px}.metric{border-bottom:2px solid var(--line);padding:12px 0 18px}.metric b{font-size:29px;line-height:1.3;display:block;font-weight:550}.metric span{font-size:11px;color:var(--muted)}.task-card{border:1px solid var(--line);border-radius:10px;padding:24px 27px;margin:23px 0;scroll-margin-top:90px}.task-card h3{margin:8px 0 17px}.task-card p,.task-card li{font-size:13px}.task-card p:last-child{font-size:11px;background:var(--canvas);padding:10px 12px;border-radius:5px;color:var(--muted);margin-bottom:0}.task-kicker{font:10px/1.5 ui-monospace,monospace;letter-spacing:1px;color:var(--muted)}.filterbar{display:flex;align-items:flex-end;gap:12px;padding:15px;background:var(--canvas);border:1px solid var(--line);border-radius:8px;margin:20px 0}.filterbar label{display:flex;flex-direction:column;font-size:11px;gap:5px}.filterbar label:first-child{flex:1}.filterbar input,.filterbar select{border:1px solid var(--line);padding:8px 10px;background:white;border-radius:5px;font-size:12px;max-width:100%;min-width:0}.filterbar span{font-size:11px;color:var(--muted);white-space:nowrap;padding-bottom:8px}.endnote{font-size:11px;color:var(--muted);border-top:1px solid var(--line);margin-top:40px;padding-top:20px}:focus-visible{outline:2px solid #72866f;outline-offset:3px}[hidden]{display:none!important}@media(max-width:1100px){.shell{grid-template-columns:200px minmax(0,1fr)}article{padding:35px 28px}.topbar{padding:10px 18px}}@media(max-width:780px){.shell{display:block}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:18px}aside nav,.rail-note{display:none}.topbar{position:static;align-items:flex-start;flex-direction:column}article{padding:28px 19px}h1{font-size:27px}h2{font-size:22px}.metric-strip{gap:8px}.metric b{font-size:23px}.task-card{padding:19px 16px}.filterbar{flex-wrap:wrap}.filterbar label:first-child{flex-basis:100%}.filterbar select{width:100%}.filterbar label{flex:1}.filterbar span{padding:0}}@media print{@page{size:A4;margin:16mm}body{background:white}.shell{display:block}aside,.topbar,.filterbar{display:none}article{padding:0;max-width:none}.task-card[hidden]{display:block!important}.task-card{break-inside:auto;margin:16pt 0;padding:13pt;border-radius:0}h1{font-size:24pt}h2{font-size:17pt;break-after:avoid;margin-top:22pt}h3{break-after:avoid}.task-card p,.task-card li{font-size:9.5pt}p,li{font-size:10pt}.table-scroll{overflow:visible}table{font-size:8.5pt}thead{display:table-header-group}tr{break-inside:avoid}pre{white-space:pre-wrap;break-inside:avoid}a{color:inherit;text-decoration:none}}
+</style></head><body><div class="shell"><aside><div class="brand">dsh / split</div><div class="eyebrow">V5 FROZEN · ENGINEERING</div><nav aria-label="任务目录"><a href="#chapter-01">01 · 冻结与执行边界</a><a href="#chapter-02">02 · 阶段、门禁与依赖</a><a href="#chapter-03">03 · 36 项任务总览</a><a href="#chapter-04">04 · 逐项工程任务卡</a><a href="#chapter-05">05 · 24 项原生验收</a><a href="#chapter-06">06 · 完成定义与提交规范</a><a href="#chapter-07">07 · 变更控制与授权</a></nav><div class="rail-note">36 项待执行任务<br>5 个阶段 · 24 项验收<br>不代表已完成开发<br>2026.10.15 / UTC+08:00</div></aside><main><header class="topbar"><span class="eyebrow">ENGINEERING WORK BREAKDOWN</span><div class="actions"><a href="index.html">交付首页</a><a href="dsh-split-final-plan.html">冻结方案</a><a href="dsh-split-interactive-demo.html">原型</a><a href="engineering-tasks.md">Markdown 版</a><button onclick="window.print()">打印</button></div></header><article><div class="metric-strip"><div class="metric"><b>36</b><span>工程任务 / 待实施</span></div><div class="metric"><b>5</b><span>阶段 / P0–P4</span></div><div class="metric"><b>24</b><span>原生验收 / 待验证</span></div><div class="metric"><b>v5</b><span>行为与视觉 / 已冻结</span></div></div><h1>dsh-split v5 · 详细工程任务清单</h1>
+<p><strong>冻结基线：DSH-SPLIT-V5-FROZEN-20261015</strong><br/>
+<strong>拆解版本：工程任务 v1.0 · 2026-10-15（UTC+08:00）</strong><br/>
+<strong>任务状态：36 项全部未开始；本文件是待执行计划，不是已完成开发或原生验收报告。</strong></p>
+<p><a href="index.html">交付首页</a> · <a href="dsh-split-final-plan.html">冻结产品与技术方案</a> · <a href="dsh-split-interactive-demo.html">冻结交互原型</a></p>
+<h2 id="chapter-01">01 · 冻结与执行边界</h2>
+<p>本清单只把已确认的 v5 方案拆成可执行任务，不新增交互、不修改原型。两份核心 HTML 按字节原样收入交付包，SHA-256 见 manifest.json 和 SHA256SUMS.txt。原文件没有改名，方案里的相对原型链接保持有效。
+宿主只针对 <strong><code>dsh-v0.2.0-rc.2</code> / <code>639ed015397290b3745d163aafe02ffee4aa3f84</code></strong>。Dockview 的具体版本尚待 W005 锁定，不能将文档网站最新版本擅自当成已验证依赖。旧插件只作为风险与需求样本，Demo 的参考布局树、模拟数据和模拟终端不迁入生产。
+<strong>冻结的是产品行为，不是原生改动授权。</strong> W006 明确纯插件/补丁路线，必要的原生修改必须先取得具体授权。此包没有安装插件、修改 DSH、创建远程 Issue/PR 或发布部署。包中的任务 ID 是本地编号，角色不是已经分配的真实人员。
+**解释优先级：**已确认的 v5 产品规则决定行为与范围；Demo 用于体感和视觉对照；本清单补充实施步骤与验收。若原型实现、文案或原生能力冲突，记录差异并确认，不擅自加功能或改交互。本清单中的建议目录/模块不是现成原生导出。</p>
+<h3>冻结需求追溯</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>冻结规则</th>
+<th>方案章节</th>
+<th>责任任务</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F01</td>
+<td>宿主固定为原版 dsh-v0.2.0-rc.2 / 639ed015397290b3745d163aafe02ffee4aa3f84；不带入其他定制项目要求。</td>
+<td>01、05</td>
+<td>W001 / W006 / W008</td>
+</tr>
+<tr>
+<td>F02</td>
+<td>一份外层 Dockview；一个 Panel 是完整会话，一个 Group 只装一个会话。</td>
+<td>01、04</td>
+<td>W005 / W009 / W010 / W015</td>
+</tr>
+<tr>
+<td>F03</td>
+<td>会话内正文＋一块原生 Sidebar；轻量 CSS 分栏，Sidebar 四边停靠，业务归属不变。</td>
+<td>02、03、04</td>
+<td>W014 / W017 / W018</td>
+</tr>
+<tr>
+<td>F04</td>
+<td>整段会话与 Sidebar 同圆角，初值 12px；会话外壳无边框、无阴影，正文不再套卡片。</td>
+<td>02</td>
+<td>W019 / W032</td>
+</tr>
+<tr>
+<td>F05</td>
+<td>非当前会话极淡灰层；不设置根 opacity/filter/inert，不拦首次点击；当前不画厚焦点框。</td>
+<td>02、03</td>
+<td>W019 / W020 / W032</td>
+</tr>
+<tr>
+<td>F06</td>
+<td>会话间不画分割线，包括悬停和拖动；透明区域仍可调尺寸/双击均分/键盘操作。</td>
+<td>02、03</td>
+<td>W016 / W032</td>
+</tr>
+<tr>
+<td>F07</td>
+<td>Sidebar 标题右上角不放两个额外图标；标题可拖/可用方向菜单，会话标题入口负责显隐。</td>
+<td>02、03</td>
+<td>W018 / W032</td>
+</tr>
+<tr>
+<td>F08</td>
+<td>Sidebar 细边框＋克制静态阴影，浅/深适配；不把阴影加到会话外壳或随焦点加重。</td>
+<td>02</td>
+<td>W019 / W032</td>
+</tr>
+<tr>
+<td>F09</td>
+<td>分屏唯一入口为左侧具体会话菜单；B 菜单按捕获的 A 向右/向下打开 B，不二次选会话。</td>
+<td>03</td>
+<td>W011 / W012</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>打开/取消 B 菜单不导航；已显示会话只定位；无参照/空间不足/放大时分屏禁用并说明。</td>
+<td>03</td>
+<td>W011 / W012 / W022</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>拖会话整体移动；拖 Sidebar 只在自身会话内换边；正文选择与原生 Tab 手势隔离。</td>
+<td>03</td>
+<td>W015 / W017 / W021</td>
+</tr>
+<tr>
+<td>F12</td>
+<td>同 Session 全窗口唯一可编辑根；目标捕获，不因焦点或异步回调漂移。</td>
+<td>05、06</td>
+<td>W003 / W010 / W012 / W025</td>
+</tr>
+<tr>
+<td>F13</td>
+<td>隐藏/移动不是关闭资源；明确关闭终端 Tab 仍走原生结束与重试流程。</td>
+<td>03、06</td>
+<td>W013 / W014 / W026 / W029</td>
+</tr>
+<tr>
+<td>F14</td>
+<td>只保存外层与 Sidebar 位置比例；原生状态不复制；窄屏投影不覆盖桌面布局。</td>
+<td>04、07</td>
+<td>W022 / W027 / W028</td>
+</tr>
+<tr>
+<td>F15</td>
+<td>保留原生 View、附件、审批、菜单及 provider；不以固定 Chat/禁拖文件换取简化。</td>
+<td>05、11</td>
+<td>W023 / W024 / W025 / W026</td>
+</tr>
+<tr>
+<td>F16</td>
+<td>不新增跨会话标签组、独立全局 Sidebar、popout、模板库、布局协同/撤销、Agent 布局编排。标签拆出只留评估。</td>
+<td>01、13</td>
+<td>W005 / W035 / W036</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>不纳入本期：Sidebar 单 Tab 拆出增强。</strong> 方案第 13 节仅为候选评估，不列实施任务，不因“已冻方案”自动授权该增强。原生 Sidebar 已有功能仍按 v5 要求保留并验收。</p>
+<h2 id="chapter-02">02 · 实施阶段、门禁与依赖</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>目标</th>
+<th>任务范围</th>
+<th>交付重点</th>
+<th>放行条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P0</td>
+<td>原生契约验证</td>
+<td>W001–W007</td>
+<td>确认复用能力、唯一编辑根、双 Sidebar、Dockview 版本及原生变更授权。</td>
+<td>G0：四类核心契约通过；所需原生补丁已有具体授权，否则不进入生产实施。</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>统一会话宿主</td>
+<td>W008–W014</td>
+<td>装配同一个宿主、原生会话和 Sidebar，落地列表菜单分屏与基础窗口命令。</td>
+<td>G1：普通导航/分屏语义准确；1→2→1 不重建宿主、不串会话。</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>两级交互与 v5 视觉</td>
+<td>W015–W022</td>
+<td>整会话移动、透明调尺寸、Sidebar 换边、轻灰聚焦、手势与窄屏。</td>
+<td>G2：真实交互符合原型，取消无副作用，关键节点身份保持。</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>完整原生兼容与恢复</td>
+<td>W023–W029</td>
+<td>保留原生 View/附件/审批/provider，完成存档、迁移、清理与回退。</td>
+<td>G3：无功能削减、资源误关和错误恢复；启停支持范围说明准确。</td>
+</tr>
+<tr>
+<td>P4</td>
+<td>发布验证与安装交付</td>
+<td>W030–W036</td>
+<td>原生端到端、视觉平台、性能与边界验证；安装包、回滚及最终放行。</td>
+<td>G4：N01–N21/V01–V03 有证据；关键缺陷清零，实际发布另获授权。</td>
+</tr>
+</tbody>
+</table></div>
+<p>这些门禁是工程验证与授权条件，不是新增产品功能。任何“同会话重复编辑根、错发/越权目标、资源误结束、恢复破坏数据、无法回退原生”都阻断发布，不通过删除原生功能掩盖。</p>
+<h3>建议先后与可并行部分</h3>
+<p><code>W001 → W002 → W003/W004</code> 是原生契约路径；<code>W001 → W005</code> 可并行。二者汇入 <code>W006 → W007（G0）</code>。其后 <code>W008 → W009 → W010</code> 建立宿主；菜单/生命周期、Sidebar、外层几何可以按各任务依赖并行。P3 汇合后执行 P4 全场景验证。每项详单中的依赖是开工前置，不应只按编号机械串行。
+<strong>不设未经估算的人天或承诺交期。</strong> 每个责任角色在 W007 后根据实际补丁和代码基线估算；一个人可以兼任多个角色。契约/原生资源相关工作由同一负责人统一审阅，避免多个 PR 同时重定义接口。</p>
+<h3>建议 PR 分组（不是已创建的 GitHub PR）</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>本地分组</th>
+<th>标题</th>
+<th>任务</th>
+<th>合并注意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PR-00</td>
+<td>契约证据与准入决策</td>
+<td>W001–W007</td>
+<td>没有 G0 就不把演示代码当生产起点；需要补丁时先确认范围和授权。</td>
+</tr>
+<tr>
+<td>PR-01</td>
+<td>新工程与唯一会话宿主</td>
+<td>W008–W010</td>
+<td>以原生内容稳定呈现为验收，不以页面能打开为准。</td>
+</tr>
+<tr>
+<td>PR-02</td>
+<td>目录菜单与窗口生命周期</td>
+<td>W011–W013</td>
+<td>唯一分屏入口、取消零变更、竞态拒绝、放大与关闭。</td>
+</tr>
+<tr>
+<td>PR-03</td>
+<td>Sidebar 内容与内层 CSS 布局</td>
+<td>W014、W017–W018</td>
+<td>按依赖分批提交；只有本会话内移动，不引入全局 Sidebar。</td>
+</tr>
+<tr>
+<td>PR-04</td>
+<td>整会话移动及透明 resize</td>
+<td>W015–W016</td>
+<td>不改内容身份、不绘制会话间分割线。</td>
+</tr>
+<tr>
+<td>PR-05</td>
+<td>轻灰视觉、焦点、手势与窄屏</td>
+<td>W019–W022</td>
+<td>仅按 v5 修饰；不返还两个 Sidebar icon。</td>
+</tr>
+<tr>
+<td>PR-06</td>
+<td>原生内容与业务动作兼容</td>
+<td>W023–W026</td>
+<td>真实 provider、附件和审批身份测试。</td>
+</tr>
+<tr>
+<td>PR-07</td>
+<td>存档恢复、迁移与清理</td>
+<td>W027–W029</td>
+<td>不触发新运行，不破坏原生存档，可回原生。</td>
+</tr>
+<tr>
+<td>PR-08</td>
+<td>测试、性能与安全边界</td>
+<td>W030–W034</td>
+<td>测试需从各 PR 开始编写；此 PR 仅汇总验证与证据，不留到最后才测试。</td>
+</tr>
+<tr>
+<td>PR-09</td>
+<td>候选发布包与最终放行</td>
+<td>W035–W036</td>
+<td>安装、回滚和支持矩阵完整，不能自动发布到生产。</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="chapter-03">03 · 工程任务总览</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>阶段</th>
+<th>任务</th>
+<th>主责角色</th>
+<th>前置</th>
+<th>风险</th>
+<th>建议 PR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>W001</td>
+<td>P0</td>
+<td>锁定宿主、交付基线与依赖许可</td>
+<td>前端负责人</td>
+<td>无</td>
+<td>高</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W002</td>
+<td>P0</td>
+<td>盘点正式扩展契约及缺口</td>
+<td>DSH 适配工程师</td>
+<td>W001</td>
+<td>高</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W003</td>
+<td>P0</td>
+<td>验证双 Conversation 与全窗口唯一编辑根</td>
+<td>DSH 适配工程师</td>
+<td>W002</td>
+<td>关键</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W004</td>
+<td>P0</td>
+<td>验证双 Sidebar 宿主与资源保活</td>
+<td>DSH 适配工程师</td>
+<td>W002</td>
+<td>关键</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W005</td>
+<td>P0</td>
+<td>验证并锁定 Dockview 受限适配方式</td>
+<td>布局工程师</td>
+<td>W001</td>
+<td>高</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W006</td>
+<td>P0</td>
+<td>形成纯插件或宿主补丁决策及授权单</td>
+<td>前端负责人</td>
+<td>W002、W003、W004、W005</td>
+<td>关键</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W007</td>
+<td>P0</td>
+<td>P0 契约集成与放行评审</td>
+<td>前端负责人</td>
+<td>W003、W004、W005、W006</td>
+<td>关键</td>
+<td>PR-00</td>
+</tr>
+<tr>
+<td>W008</td>
+<td>P1</td>
+<td>建立干净源码工程及插件装配</td>
+<td>前端负责人</td>
+<td>W007</td>
+<td>高</td>
+<td>PR-01</td>
+</tr>
+<tr>
+<td>W009</td>
+<td>P1</td>
+<td>实现单一主内容呈现宿主</td>
+<td>DSH 适配工程师</td>
+<td>W008</td>
+<td>关键</td>
+<td>PR-01</td>
+</tr>
+<tr>
+<td>W010</td>
+<td>P1</td>
+<td>实现稳定 SessionSurface 与会话引用管理</td>
+<td>DSH 适配工程师</td>
+<td>W009</td>
+<td>关键</td>
+<td>PR-01</td>
+</tr>
+<tr>
+<td>W011</td>
+<td>P1</td>
+<td>接入左侧逐会话菜单的右/下分屏</td>
+<td>前端负责人</td>
+<td>W010</td>
+<td>高</td>
+<td>PR-02</td>
+</tr>
+<tr>
+<td>W012</td>
+<td>P1</td>
+<td>实现会话切换与分屏异步事务</td>
+<td>DSH 适配工程师</td>
+<td>W010、W011</td>
+<td>关键</td>
+<td>PR-02</td>
+</tr>
+<tr>
+<td>W013</td>
+<td>P1</td>
+<td>实现关闭视图、临时放大与恢复</td>
+<td>布局工程师</td>
+<td>W010、W012</td>
+<td>高</td>
+<td>PR-02</td>
+</tr>
+<tr>
+<td>W014</td>
+<td>P1</td>
+<td>集成显式会话绑定的原生 Sidebar</td>
+<td>DSH 适配工程师</td>
+<td>W010</td>
+<td>关键</td>
+<td>PR-03</td>
+</tr>
+<tr>
+<td>W015</td>
+<td>P2</td>
+<td>实现完整会话四方向移动</td>
+<td>布局工程师</td>
+<td>W010、W013</td>
+<td>高</td>
+<td>PR-04</td>
+</tr>
+<tr>
+<td>W016</td>
+<td>P2</td>
+<td>实现无可见分割线的尺寸调整</td>
+<td>布局工程师</td>
+<td>W010、W015</td>
+<td>高</td>
+<td>PR-04</td>
+</tr>
+<tr>
+<td>W017</td>
+<td>P2</td>
+<td>实现 Sidebar 四边 CSS 停靠及独立比例</td>
+<td>布局工程师</td>
+<td>W014</td>
+<td>高</td>
+<td>PR-03</td>
+</tr>
+<tr>
+<td>W018</td>
+<td>P2</td>
+<td>实现 Sidebar 标题与收起入口</td>
+<td>前端负责人</td>
+<td>W014、W017</td>
+<td>常规</td>
+<td>PR-03</td>
+</tr>
+<tr>
+<td>W019</td>
+<td>P2</td>
+<td>落地 v5 圆角、轻灰遮罩与轻阴影</td>
+<td>前端负责人</td>
+<td>W010、W014</td>
+<td>常规</td>
+<td>PR-05</td>
+</tr>
+<tr>
+<td>W020</td>
+<td>P2</td>
+<td>实现焦点路由与 iframe 归属校验</td>
+<td>DSH 适配工程师</td>
+<td>W010、W014、W019</td>
+<td>高</td>
+<td>PR-05</td>
+</tr>
+<tr>
+<td>W021</td>
+<td>P2</td>
+<td>统一三层手势取消与桌面拖窗边界</td>
+<td>布局工程师</td>
+<td>W015、W016、W017、W018、W020</td>
+<td>高</td>
+<td>PR-05</td>
+</tr>
+<tr>
+<td>W022</td>
+<td>P2</td>
+<td>实现窄屏投影与空间不足反馈</td>
+<td>布局工程师</td>
+<td>W013、W016、W017、W020</td>
+<td>高</td>
+<td>PR-05</td>
+</tr>
+<tr>
+<td>W023</td>
+<td>P3</td>
+<td>保留原生 View、Header 和全局浮层</td>
+<td>DSH 适配工程师</td>
+<td>W010、W014、W019、W020</td>
+<td>高</td>
+<td>PR-06</td>
+</tr>
+<tr>
+<td>W024</td>
+<td>P3</td>
+<td>保留附件上传、粘贴和文件拖放</td>
+<td>DSH 适配工程师</td>
+<td>W012、W020、W021</td>
+<td>关键</td>
+<td>PR-06</td>
+</tr>
+<tr>
+<td>W025</td>
+<td>P3</td>
+<td>对齐原生发送、审批、快捷键与关闭目标</td>
+<td>DSH 适配工程师</td>
+<td>W012、W020、W021、W023</td>
+<td>关键</td>
+<td>PR-06</td>
+</tr>
+<tr>
+<td>W026</td>
+<td>P3</td>
+<td>验证 provider 的隐藏、移动、关闭与恢复语义</td>
+<td>DSH 适配工程师</td>
+<td>W014、W017、W018、W023、W025</td>
+<td>关键</td>
+<td>PR-06</td>
+</tr>
+<tr>
+<td>W027</td>
+<td>P3</td>
+<td>实现外层布局持久化与输入校验</td>
+<td>前端负责人</td>
+<td>W012、W013、W017、W022</td>
+<td>高</td>
+<td>PR-07</td>
+</tr>
+<tr>
+<td>W028</td>
+<td>P3</td>
+<td>实现安全恢复与旧布局一次性迁移</td>
+<td>前端负责人</td>
+<td>W026、W027</td>
+<td>关键</td>
+<td>PR-07</td>
+</tr>
+<tr>
+<td>W029</td>
+<td>P3</td>
+<td>实现启停、HMR 清理与回退原生</td>
+<td>DSH 适配工程师</td>
+<td>W009、W013、W021、W026、W028</td>
+<td>关键</td>
+<td>PR-07</td>
+</tr>
+<tr>
+<td>W030</td>
+<td>P4</td>
+<td>建立可追溯的自动化契约测试集</td>
+<td>测试工程师</td>
+<td>W012、W015、W016、W017、W020、W027</td>
+<td>高</td>
+<td>PR-08</td>
+</tr>
+<tr>
+<td>W031</td>
+<td>P4</td>
+<td>执行真实 DSH 双会话端到端验收</td>
+<td>测试工程师</td>
+<td>W023、W024、W025、W026、W028、W029、W030</td>
+<td>关键</td>
+<td>PR-08</td>
+</tr>
+<tr>
+<td>W032</td>
+<td>P4</td>
+<td>执行视觉、平台、缩放与无障碍回归</td>
+<td>测试工程师</td>
+<td>W018、W019、W021、W022、W023、W031</td>
+<td>高</td>
+<td>PR-08</td>
+</tr>
+<tr>
+<td>W033</td>
+<td>P4</td>
+<td>性能、长历史与重复操作稳定性测量</td>
+<td>测试工程师</td>
+<td>W026、W029、W031</td>
+<td>高</td>
+<td>PR-08</td>
+</tr>
+<tr>
+<td>W034</td>
+<td>P4</td>
+<td>对抗性目标与持久化边界检查</td>
+<td>测试工程师</td>
+<td>W024、W025、W027、W028、W031</td>
+<td>关键</td>
+<td>PR-08</td>
+</tr>
+<tr>
+<td>W035</td>
+<td>P4</td>
+<td>准备可复现插件包、安装与回滚说明</td>
+<td>发布工程师</td>
+<td>W029、W031、W032、W033、W034</td>
+<td>高</td>
+<td>PR-09</td>
+</tr>
+<tr>
+<td>W036</td>
+<td>P4</td>
+<td>最终放行、范围核对与证据归档</td>
+<td>前端负责人</td>
+<td>W035</td>
+<td>关键</td>
+<td>PR-09</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="chapter-04">04 · 逐项任务卡（可复制到 Issue）</h2><div class="filterbar"><label>搜索任务<input id="taskSearch" placeholder="ID、任务名、关键词…" type="search"/></label><label>阶段<select id="phaseFilter"><option value="">全部阶段</option><option value="P0">P0 · 原生契约验证</option><option value="P1">P1 · 统一会话宿主</option><option value="P2">P2 · 两级交互与 v5 视觉</option><option value="P3">P3 · 完整原生兼容与恢复</option><option value="P4">P4 · 发布验证与安装交付</option></select></label><span aria-live="polite" id="filterCount">36 项任务</span></div>
+<p>每张卡均应填写实际负责人、分支/PR、验收证据和缺陷。初始状态全部为“未开始”；不能因为任务卡写完或原型可以操作就改为“完成”。</p>
+<section class="task-card" data-owner="前端负责人" data-phase="P0" id="W001"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W001 · 锁定宿主、交付基线与依赖许可</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：无　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：建立可复现的 rc.2 工程基线；冻结 v5 原文件，不把参考原型当成生产源码。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>记录 DSH tag、完整 commit、运行目标、构建工具链及原生安装方式；校验本交付包 SHA256SUMS.txt。</li>
+<li>识别旧插件是否启用及其数据键；仅记录，不自动卸载或覆盖用户环境。</li>
+<li>为待评估 Dockview 包列出明确版本、包内许可和依赖关系；版本需经 W005 验证后进入 lockfile。</li>
+<li>明确旧 bundle、原型内消息数据/布局树、逆向仓库组件均不整体迁入生产；不引入其他定制项目假设。</li>
+</ol>
+<p><strong>交付物</strong>：docs/baseline.md（建议新建）；可复现安装/构建说明与原始校验结果；依赖与许可清单初稿。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ tag/commit 与冻结方案一致，或明确阻断而非自动升级。</li>
+<li class="acceptance-item">□ 两份冻结 HTML 哈希匹配；未重新格式化或修改其内容。</li>
+<li class="acceptance-item">□ 依赖许可未确认或出现第二份 React 时，不批准后续打包。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-01">方案 §01</a>、<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P0" id="W002"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W002 · 盘点正式扩展契约及缺口</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W001　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：确认主宿主、原生 Header/View、逐行菜单、Sidebar 与命令入口能否合法复用。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>只对固定 commit 做只读核对；将公开接口、内部实现、缺失能力分别列出并附文件/行号证据。</li>
+<li>重点核对 ui-layout、ui-conversation、ui-slots/ui-renderer、ui-sidebar-right、会话列表菜单、快捷键与附件接收入口。</li>
+<li>逐项回答：能否关闭旧呈现但保留原生服务；能否按 Session 嵌入 Header/View；能否同时显示不同会话的 Sidebar。</li>
+<li>拒绝把 DOM 注入、同名 Slot 抢占、私有 import、运行时劫持视为正式扩展面。</li>
+</ol>
+<p><strong>交付物</strong>：docs/compatibility-matrix.md；每项能力的可复现最小调用与证据。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 至少覆盖主宿主、编辑根、Header/View、列表菜单、Sidebar、多会话命令/附件六类边界。</li>
+<li class="acceptance-item">□ 每个“可用”有证据；每个“需改原生”有影响说明；不以截图证明原生兼容。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P0" id="W003"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W003 · 验证双 Conversation 与全窗口唯一编辑根</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W002　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：证明两个不同会话能复用原生内容，同时不与隐藏主页面或 subagentchat 争用输入根。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>在隔离验证环境中，以原生 SessionReference/SessionProvider 及 conversation.content 路径呈现 A、B；不复制 Conversation。</li>
+<li>同时输入不同草稿、流式输出、切换 View；记录挂载、编辑根和订阅身份。</li>
+<li>测试同一会话被工作台与原生 subagentchat 引用时的重复占用处理；重复打开应定位/受控交接，不生成第二输入根。</li>
+<li>证明一变二、二变一可在单一主宿主中完成；禁止保留底层编辑器再用 generation 抢回。</li>
+</ol>
+<p><strong>交付物</strong>：最小可运行验证与复现步骤；编辑根/订阅计数记录及 A/B 操作录像。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A/B 内容、草稿、发送目标独立；布局变化不建立新 transport。</li>
+<li class="acceptance-item">□ 同 Session 重复呈现被正确阻止或受控交接。</li>
+<li class="acceptance-item">□ 无法合法复用 Header/View 或保持唯一编辑根，标记 P0 阻断。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P0" id="W004"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W004 · 验证双 Sidebar 宿主与资源保活</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W002　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：证明两份 Sidebar 可显式绑定 A、B，且不继续依赖单一全局 current 控制展示。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>保留原生 registry、Tab 域、occurrence、provider 与原生存档；验证宿主会话、可见性和尺寸能单独提供。</li>
+<li>A、B 分别打开文件与终端/预览；切焦点后检查 tab.actions、资源打开及命令目标。</li>
+<li>验证收起、隐藏、关闭会话视图与显式关闭终端 Tab 的不同语义；记录资源持有与清理行为。</li>
+<li>列出传统右轨道报告、mounted/tab.visible、fullscreen 和当前目标中需调整的契约。</li>
+</ol>
+<p><strong>交付物</strong>：Sidebar 最小双宿主验证；资源生命周期记录；Sidebar 缺口/补丁边界清单。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A 文件只进 Sidebar A；B 可见不使 A 被误标为后台隐藏。</li>
+<li class="acceptance-item">□ 隐藏不调用终端 close handler；显式关闭仍走原生清理。</li>
+<li class="acceptance-item">□ 未通过前不把完整 Sidebar 兼容性标为完成。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P0" id="W005"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W005 · 验证并锁定 Dockview 受限适配方式</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W001　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：选定能满足 v5 行为的具体 Dockview 版本及公开 API 路径，不追求库的全部能力。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>验证一实例、一个 Group 一个会话、隐藏 IDE 标签、禁止中心合并/浮动/popout 的真实配置效果。</li>
+<li>测试公开 add/move/resize/maximize/restore/state API，证明移动不以 remove+add 重建内容。</li>
+<li>重点验证源移除后的正确落点预览、Esc 取消及稳定原生内容容器；必要时仅增加小型 pointer 意图适配器。</li>
+<li>比较常驻渲染、DOM 移动与 iframe 重载情况；记录 locked/disableDnd 的实际语义，不按名称猜测。</li>
+</ol>
+<p><strong>交付物</strong>：Dockview 版本决策记录；受限配置与最小验证脚本；通过后固定的依赖/lockfile 条目。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 单 Group 单会话在鼠标及 API 路径均成立。</li>
+<li class="acceptance-item">□ 组件身份、DOM 和 iframe 生命周期分别有观察结果。</li>
+<li class="acceptance-item">□ 公开 API 不足以满足合同就列为风险，不引入第二棵可写布局树兜底。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-01">方案 §01</a>、<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P0" id="W006"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W006 · 形成纯插件或宿主补丁决策及授权单</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W002、W003、W004、W005　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：先明确交付形态和安装影响，再允许进入原生适配实施。用户冻结方案不等于授权修改原生。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>汇总可由正式扩展面完成的部分及不可完成的部分。</li>
+<li>如需补丁，给出拟改包/文件、契约目的、影响范围、版本限制、构建/重载要求及回退路径；草案不得直接应用到用户环境。</li>
+<li>明确不触及 Agent 推理、模型调用、服务端协议、终端执行语义、会话数据格式。</li>
+<li>记录用户对具体原生变更的独立授权；未授权保留纯只读/独立原型工作，阻断依赖补丁的实现。</li>
+</ol>
+<p><strong>交付物</strong>：docs/host-change-decision.md；补丁范围与回退方案（若需要）；授权记录或“无需原生修改”的验证记录。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 不把“可停用”“可热卸载”“零原生改动”混为一谈。</li>
+<li class="acceptance-item">□ 需要原生变更时存在明确授权；授权前没有应用变更。</li>
+<li class="acceptance-item">□ 没有用 overlay、私有方法替换掩盖接口缺失。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P0" id="W007"><div class="task-kicker">P0 / PR-00 / 未开始</div><h3>W007 · P0 契约集成与放行评审</h3>
+<p><strong>阶段</strong>：P0　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W003、W004、W005、W006　<strong>建议 PR</strong>：PR-00</p>
+<p><strong>目标</strong>：将分散验证合成一个真实 rc.2 最小场景，决定后续是否有条件开工。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>组合两会话两 Sidebar，运行中文输入、文件打开、原生 View、隐藏资源和最小拖动验证。</li>
+<li>对必要且已授权的契约改动在隔离分支做最小集成；记录实际 diff，不扩大业务重构。</li>
+<li>建立失败即回到正常原生界面的降级路径；无“半可用工作台”。</li>
+<li>形成 P0 通过/阻断清单与后续负责角色；所有未证实能力继续标注未验证。</li>
+</ol>
+<p><strong>交付物</strong>：docs/gates/P0.md；可复现集成分支/补丁与测试日志；具体 DSH/Dockview 版本记录。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 唯一编辑根、双 Sidebar 目标、合法 Header/View 和菜单接入均已验证。</li>
+<li class="acceptance-item">□ 所有涉及原生的差异在授权范围内。</li>
+<li class="acceptance-item">□ 关键项失败则 P0 不通过；不先做完整皮肤再回补。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P1" id="W008"><div class="task-kicker">P1 / PR-01 / 未开始</div><h3>W008 · 建立干净源码工程及插件装配</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W007　<strong>建议 PR</strong>：PR-01</p>
+<p><strong>目标</strong>：以新 src 工程实现，不再直接维护旧 lib/client.js bundle。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>建立 workbench、session-surface、dsh-adapter/rc.2、persistence、theme 与 tests；仅按职责拆目录，不拆大量包。</li>
+<li>复用宿主 React/DSH 单例；实现插件初始化、能力探针和不兼容版本拒绝。</li>
+<li>配置 lint、类型检查、单元测试和构建脚本；lib 仅为产物。</li>
+<li>保留原生导航、设置、系统 chrome，新增样式限定在插件自有宿主范围。</li>
+</ol>
+<p><strong>交付物</strong>：源码工程、插件入口及构建配置；依赖锁文件；基础 CI 脚本。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 干净环境可按文档构建，未打包第二份 React。</li>
+<li class="acceptance-item">□ 未知宿主版本/能力不足时保留正常原生界面并提示原因。</li>
+<li class="acceptance-item">□ 停用后没有插件全局样式残留。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P1" id="W009"><div class="task-kicker">P1 / PR-01 / 未开始</div><h3>W009 · 实现单一主内容呈现宿主</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W008　<strong>建议 PR</strong>：PR-01</p>
+<p><strong>目标</strong>：让单会话和多会话始终使用同一个生效宿主。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>按 P0 已批准路径让传统主会话呈现合法让位，但保留业务服务和 Factory。</li>
+<li>处理设置、插件管理等原生全局面板与工作台之间的切换。</li>
+<li>保证会话数量变化不重建宿主、不挂隐藏竞争编辑器。</li>
+<li>实现启用失败的原子回退；原生适配只在既定范围内。</li>
+</ol>
+<p><strong>交付物</strong>：WorkbenchHost 与原生装配适配；宿主切换契约测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 1→2→1 时存活内容实例不因宿主切换被重建。</li>
+<li class="acceptance-item">□ 原生全局面板可打开、返回且无遗留 overlay。</li>
+<li class="acceptance-item">□ 无 generation/double bump、void 面板或延时“抢输入框”逻辑。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P1" id="W010"><div class="task-kicker">P1 / PR-01 / 未开始</div><h3>W010 · 实现稳定 SessionSurface 与会话引用管理</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W009　<strong>建议 PR</strong>：PR-01</p>
+<p><strong>目标</strong>：面板、业务会话和异步代次分离；移动尺寸不会重新绑定会话。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>定义稳定 panelId、原生 SessionId、bindingEpoch；仅显式会话切换递增 epoch。</li>
+<li>通过原生引用与渲染契约挂载 Conversation/Header/View/Composer 和 Sidebar 内容；不使用虚构导出。</li>
+<li>管理全窗口编辑呈现占用，涵盖 subagentchat；用原生引用释放/保活机制管理资源。</li>
+<li>增加局部错误边界和明确失效状态，不让一块故障清空其他会话。</li>
+</ol>
+<p><strong>交付物</strong>：SessionSurface 与引用/占用适配；挂载/释放测试与只含身份的调试日志。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 移动、聚焦、换边不改变 SessionReference 或 bindingEpoch。</li>
+<li class="acceptance-item">□ 重复 Session 不产生第二可编辑根。</li>
+<li class="acceptance-item">□ 局部错误不会停止其他 Session 或销毁其资源。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P1" id="W011"><div class="task-kicker">P1 / PR-02 / 未开始</div><h3>W011 · 接入左侧逐会话菜单的右/下分屏</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010　<strong>建议 PR</strong>：PR-02</p>
+<p><strong>目标</strong>：唯一增屏入口位于原生左侧具体会话的选项菜单。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>用批准的原生菜单扩展契约新增“向右分屏”“向下分屏”，保留原有条目，不复制目录。</li>
+<li>打开 B 菜单时捕获活动 A 的 panelId/epoch 及 B 的 SessionId；不先导航 B。</li>
+<li>点击后直接打开 B；不弹第二选择框，不在会话标题或下拉框放分屏入口。</li>
+<li>处理已显示 B 的定位、无参照/空间不足/临时放大时的禁用原因，以及 Esc 返回菜单触发点。</li>
+</ol>
+<p><strong>交付物</strong>：逐行菜单扩展与状态计算；菜单动作快照及竞态测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A 活跃时打开/取消 B 菜单，A 和布局零变化。</li>
+<li class="acceptance-item">□ B 右/下分屏目标准确；已显示 B 只定位，不复制。</li>
+<li class="acceptance-item">□ 标题内无分屏控件；原生目录其他功能仍在。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P1" id="W012"><div class="task-kicker">P1 / PR-02 / 未开始</div><h3>W012 · 实现会话切换与分屏异步事务</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W010、W011　<strong>建议 PR</strong>：PR-02</p>
+<p><strong>目标</strong>：将“普通切换”和“新增分屏”分开，实现目标捕获、过期拒绝与失败回退。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>普通点击未显示 B：在活动位置切换；B 已显示：只定位。</li>
+<li>准备目标引用期间不破坏当前内容；提交前验证 anchorPanelId、bindingEpoch、目标唯一性和操作时效。</li>
+<li>使用 Dockview 公共新增/绑定路径提交；取消/失败不留空窗格、不丢旧草稿。</li>
+<li>并发快速点击、来源关闭/换绑或目标删除时拒绝旧意图；不删除合法创建的 Session。</li>
+</ol>
+<p><strong>交付物</strong>：导航/分屏事务实现；快速点击、迟到回调、失败恢复测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A→B→C 乱序完成后不被旧 B 回调覆盖。</li>
+<li class="acceptance-item">□ 关闭参照后迟到分屏不落到其他会话。</li>
+<li class="acceptance-item">□ 新建行为沿用原生，不追加会话标签组或替换模式。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P1" id="W013"><div class="task-kicker">P1 / PR-02 / 未开始</div><h3>W013 · 实现关闭视图、临时放大与恢复</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010、W012　<strong>建议 PR</strong>：PR-02</p>
+<p><strong>目标</strong>：只改变呈现范围，不删除 Session、不误结束后台工作。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>实现窗口关闭、放大/恢复及关闭到零时的原生新建/选择入口；不为分屏流程创建永久空窗格。</li>
+<li>放大隐藏其他视图但保留底层几何；恢复回到原比例；放大时菜单增屏按冻结规则禁用。</li>
+<li>关闭引用沿原生资源持有规则释放，保留原生已打开 Tab 的必要生命周期。</li>
+<li>取消默认重载后恢复最大化；保留最后有效活动视图的清晰状态。</li>
+</ol>
+<p><strong>交付物</strong>：窗口级命令及状态测试；关闭/隐藏与资源保持验证。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 关视图不删除 Session、不调用停止 Agent/关闭全部 Tab。</li>
+<li class="acceptance-item">□ 放大恢复不重建仍存活内容，不覆写正常布局。</li>
+<li class="acceptance-item">□ 1→0→1 没有重复宿主或事件处理。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P1" id="W014"><div class="task-kicker">P1 / PR-03 / 未开始</div><h3>W014 · 集成显式会话绑定的原生 Sidebar</h3>
+<p><strong>阶段</strong>：P1　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W010　<strong>建议 PR</strong>：PR-03</p>
+<p><strong>目标</strong>：每个会话拥有自己的一块 Sidebar；不建立第二套 provider 或全局独立 Sidebar 窗口。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>依批准契约将原生内容与右轨道呈现分离，按 Session/host 提供可见性、尺寸和原生命令目标。</li>
+<li>A 中资源链接、文件树和命令只路由 Sidebar A；旧全局 current 不能作为迟到动作回退。</li>
+<li>保留 Tab、guide、原生内部两格/float 等既有能力；嵌入态 fullscreen 不覆盖其他会话，若适配有缺口须明确阻断。</li>
+<li>报告内容宽高而非整页 viewport，避免原生两格判断读取错误空间。</li>
+</ol>
+<p><strong>交付物</strong>：SidebarBridge 与原生打开路由；双 Sidebar、原生 Tab/扩展贡献兼容测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 两个可见 Sidebar 互不跟随或短暂显示对方内容。</li>
+<li class="acceptance-item">□ 不向旧右栏轨道重复申请宽度。</li>
+<li class="acceptance-item">□ 本插件不新增 Tab 外置、跨会话迁移或第二 Sidebar 服务。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P2" id="W015"><div class="task-kicker">P2 / PR-04 / 未开始</div><h3>W015 · 实现完整会话四方向移动</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010、W013　<strong>建议 PR</strong>：PR-04</p>
+<p><strong>目标</strong>：搬动整个会话，保留其正文、Sidebar、草稿与内部比例。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>仅会话标题空白/把手可启动外层拖动；按下越过小阈值后进入预览态。</li>
+<li>保持原内容在原位，使用轻量标签和目标边缘预览；以移除来源后的真实目标几何计算提示。</li>
+<li>松手一次公开移动提交；中央、目录、应用外均无效，不合并标签/覆盖内容。</li>
+<li>提供标题方向菜单作为键盘/触摸等效路径；不引入新布局模式。</li>
+</ol>
+<p><strong>交付物</strong>：受限外层 DnD/移动适配；四方向与取消、单组不变量测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A 左 B 右，A 移到 B 下后为 B 上 A 下；没有第三块空位。</li>
+<li class="acceptance-item">□ 移动不交换 sessionId、不调用 remove+add 重建内容。</li>
+<li class="acceptance-item">□ 无效落点/取消完全保留原布局和业务状态。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P2" id="W016"><div class="task-kicker">P2 / PR-04 / 未开始</div><h3>W016 · 实现无可见分割线的尺寸调整</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010、W015　<strong>建议 PR</strong>：PR-04</p>
+<p><strong>目标</strong>：会话之间只留空隙，仍可拖动、双击均分与键盘调尺寸。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>透明命中区域与外层几何一致；正常、hover、active、dragging 均不绘制分割线或加深边。</li>
+<li>保留方向光标、可访问的分隔角色/数值、键盘尺寸反馈；不能用重新画会话间分割线实现焦点提示。</li>
+<li>拖动实时更新，结合最小宽高钳制；双击约束内均分。</li>
+<li>取消恢复操作前比例；每帧合并几何更新，不对宽高加长过渡。</li>
+</ol>
+<p><strong>交付物</strong>：透明 resize hit-area 与键盘操作；宽高、均分、取消、无描线断言。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 左右与上下分屏均在所有鼠标状态下看不到分割线。</li>
+<li class="acceptance-item">□ 拖动有效且边界正确；Esc 回到原比例。</li>
+<li class="acceptance-item">□ 不牺牲键盘可操作性或切断内容滚动。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P2" id="W017"><div class="task-kicker">P2 / PR-03 / 未开始</div><h3>W017 · 实现 Sidebar 四边 CSS 停靠及独立比例</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W014　<strong>建议 PR</strong>：PR-03</p>
+<p><strong>目标</strong>：内层只需方向、横/纵比例和稳定子节点，不再引入嵌套 Dockview。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>固定正文、分隔条、Sidebar 的 DOM/React 身份，用 CSS Grid 改区域与行列。</li>
+<li>支持左、右、上、下；仅在本会话内给出落点，松手提交一次方向。</li>
+<li>横向和纵向比例分别保存；改变尺寸即时跟手、双击约束内均分。</li>
+<li>不移动 iframe 父节点、不关旧开新、不拖窄自动收起；跨会话与应用外拒绝。</li>
+</ol>
+<p><strong>交付物</strong>：轻量内部布局与命中计算；四向停靠、比例记忆、iframe 节点稳定测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A Sidebar 换边不影响 B；方向与比例随整会话移动。</li>
+<li class="acceptance-item">□ 浏览器/终端内容身份和运行状态不变。</li>
+<li class="acceptance-item">□ 内部没有第二个全局布局引擎或可写会话树。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P2" id="W018"><div class="task-kicker">P2 / PR-03 / 未开始</div><h3>W018 · 实现 Sidebar 标题与收起入口</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：常规<br/>
+<strong>前置</strong>：W014、W017　<strong>建议 PR</strong>：PR-03</p>
+<p><strong>目标</strong>：保持 v5 的简洁 Sidebar 标题：右上角没有两个额外 icon。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>移除插件新增的停靠位置和关闭图标，仅保留标题可拖。</li>
+<li>点击或 Enter 激活 Sidebar 标题打开方向菜单；拖动后抑制误点击弹菜单，Esc 关闭后返回标题。</li>
+<li>通过会话标题栏原有 Sidebar 入口收起/展开，恢复上次方向和比例。</li>
+<li>Sidebar 内部标签按钮与原生关闭操作保持，不误删原生 Tab 工具。</li>
+</ol>
+<p><strong>交付物</strong>：标题交互及原生显隐入口适配；点击/拖动区分与按键测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 两份 Sidebar 标题右上角均无那两个按钮。</li>
+<li class="acceptance-item">□ 没有按钮仍能换边、收起、展开并以键盘完成。</li>
+<li class="acceptance-item">□ 仅收起时终端继续，未触发任何 Tab close handler。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P2" id="W019"><div class="task-kicker">P2 / PR-05 / 未开始</div><h3>W019 · 落地 v5 圆角、轻灰遮罩与轻阴影</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：常规<br/>
+<strong>前置</strong>：W010、W014　<strong>建议 PR</strong>：PR-05</p>
+<p><strong>目标</strong>：按冻结原型实现视觉，不回退到旧版无圆角或粗焦点描边。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>完整会话与 Sidebar 共用 12px 初值 token；会话外壳零边框、零阴影，正文不再套卡片。</li>
+<li>非当前会话增加 pointer-events:none 的极淡灰层；不使用根 opacity/filter/inert；当前清晰。</li>
+<li>Sidebar 保留细边框与静态微阴影，浅/深分别使用冻结原型初值；不随焦点加深。</li>
+<li>从 DSH 主题继承底色；留白容纳 Sidebar 阴影，圆角裁剪不得截断浮层；系统字号/reduced-motion 正常。</li>
+</ol>
+<p><strong>交付物</strong>：作用域化 theme tokens/CSS；与冻结原型的浅/深色对照图。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 会话与 Sidebar 圆角一致；非聚焦可读，不出现厚重边框。</li>
+<li class="acceptance-item">□ 只有 Sidebar 有克制阴影；外层间隙仍无分割线。</li>
+<li class="acceptance-item">□ 菜单/灯箱不被裁；首次点击不需要先解除遮罩。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P2" id="W020"><div class="task-kicker">P2 / PR-05 / 未开始</div><h3>W020 · 实现焦点路由与 iframe 归属校验</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010、W014、W019　<strong>建议 PR</strong>：PR-05</p>
+<p><strong>目标</strong>：视觉焦点切换不改变业务绑定，内嵌内容也能一次点击正确激活。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>处理 SessionSurface 内 pointerdown/focusin；iframe 通过原生宿主或受控桥接解析归属。</li>
+<li>校验 message.source/已挂载 frame/类型及适用来源；不信任网页自报 SessionId。</li>
+<li>目录菜单打开/取消不改变活动会话；应用失焦仍保留最后明确活动者，不全部蒙灰。</li>
+<li>单视图、窄屏及放大时展示者清晰；移动只选择容器，不强行 focus Composer。</li>
+</ol>
+<p><strong>交付物</strong>：焦点/安全消息桥接；首次点击、键盘、终端、iframe 与伪造消息测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 点击非当前输入框一次就能放光标和输入。</li>
+<li class="acceptance-item">□ A iframe 点击只激活 A；其他来源消息不改变焦点。</li>
+<li class="acceptance-item">□ 聚焦变化不递增 bindingEpoch、不重挂原生内容。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P2" id="W021"><div class="task-kicker">P2 / PR-05 / 未开始</div><h3>W021 · 统一三层手势取消与桌面拖窗边界</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W015、W016、W017、W018、W020　<strong>建议 PR</strong>：PR-05</p>
+<p><strong>目标</strong>：会话、Sidebar、原生 Tab 只由一层消费同一个手势，取消不误触业务命令。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>分别管理外层标题、Sidebar 标题、内部 Tab 和 resize hit-area；正文选区/Composer 不触发布局拖动。</li>
+<li>pointercapture/临时 iframe 事件屏障只在有效手势期间生效；结束、Esc、cancel、失焦、卸载均释放。</li>
+<li>拖动取消优先于原生双 Esc 停止；IME、重复按键、原生菜单/审批遵循原生裁决。</li>
+<li>Windows/macOS 的应用内部拖动区明确 no-drag，系统标题带保留原生行为。</li>
+</ol>
+<p><strong>交付物</strong>：手势生命周期与屏障清理；键盘冲突、iframe 跨越、系统拖窗测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 拖内部 Tab 不搬 Sidebar，拖 Sidebar 不搬会话。</li>
+<li class="acceptance-item">□ 取消后无透明层拦点击、无残留光标，Agent 不停止。</li>
+<li class="acceptance-item">□ 拖内容标题不会拖动整个操作系统窗口。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="布局工程师" data-phase="P2" id="W022"><div class="task-kicker">P2 / PR-05 / 未开始</div><h3>W022 · 实现窄屏投影与空间不足反馈</h3>
+<p><strong>阶段</strong>：P2　<strong>主责</strong>：布局工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W013、W016、W017、W020　<strong>建议 PR</strong>：PR-05</p>
+<p><strong>目标</strong>：屏幕变窄只影响当前展示，不破坏桌面布局或后台资源。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>按实际容器最小尺寸判断可分屏；按钮给出明确禁用原因，不擅自换分屏方向。</li>
+<li>整体太窄时仅投影活动会话；扩宽回原布局，保留其他会话和资源。</li>
+<li>会话内部无法同时容纳时在该会话内单页显示 Sidebar，并提供返回对话。</li>
+<li>区分临时几何变化和用户布局提交，投影不覆写桌面快照；不新增移动端业务 Store。</li>
+</ol>
+<p><strong>交付物</strong>：响应式投影与尺寸约束；窄→宽、缩放与键盘/触摸测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 窄屏无水平溢出或消失的关闭/返回入口。</li>
+<li class="acceptance-item">□ 回到宽屏恢复原排列、方向和比例。</li>
+<li class="acceptance-item">□ 空间不足不创建空格、不停止或偷偷删除会话。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P3" id="W023"><div class="task-kicker">P3 / PR-06 / 未开始</div><h3>W023 · 保留原生 View、Header 和全局浮层</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W010、W014、W019、W020　<strong>建议 PR</strong>：PR-06</p>
+<p><strong>目标</strong>：完整原生能力不因紧凑外壳而被削减。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>接入原生 Chat/Trajectory/第三方已注册 View 和 Inspect；不永久固定 Chat。</li>
+<li>采用已批准装配契约呈现必要 Header/工具动作，不复制私有 UI。</li>
+<li>测试模型菜单、Tooltip、审批、灯箱的 portal、圆角裁剪、遮罩与焦点归属。</li>
+<li>空白会话、View 不存在/卸载、插件慢加载时遵循原生 fallback，不随意选第一项。</li>
+</ol>
+<p><strong>交付物</strong>：完整内容适配与回归用例；View/浮层对照证据。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 每个会话保留自己的 View 选择与 Inspect 目标。</li>
+<li class="acceptance-item">□ 浮层可点击、无遮挡、不被圆角或灰层裁切。</li>
+<li class="acceptance-item">□ 第三方贡献缺失不会导致错误视图或整页崩溃。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P3" id="W024"><div class="task-kicker">P3 / PR-06 / 未开始</div><h3>W024 · 保留附件上传、粘贴和文件拖放</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W012、W020、W021　<strong>建议 PR</strong>：PR-06</p>
+<p><strong>目标</strong>：恢复原生附件能力，并保证一次事件只有一个明确接收会话。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>接入原生附件验证、图片/文件上传、桌面路径引用和目录处理，插件不另做上传器。</li>
+<li>将 document 级接收与会话级接收统一仲裁；禁用/锁定/不存在输入根不能接收。</li>
+<li>异步上传/打开引用捕获目标与时效；切焦点或来源关闭后不回退全局 current。</li>
+<li>保留原生队列、取消、错误恢复与文件字节生命周期；日志不记录敏感文件内容。</li>
+</ol>
+<p><strong>交付物</strong>：附件目标适配；拖/粘贴/选择、目录、失败及焦点竞态测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 一批文件只进入一个目标，不重复上传。</li>
+<li class="acceptance-item">□ A 上传过程中激活 B，结果仍属于 A；过期 UI 意图安全拒绝。</li>
+<li class="acceptance-item">□ 桌面路径与 Web 上传行为按原生环境分支保留。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P3" id="W025"><div class="task-kicker">P3 / PR-06 / 未开始</div><h3>W025 · 对齐原生发送、审批、快捷键与关闭目标</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W012、W020、W021、W023　<strong>建议 PR</strong>：PR-06</p>
+<p><strong>目标</strong>：所有业务命令按明确身份执行，布局快捷键不抢占原生输入。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>发送/停止/队列/审批保留原生入口与 Session/occurrence 目标；异步时不重读 current。</li>
+<li>Esc 取消布局、菜单关闭、原生双 Esc 停止按优先级处理；Enter 与组合输入交还原生。</li>
+<li>终端、iframe、弹窗获得焦点时，不让工作台命令误作用于另一 Session。</li>
+<li>处理原生关闭命令与视图关闭不同语义；过期目标不降级为关闭应用窗口。</li>
+</ol>
+<p><strong>交付物</strong>：命令上下文适配与冲突表；发送/审批/停止/关闭目标测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ A 发出的操作在焦点切换后仍正确；旧审批/导航身份不被复用。</li>
+<li class="acceptance-item">□ 取消拖动不停止 Agent，输入法按键不触发工作区命令。</li>
+<li class="acceptance-item">□ 未命中合法原生命令目标时明确无动作，而非回退关窗。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P3" id="W026"><div class="task-kicker">P3 / PR-06 / 未开始</div><h3>W026 · 验证 provider 的隐藏、移动、关闭与恢复语义</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W014、W017、W018、W023、W025　<strong>建议 PR</strong>：PR-06</p>
+<p><strong>目标</strong>：按真实 provider 测试资源生命周期，不能用模拟终端替代。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>逐项覆盖文件树、文档预览、浏览器/iframe、终端、可继续子代理及代表性第三方 provider。</li>
+<li>区分收起 Sidebar、隐藏窗口、切换 Session、移位与显式关闭/替换 Tab。</li>
+<li>检查原生 openTabs 资源持有、keepMounted、尺寸观察、关闭 handler 失败及后台重试。</li>
+<li>测试失效终端恢复提示，不自动新建 PTY；移动保持 tabId/occurrence 和 iframe 身份。</li>
+</ol>
+<p><strong>交付物</strong>：provider 兼容矩阵；真实 PTY/iframe/子代理测试记录与失败说明。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 运行终端收起再开继续；明确关闭 Tab 按原生结束。</li>
+<li class="acceptance-item">□ 浏览器输入/滚动在承诺无损的移动中保持；不默认所有 provider 都通过。</li>
+<li class="acceptance-item">□ 不新建 Tab Store、文件协议或终端控制器。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P3" id="W027"><div class="task-kicker">P3 / PR-07 / 未开始</div><h3>W027 · 实现外层布局持久化与输入校验</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W012、W013、W017、W022　<strong>建议 PR</strong>：PR-07</p>
+<p><strong>目标</strong>：只保存外层几何与逐会话 Sidebar 位置，不复制业务状态。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>定义 schemaVersion、宿主/引擎版本、安全 Panel/Session 引用、Dockview 快照、SidebarPlacement。</li>
+<li>使用宿主解析的 connection/profile 命名空间；校验重复会话、未知类型、体积、深度和非法数值。</li>
+<li>在有效布局提交后防抖保存；token/焦点/窄屏投影不全量写盘；最大化默认不恢复。</li>
+<li>存储失败保留内存工作态并提示，不清原生 Sidebar key，不把 token/凭证/消息/连接放入 params。</li>
+</ol>
+<p><strong>交付物</strong>：版本化快照 schema 与读写模块；畸形快照、频率、容量和存储异常测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 流式输出不触发外层布局保存；resize 不逐帧全量写盘。</li>
+<li class="acceptance-item">□ 快照无敏感运行数据，命名空间不冒充权限隔离。</li>
+<li class="acceptance-item">□ 多个页面不实时强制覆盖彼此活动布局。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-04">方案 §04</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P3" id="W028"><div class="task-kicker">P3 / PR-07 / 未开始</div><h3>W028 · 实现安全恢复与旧布局一次性迁移</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W026、W027　<strong>建议 PR</strong>：PR-07</p>
+<p><strong>目标</strong>：刷新可以找回位置，但不自动启动任务或破坏原生存档。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>等待宿主身份/provider 就绪→校验快照→准备引用/唯一性→采用原生 Sidebar 状态→一次恢复外层。</li>
+<li>处理 Session 删除、权限撤销、provider 延迟、不可用资源与版本不兼容；提供安全占位或默认外层布局。</li>
+<li>旧 dsh.split.v1 只迁移可验证、去重的 Session 引用；保留旧备份，不迁移 overlay/generation/特殊主格。</li>
+<li>若旧几何不能无歧义转换，只重置外层几何并说明；原生 Sidebar key 不删除。</li>
+</ol>
+<p><strong>交付物</strong>：恢复状态机与迁移脚本/函数；正常/坏存档/旧版本/延迟 provider 样本及测试。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 恢复不发送消息、不启动 Agent、不分配替代终端。</li>
+<li class="acceptance-item">□ 缺权限的内容连敏感标题也不展示。</li>
+<li class="acceptance-item">□ 迁移幂等，失败可回退，不覆盖原始存档。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="DSH 适配工程师" data-phase="P3" id="W029"><div class="task-kicker">P3 / PR-07 / 未开始</div><h3>W029 · 实现启停、HMR 清理与回退原生</h3>
+<p><strong>阶段</strong>：P3　<strong>主责</strong>：DSH 适配工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W009、W013、W021、W026、W028　<strong>建议 PR</strong>：PR-07</p>
+<p><strong>目标</strong>：先支持可靠的受控切换，再按实测决定是否能承诺热插拔。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>完整释放手势屏障、监听、计时器、订阅与视图引用；保活资源仍由原生所有者决定。</li>
+<li>停用时交回原生呈现，保证编辑器绑定顺序正确；拒绝使用定时 generation 修补。</li>
+<li>测试重复启停/HMR、切换中异步回调、加载失败；旧实例不能写入新实例状态。</li>
+<li>记录安装补丁/更新客户端产物是否需重载；未验证无损热卸载时只承诺明确的受控重载。</li>
+</ol>
+<p><strong>交付物</strong>：启停与清理实现；兼容回退说明；重复启停和资源泄漏观察记录。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 停用后原生可输入、可打开 Sidebar，没有残留 CSS/遮罩。</li>
+<li class="acceptance-item">□ 运行任务和 terminal 不因布局插件销毁被误关。</li>
+<li class="acceptance-item">□ 产品文档准确区分零改动、可停用、可热卸载，不夸大。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="测试工程师" data-phase="P4" id="W030"><div class="task-kicker">P4 / PR-08 / 未开始</div><h3>W030 · 建立可追溯的自动化契约测试集</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：测试工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W012、W015、W016、W017、W020、W027　<strong>建议 PR</strong>：PR-08</p>
+<p><strong>目标</strong>：让关键不变量可重复检验，而不是继承旧补丁实现测试。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>为纯状态、导航 epoch、菜单捕获、布局约束、显隐/关闭、保存恢复建立单元与契约测试。</li>
+<li>建立 N01–N21、V01–V03 与任务 ID 的双向映射。</li>
+<li>测试 mock 明确只覆盖接口合同，不冒充原生 provider 运行验收。</li>
+<li>退休仅验证 generation/double bump/旧 overlay 的测试，转写用户可见行为测试。</li>
+</ol>
+<p><strong>交付物</strong>：tests/unit、tests/contract；自动化执行入口与追溯矩阵。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 正常/取消/异常/竞态均有断言。</li>
+<li class="acceptance-item">□ CI 结果与固定依赖关联；测试失败不被静默 skip。</li>
+<li class="acceptance-item">□ 真实集成用例另行执行，不用 mock 全绿放行。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="测试工程师" data-phase="P4" id="W031"><div class="task-kicker">P4 / PR-08 / 未开始</div><h3>W031 · 执行真实 DSH 双会话端到端验收</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：测试工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W023、W024、W025、W026、W028、W029、W030　<strong>建议 PR</strong>：PR-08</p>
+<p><strong>目标</strong>：证明生产实现而非离线 Demo 满足冻结合同。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>在固定 rc.2 与被测插件 commit 上跑两会话两 Sidebar 场景，附完整环境信息。</li>
+<li>覆盖侧栏 B 菜单右/下、取消、重复定位、来源失效；整会话拖动、Sidebar 四向、透明调尺寸与放大。</li>
+<li>覆盖中文输入、并行输出、附件、审批、terminal、iframe、恢复和停用。</li>
+<li>逐条给 N01–N21 与 V01–V03 状态、脚本/日志/录像、缺陷 ID；不沿用 v5 的原型通过记录。</li>
+</ol>
+<p><strong>交付物</strong>：docs/evidence/native-e2e/；逐项原生验收结果与缺陷清单。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 所有强制用例有真实结果，未测项保持“未测”。</li>
+<li class="acceptance-item">□ 关键身份/资源/输入问题为阻断，不作为小 UI bug 忽略。</li>
+<li class="acceptance-item">□ 无失败场景需要通过重新加载才能假装操作成功。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-10">方案 §10</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="测试工程师" data-phase="P4" id="W032"><div class="task-kicker">P4 / PR-08 / 未开始</div><h3>W032 · 执行视觉、平台、缩放与无障碍回归</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：测试工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W018、W019、W021、W022、W023、W031　<strong>建议 PR</strong>：PR-08</p>
+<p><strong>目标</strong>：确认 v5 的视觉删减和可用性在目标平台一致成立。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>覆盖 Chromium/Edge Web、Windows Electron、macOS Electron，记录精确版本。</li>
+<li>分别测浅/深色、100%/125%/150% 缩放、窄屏、reduced-motion、键盘和触摸等效路径。</li>
+<li>检查会话无边线/阴影、同圆角、灰层一次点击、外层分割线各状态不可见、Sidebar 两图标缺席及轻阴影。</li>
+<li>检查系统顶栏、菜单、Tooltip、灯箱、原生 View 工具和内部 Tab 的操作面积与裁剪。</li>
+</ol>
+<p><strong>交付物</strong>：平台矩阵与对照截图；键盘/可访问性回归报告。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ V01–V03 全通过，不为某平台加回被删除按钮/分割线。</li>
+<li class="acceptance-item">□ 窗口内部拖动不会拖系统窗；主要操作可用键盘完成。</li>
+<li class="acceptance-item">□ 平台未测即标未支持/未验证，不宣布跨平台全部兼容。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-02">方案 §02</a>、<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="测试工程师" data-phase="P4" id="W033"><div class="task-kicker">P4 / PR-08 / 未开始</div><h3>W033 · 性能、长历史与重复操作稳定性测量</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：测试工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W026、W029、W031　<strong>建议 PR</strong>：PR-08</p>
+<p><strong>目标</strong>：用可复现负载评估效率，不承诺任意设备/会话数的绝对最优。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>以两会话两 Sidebar 建立基准，再测四会话长历史与 iframe/terminal 负载；记录硬件、浏览器、视口和模型输出负载。</li>
+<li>测拖动/resize 帧时间、输入响应、保存频率、渲染/挂载/订阅计数与内存趋势。</li>
+<li>重复移动、收起、切换、启停；检查重复 transport、未释放屏障及持续增长资源。</li>
+<li>将结果与同环境原生基准比较；60Hz 跟手仅为设计目标，瓶颈需测量后定位。</li>
+</ol>
+<p><strong>交付物</strong>：docs/evidence/performance.md；trace/计数/内存趋势原始记录与复现负载。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 正常移动不重建编辑器/历史数据源，token 不全量保存布局。</li>
+<li class="acceptance-item">□ 重复操作后无持续累积的无主订阅、计时器或 iframe。</li>
+<li class="acceptance-item">□ 实测达不到可接受体感时修复或限制容量，不捏造统一毫秒指标。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-08">方案 §08</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="测试工程师" data-phase="P4" id="W034"><div class="task-kicker">P4 / PR-08 / 未开始</div><h3>W034 · 对抗性目标与持久化边界检查</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：测试工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W024、W025、W027、W028、W031　<strong>建议 PR</strong>：PR-08</p>
+<p><strong>目标</strong>：验证错目标、伪造消息和恶意快照不会破坏原生资源边界。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>构造过期 panel/epoch、已关闭 Tab、删除 Session、同名/重复引用和菜单触发竞态。</li>
+<li>从非拥有 iframe 发送伪造 focus/message；验证来源与映射而非自报身份。</li>
+<li>构造超大/深层/未知类型/非法比例快照，验证拒绝与安全回退。</li>
+<li>检查错误与日志中不包含凭证、完整消息或敏感资源标题；布局不能授予资源权限。</li>
+</ol>
+<p><strong>交付物</strong>：边界测试与风险报告；失败样本（去敏）及修复证据。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 不出现业务操作落到错误 Session；过期目标不回退 current。</li>
+<li class="acceptance-item">□ 不可信消息不能操控焦点/业务命令。</li>
+<li class="acceptance-item">□ 坏存档不清空原生资源存档，不触发运行操作。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-03">方案 §03</a>、<a href="dsh-split-final-plan.html#section-06">方案 §06</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="发布工程师" data-phase="P4" id="W035"><div class="task-kicker">P4 / PR-09 / 未开始</div><h3>W035 · 准备可复现插件包、安装与回滚说明</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：发布工程师　<strong>状态</strong>：未开始　<strong>风险</strong>：高<br/>
+<strong>前置</strong>：W029、W031、W032、W033、W034　<strong>建议 PR</strong>：PR-09</p>
+<p><strong>目标</strong>：交付可安装的实现包时明确支持边界；本任务不是本次文档打包已完成的内容。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>构建插件产物、校验依赖、许可证和源码 commit；不包含测试账号、密钥或第二份 React。</li>
+<li>若需授权补丁，将补丁与插件分开标注，写清安装顺序、构建/重载要求、卸载及补丁回滚。</li>
+<li>声明固定支持的 DSH/Dockview/平台版本、已知限制和未支持情况；未知版本能力探针应拒绝。</li>
+<li>包含校验和、变更记录与原生数据备份建议；不自动执行生产切换。</li>
+</ol>
+<p><strong>交付物</strong>：候选插件安装包与 SHA-256；INSTALL/ROLLBACK/CHANGELOG/许可清单；已批准宿主补丁（若需要）。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 干净环境可安装、停用并回到原生，步骤有实测证据。</li>
+<li class="acceptance-item">□ 安装说明不声称未经证实的零改动热插拔。</li>
+<li class="acceptance-item">□ 未自动增加 Sidebar 标签拆出或其他本期排除功能。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-05">方案 §05</a>、<a href="dsh-split-final-plan.html#section-07">方案 §07</a>、<a href="dsh-split-final-plan.html#section-09">方案 §09</a>、<a href="dsh-split-final-plan.html#section-12">方案 §12</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><section class="task-card" data-owner="前端负责人" data-phase="P4" id="W036"><div class="task-kicker">P4 / PR-09 / 未开始</div><h3>W036 · 最终放行、范围核对与证据归档</h3>
+<p><strong>阶段</strong>：P4　<strong>主责</strong>：前端负责人　<strong>状态</strong>：未开始　<strong>风险</strong>：关键<br/>
+<strong>前置</strong>：W035　<strong>建议 PR</strong>：PR-09</p>
+<p><strong>目标</strong>：确保交付的是冻结 v5 的实现，所有改变都有明确记录。</p>
+<p><strong>执行步骤</strong></p>
+<ol>
+<li>逐项对照冻结规则 F01–F16 与任务完成证据；产品变更必须另走变更请求，不在重构中悄悄调整。</li>
+<li>核对 N01–N21/V01–V03、平台与性能结果，记录通过/阻断/不适用的理由。</li>
+<li>收敛缺陷：错发、数据丢失、资源误关、重复编辑根、恢复破坏、无法回退均为发布阻断。</li>
+<li>用户/产品负责人确认交互与已声明的安装影响后，再单独授权实际发布；归档版本与回退包。</li>
+</ol>
+<p><strong>交付物</strong>：docs/gates/P4-release.md；最终范围追溯矩阵；已签收版本、缺陷与回退记录。</p>
+<p><strong>验收条件</strong></p>
+<ul>
+<li class="acceptance-item">□ 所有发布前置都有证据而非人工勾选代替测试。</li>
+<li class="acceptance-item">□ 原型验证、原生实现验证和用户发布授权分别记录。</li>
+<li class="acceptance-item">□ 未授权不操作真实生产或远程仓库发布。</li>
+</ul>
+<p><strong>依据</strong>：<a href="dsh-split-final-plan.html#section-09">方案 §09</a>、<a href="dsh-split-final-plan.html#section-11">方案 §11</a>、<a href="dsh-split-final-plan.html#section-12">方案 §12</a>。</p>
+<p><strong>证据回填</strong>：实现 commit / PR：<strong><strong>；测试入口：</strong></strong>；日志或录像：<strong><strong>；缺陷/限制：</strong></strong>；复核者：____。</p>
+</section><h2 id="chapter-05">05 · 原生验收矩阵与证据格式</h2>
+<p>N01–N21 沿用冻结方案中的原生验收编号；V01–V03 是 v5 三项最新视觉要求的测试拆解，<strong>不是新增产品需求</strong>。所有项目当前均为“待验证”。方案内的历史 headless 原型检查与本包的文件检查都不能替代这里的原生结果。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>用例</th>
+<th>必须验证的结果</th>
+<th>主要责任任务</th>
+<th>初始状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>N01</td>
+<td>一个会话→两个→一个，同一宿主，无隐藏竞争编辑根</td>
+<td>W003、W009、W010、W013</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N02</td>
+<td>两个长历史会话并行输出，不串消息、不另建 transport</td>
+<td>W003、W010、W033</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N03</td>
+<td>A 中文输入期间操作 B，不错发、不破坏编辑器状态</td>
+<td>W003、W020、W021、W025</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N04</td>
+<td>工作台与 subagentchat 引用同 Session，唯一可编辑 root</td>
+<td>W003、W010、W026</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N05</td>
+<td>拖会话/换 Sidebar 边/缩放，原生内容身份稳定</td>
+<td>W015、W016、W017、W026</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N06</td>
+<td>A 文件/上传后切 B，异步仍指向 A；过期目标拒绝</td>
+<td>W012、W014、W024、W025</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N07</td>
+<td>终端运行时隐藏 Sidebar/关闭会话视图，原生持有规则继续</td>
+<td>W013、W018、W026、W029</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N08</td>
+<td>显式关闭终端 Tab、清理失败/重试沿用原生</td>
+<td>W025、W026</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N09</td>
+<td>iframe 输入/表单/滚动后移动，无损路径不重载</td>
+<td>W005、W017、W020、W026</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N10</td>
+<td>Chat/Trajectory/第三方 View 与 Inspect 保留</td>
+<td>W003、W023</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N11</td>
+<td>模型菜单/审批/Tooltip/灯箱不裁切，作用域正确</td>
+<td>W019、W023、W025</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N12</td>
+<td>一次文件拖放仅一个接收目标，原生路径/上传规则保留</td>
+<td>W024</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N13</td>
+<td>Esc 取消布局与双 Esc 停止不冲突</td>
+<td>W021、W025</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N14</td>
+<td>Windows/macOS 内容拖动不拖系统窗</td>
+<td>W021、W032</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N15</td>
+<td>空间不足/缩放/窄→宽，边界明确且布局不丢</td>
+<td>W016、W017、W022</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N16</td>
+<td>坏快照/删除会话/provider 延迟/权限撤销安全处理</td>
+<td>W027、W028、W034</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N17</td>
+<td>安装/HMR/停用/回原生无泄漏，不误关资源</td>
+<td>W008、W029、W035</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N18</td>
+<td>其他未验证 DSH 版本明确拒绝或标未支持</td>
+<td>W001、W008、W035</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N19</td>
+<td>同圆角、无会话边框、轻灰不拦首次点击及 iframe</td>
+<td>W019、W020、W032</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N20</td>
+<td>A 活跃打开 B 菜单右/下分屏，取消零变更，已开不重复</td>
+<td>W011、W012</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>N21</td>
+<td>异步分屏准备中参照关闭/换绑，旧动作不误提交</td>
+<td>W011、W012、W034</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>V01</td>
+<td>左右/上下会话间分割线在正常、hover、drag 全不可见，但仍能调尺寸</td>
+<td>W016、W032</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>V02</td>
+<td>Sidebar 标题右上角两个额外 icon 全部缺席；标题/会话入口仍可操作</td>
+<td>W018、W032</td>
+<td>待验证</td>
+</tr>
+<tr>
+<td>V03</td>
+<td>仅 Sidebar 有静态轻阴影，浅深主题克制，不因聚焦加深</td>
+<td>W019、W032</td>
+<td>待验证</td>
+</tr>
+</tbody>
+</table></div>
+<h3>每条验收的最小证据</h3>
+<p>记录 DSH/插件/Dockview commit 或版本、平台/浏览器/视口/缩放、复现步骤、预期、实际、通过/失败/未测、脚本位置、日志/trace/截图/录像和缺陷号。涉及节点稳定性时分别记录 SessionReference、Editor root、iframe DOM 和真实进程身份；不能只截图“草稿文字还在”。
+建议证据位置为 <code>docs/evidence/&lt;candidate-commit&gt;/&lt;case-id&gt;/</code>。这是待实现工程目录，不属于本包已存在的原生测试产物。真实数据和日志应去敏；不得记录凭证和不必要的完整聊天正文。</p>
+<h2 id="chapter-06">06 · 统一完成定义与提交规范</h2>
+<p>每项工程任务同时满足以下条件才可关闭：</p>
+<ul>
+<li class="acceptance-item">□ 实现落在已冻结范围与已批准原生变更内；使用建议目录时核对真实接口，不引用虚构导出。</li>
+<li class="acceptance-item">□ 类型检查/构建/相关自动化通过；正常、取消、异常、异步失效均有覆盖。</li>
+<li class="acceptance-item">□ 原生/平台相关任务提供对应真实环境证据；未测平台不标兼容。</li>
+<li class="acceptance-item">□ 不新增第二份可写业务状态、不重复 transport、不遗留监听/屏障/计时器；不误清理原生资源。</li>
+<li class="acceptance-item">□ 已更新接口/安装/支持限制；独立复核通过；未解决缺陷与回退方式记录清楚。</li>
+</ul>
+<h3>Issue / PR 回填模板</h3>
+<pre tabindex="0"><code class="language-text">任务：Wxxx · 标题
+冻结基线：DSH-SPLIT-V5-FROZEN-20261015
+负责人：
+前置任务与完成证据：
+涉及原生变更：无 / 有（授权与范围链接）
+实现边界及关键差异：
+冻结规则：Fxx
+验收用例：Nxx / Vxx
+测试环境、命令与结果：
+内容/资源生命周期证据：
+已知限制与缺陷：
+回退步骤：
+复核者与放行结论：
+</code></pre>
+<h2 id="chapter-07">07 · 变更控制与授权检查点</h2>
+<p>冻结后新增交互、扩大面板形态、改变关闭语义或放宽平台/版本声明，均先提交 CR（变更请求）。CR 至少包含原因、受影响的 F/W/N 编号、方案/原型差异、风险、测试和回滚影响。用户确认后生成新基线；不能直接覆盖本冻结包。
+必须单独确认的事项：W006 的具体原生契约补丁；超出本期的 Sidebar 标签拆出/跨会话/浮窗等；W036 后真实环境发布。版本不匹配时停止而不是自动修改未支持的原生代码。
+<strong>当前交付状态：产品方案与原型已冻结；工程任务已拆解；原生开发、集成测试、热卸载与生产发布均未执行。</strong></p>
+<div class="endnote">本页与 engineering-tasks.md / engineering-tasks.json 由同一份任务数据生成。检索只改变阅读显示，不会修改任务状态或创建远程 Issue。产品方案与原型保持冻结原文件。</div></article></main></div><script>(()=>{const search=document.getElementById('taskSearch'),filter=document.getElementById('phaseFilter'),cards=[...document.querySelectorAll('.task-card')];const update=()=>{const q=search.value.trim().toLowerCase(),p=filter.value;let n=0;for(const c of cards){const show=(!p||c.dataset.phase===p)&&(!q||c.textContent.toLowerCase().includes(q));c.hidden=!show;if(show)n++;}document.getElementById('filterCount').textContent=n+' / '+cards.length+' 项任务';};search.addEventListener('input',update);filter.addEventListener('change',update);window.addEventListener('hashchange',()=>{const id=decodeURIComponent(location.hash.slice(1));const c=document.getElementById(id);if(c&&c.classList.contains('task-card')&&c.hidden){search.value='';filter.value='';update();c.scrollIntoView();}});})();</script></body></html>

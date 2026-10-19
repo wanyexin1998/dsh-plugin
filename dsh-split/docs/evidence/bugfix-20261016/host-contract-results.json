@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2026-10-16T02:38:13.384Z",
+  "artifactEvidence": {
+    "asar": "E:/deepseek-harness/resources/app.asar",
+    "renderer": {
+      "entry": "/dsh/node_modules/@deepseek-ai/dsh-client-ui-renderer/lib/client.js",
+      "sha256": "ff99042d53a034cadad511ace442acfb3fa92f0ce86581de8611244e7664fb78",
+      "bytes": 75955
+    },
+    "slots": {
+      "entry": "/dsh/node_modules/@deepseek-ai/dsh-client-ui-slots/lib/index.js",
+      "sha256": "57e1314e31a2015f30231e1e7596da658f1bb5cb64c103c4cf13381647412c99",
+      "bytes": 23461
+    },
+    "diagnosticLines": {
+      "bindInjectSources": 424,
+      "standardKit": 715,
+      "scopeAreaProvider": 684,
+      "SessionEntry": 790
+    }
+  },
+  "runtime": {
+    "node": "v24.21.0",
+    "react": "18.0.0",
+    "reactDom": "18.0.0",
+    "jsdom": "30.1.2",
+    "esbuild": "0.28.2"
+  },
+  "harnessFiles": {
+    "tests/host-contract.test.mjs": "a8c40e8a5a9203e477b005402cb80bf4c0f367eefdfbaf09ed8aeda297ed65bf",
+    "tests/helpers/host-contract-harness.mjs": "8f349a29f30b0705f93e18e3f5ca932e30b0dffe20c2a160f70aa09120050923"
+  },
+  "baseline": {
+    "command": [
+      "C:\\Users\\wanyexin\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\node\\bin\\node.exe",
+      "--test-reporter=spec",
+      "tests/host-contract.test.mjs",
+      "--before"
+    ],
+    "exitCode": 1,
+    "passed": 0,
+    "failed": 5,
+    "cases": [
+      {
+        "name": "rc.2 inject binding preserves workbench callbacks under a non-reserved name",
+        "passed": false,
+        "durationMs": 469.1583
+      },
+      {
+        "name": "main declares a strict session child and receives the real SessionProvider seat",
+        "passed": false,
+        "durationMs": 55.7646
+      },
+      {
+        "name": "each pane uses its own live session and conversation phase through the real renderer",
+        "passed": false,
+        "durationMs": 91.2586
+      },
+      {
+        "name": "split, focus, sidebar and close preserve other sessions; unload releases everything",
+        "passed": false,
+        "durationMs": 56.4206
+      },
+      {
+        "name": "restored panes recover when the session catalog arrives, without rebinding ready panes",
+        "passed": false,
+        "durationMs": 79.8878
+      }
+    ],
+    "sourceFiles": {
+      "client.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\docs\\evidence\\bugfix-20261016\\before\\src\\client.ts",
+        "sha256": "2c03d0b18632a4a2360c9d61f3581e4477aae081ed49c8d63bb56e702144b132"
+      },
+      "workbench.tsx": {
+        "path": "E:\\dsh-plugin\\dsh-split\\docs\\evidence\\bugfix-20261016\\before\\src\\workbench.tsx",
+        "sha256": "95fd97a2ccac0ae4a082d7a0e51fb20f6b4dfc0d72f35129dabf0294f46ef74b"
+      },
+      "styles.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\docs\\evidence\\bugfix-20261016\\before\\src\\styles.ts",
+        "sha256": "12b7a74975e7bc3e609890cdc4d6c9684dc0bf7ff21a440e0a32b337fc1d04a7"
+      },
+      "layout.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\src\\layout.ts",
+        "sha256": "3e1d90b3b269f72b78a8079d091dc136941d0862db2ee4b528ad2da06a60e761"
+      }
+    },
+    "diagnostics": [
+      "ℹ [dsh-split] retain failed A TypeError: Cannot read properties of undefined (reading 'retain')",
+      "[dsh-split] retain failed B TypeError: Cannot read properties of undefined (reading 'retain')",
+      "[dsh-split] retain failed C TypeError: Cannot read properties of undefined (reading 'retain')",
+      "ℹ [dsh-split] retain failed A TypeError: Cannot read properties of undefined (reading 'retain')",
+      "[dsh-split] retain failed B TypeError: Cannot read properties of undefined (reading 'retain')",
+      "ℹ [dsh-split] retain failed A TypeError: Cannot read properties of undefined (reading 'retain')",
+      "[dsh-split] retain failed B TypeError: Cannot read properties of undefined (reading 'retain')"
+    ],
+    "stderr": ""
+  },
+  "fixed": {
+    "command": [
+      "C:\\Users\\wanyexin\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\node\\bin\\node.exe",
+      "--test-reporter=spec",
+      "tests/host-contract.test.mjs"
+    ],
+    "exitCode": 0,
+    "passed": 5,
+    "failed": 0,
+    "cases": [
+      {
+        "name": "rc.2 inject binding preserves workbench callbacks under a non-reserved name",
+        "passed": true,
+        "durationMs": 425.3585
+      },
+      {
+        "name": "main declares a strict session child and receives the real SessionProvider seat",
+        "passed": true,
+        "durationMs": 71.5093
+      },
+      {
+        "name": "each pane uses its own live session and conversation phase through the real renderer",
+        "passed": true,
+        "durationMs": 139.8267
+      },
+      {
+        "name": "split, focus, sidebar and close preserve other sessions; unload releases everything",
+        "passed": true,
+        "durationMs": 113.6189
+      },
+      {
+        "name": "restored panes recover when the session catalog arrives, without rebinding ready panes",
+        "passed": true,
+        "durationMs": 98.0201
+      }
+    ],
+    "sourceFiles": {
+      "client.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\src\\client.ts",
+        "sha256": "c56684e461b96c01ddfd5ea2e7ce37b4774c32057a0bd8ddf5668ad290c90403"
+      },
+      "workbench.tsx": {
+        "path": "E:\\dsh-plugin\\dsh-split\\src\\workbench.tsx",
+        "sha256": "4e09f0b5510ccc585f88ab6d98e1de78cf93b25f9f2ec31022b461ae1553ee95"
+      },
+      "styles.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\src\\styles.ts",
+        "sha256": "33c2240225cb17fe7268186947a16856288e67e607a6957f96081eca1f95bc2d"
+      },
+      "layout.ts": {
+        "path": "E:\\dsh-plugin\\dsh-split\\src\\layout.ts",
+        "sha256": "3e1d90b3b269f72b78a8079d091dc136941d0862db2ee4b528ad2da06a60e761"
+      }
+    },
+    "diagnostics": [],
+    "stderr": ""
+  },
+  "boundary": {
+    "real": [
+      "Installed rc.2 complete renderer bundle",
+      "Installed SlotCore and SlotRegistry",
+      "Actual inject binding and child-slot authorization",
+      "Actual session-scoped providers and factory dispatch",
+      "React 18 and ReactDOM portals in jsdom",
+      "Current plugin TS sources compiled in memory"
+    ],
+    "synthetic": [
+      "Cordis context/effect lifetime and service injection",
+      "Session/catalog/conversation observable sources",
+      "conversation.content body probe",
+      "Dockview geometry and activation events"
+    ],
+    "notVerified": [
+      "Running Electron application and real sessions",
+      "Visual geometry, drag/drop and native browser layout",
+      "Actual composer submission/backend",
+      "Production installation or deployment"
+    ],
+    "mutations": [
+      "Only test files and this evidence record were written; installed app.asar and real sessions untouched"
+    ]
+  }
+}

@@ -1,0 +1,471 @@
+{
+  "version": "v1.2-FROZEN-R1",
+  "entry": "BOOP_开发交接阅读器.html",
+  "readme": "README_开发团队先读.md",
+  "preservedSourceFileCount": 65,
+  "workItemCount": 26,
+  "validationItemCount": 71,
+  "runtimeValidated": false,
+  "files": [
+    {
+      "path": "BOOP_开发交接阅读器.html",
+      "bytes": 5526478
+    },
+    {
+      "path": "README_开发团队先读.md",
+      "bytes": 3453
+    },
+    {
+      "path": "baseline/BOOP_方案阅读器.html",
+      "bytes": 5336436
+    },
+    {
+      "path": "baseline/CHANGELOG_v1.1.md",
+      "bytes": 1086
+    },
+    {
+      "path": "baseline/CHANGELOG_v1.2.md",
+      "bytes": 1074
+    },
+    {
+      "path": "baseline/README.md",
+      "bytes": 1292
+    },
+    {
+      "path": "baseline/SHA256SUMS.txt",
+      "bytes": 6204
+    },
+    {
+      "path": "baseline/appendix/ADR-v1.1.md",
+      "bytes": 496
+    },
+    {
+      "path": "baseline/appendix/boop-config.example.json",
+      "bytes": 1566
+    },
+    {
+      "path": "baseline/appendix/boop-contracts.ts",
+      "bytes": 3463
+    },
+    {
+      "path": "baseline/appendix/boop-schema.sql",
+      "bytes": 10118
+    },
+    {
+      "path": "baseline/appendix/sources.json",
+      "bytes": 9849
+    },
+    {
+      "path": "baseline/appendix/taskboard-reuse-map.json",
+      "bytes": 711
+    },
+    {
+      "path": "baseline/appendix/决策记录.csv",
+      "bytes": 1566
+    },
+    {
+      "path": "baseline/appendix/来源与验证台账.md",
+      "bytes": 9386
+    },
+    {
+      "path": "baseline/appendix/验收矩阵.csv",
+      "bytes": 3685
+    },
+    {
+      "path": "baseline/assets/README.md",
+      "bytes": 823
+    },
+    {
+      "path": "baseline/assets/boop-brand-tokens.json",
+      "bytes": 431
+    },
+    {
+      "path": "baseline/assets/boop-character-approved.png",
+      "bytes": 1614648
+    },
+    {
+      "path": "baseline/assets/boop-kv-approved.png",
+      "bytes": 1684527
+    },
+    {
+      "path": "baseline/assets/boop-mark-concept-v1.0-deprecated.svg",
+      "bytes": 760
+    },
+    {
+      "path": "baseline/assets/boop-tokens.json",
+      "bytes": 1238
+    },
+    {
+      "path": "baseline/assets/boop-ui-scope-v1.1.css",
+      "bytes": 359
+    },
+    {
+      "path": "baseline/assets/boop-visual-assets.json",
+      "bytes": 1306
+    },
+    {
+      "path": "baseline/assets/boop.tokens.css",
+      "bytes": 1230
+    },
+    {
+      "path": "baseline/assets/cellgent-character-reference.png",
+      "bytes": 288772
+    },
+    {
+      "path": "baseline/assets/cellgent-kv-reference.jpg",
+      "bytes": 181557
+    },
+    {
+      "path": "baseline/diagrams/01_整体架构.mmd",
+      "bytes": 793
+    },
+    {
+      "path": "baseline/diagrams/02_动作状态.mmd",
+      "bytes": 777
+    },
+    {
+      "path": "baseline/diagrams/03_记忆提交时序.mmd",
+      "bytes": 704
+    },
+    {
+      "path": "baseline/diagrams/04_谨慎恢复.mmd",
+      "bytes": 528
+    },
+    {
+      "path": "baseline/docs/01_产品功能架构书.md",
+      "bytes": 18289
+    },
+    {
+      "path": "baseline/docs/02_Agent_Harness与Loop技术方案.md",
+      "bytes": 19266
+    },
+    {
+      "path": "baseline/docs/03_插件完整技术详细方案.md",
+      "bytes": 35335
+    },
+    {
+      "path": "baseline/docs/04_前端设计方案.md",
+      "bytes": 16437
+    },
+    {
+      "path": "baseline/docs/05_BOOP（波波）视觉设计方案.md",
+      "bytes": 13741
+    },
+    {
+      "path": "baseline/docs/06_Taskboard复用审查与接入决策.md",
+      "bytes": 10808
+    },
+    {
+      "path": "baseline/qa/v1.0/01_阅读器总览_桌面.png",
+      "bytes": 321028
+    },
+    {
+      "path": "baseline/qa/v1.0/02_技术方案_桌面.png",
+      "bytes": 283264
+    },
+    {
+      "path": "baseline/qa/v1.0/03_视觉样张_桌面.png",
+      "bytes": 242963
+    },
+    {
+      "path": "baseline/qa/v1.0/04_视觉样张_深色.png",
+      "bytes": 204809
+    },
+    {
+      "path": "baseline/qa/v1.0/05_阅读器总览_手机.png",
+      "bytes": 236068
+    },
+    {
+      "path": "baseline/qa/v1.0/06_前端方案_手机.png",
+      "bytes": 73647
+    },
+    {
+      "path": "baseline/qa/v1.0/交付质量检查.json",
+      "bytes": 1772
+    },
+    {
+      "path": "baseline/qa/v1.0/阅读器测试.json",
+      "bytes": 1995
+    },
+    {
+      "path": "baseline/qa/v1.0/颜色对比度.json",
+      "bytes": 1848
+    },
+    {
+      "path": "baseline/qa/v1.1_doc5_desktop.png",
+      "bytes": 210847
+    },
+    {
+      "path": "baseline/qa/v1.1_doc6_desktop.png",
+      "bytes": 241411
+    },
+    {
+      "path": "baseline/qa/v1.1_doc6_mobile.png",
+      "bytes": 80488
+    },
+    {
+      "path": "baseline/qa/v1.1_overview_desktop.png",
+      "bytes": 176265
+    },
+    {
+      "path": "baseline/qa/v1.1_overview_mobile.png",
+      "bytes": 71071
+    },
+    {
+      "path": "baseline/qa/v1.1_visual_desktop.png",
+      "bytes": 1146833
+    },
+    {
+      "path": "baseline/qa/v1.1_visual_mobile.png",
+      "bytes": 167366
+    },
+    {
+      "path": "baseline/qa/v1.1_候选文本色对比度.json",
+      "bytes": 1167
+    },
+    {
+      "path": "baseline/qa/v1.1_阅读器检查.json",
+      "bytes": 1105
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_doc5_desktop.png",
+      "bytes": 733750
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_doc5_mobile.png",
+      "bytes": 117794
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_kv_lightbox_desktop.png",
+      "bytes": 1188566
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_overview_desktop.png",
+      "bytes": 453862
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_visual_dark.png",
+      "bytes": 913116
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_visual_desktop.png",
+      "bytes": 1304215
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_visual_mobile.png",
+      "bytes": 395996
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_内容与资产校验.json",
+      "bytes": 1345
+    },
+    {
+      "path": "baseline/qa/v1.2/v1.2_阅读器检查.json",
+      "bytes": 1707
+    },
+    {
+      "path": "baseline/references/Cellgent_KV_用户参考.png",
+      "bytes": 2280026
+    },
+    {
+      "path": "baseline/references/Cellgent_角色_用户参考.png",
+      "bytes": 927859
+    },
+    {
+      "path": "baseline/references/README.md",
+      "bytes": 225
+    },
+    {
+      "path": "handoff/00_冻结说明与文档优先级.md",
+      "bytes": 4858
+    },
+    {
+      "path": "handoff/01_开发路线与任务清单.md",
+      "bytes": 5145
+    },
+    {
+      "path": "handoff/02_验证门与验收映射.md",
+      "bytes": 9909
+    },
+    {
+      "path": "handoff/03_接入参数与待验证风险.md",
+      "bytes": 4818
+    },
+    {
+      "path": "handoff/04_视觉资产交接.md",
+      "bytes": 2923
+    },
+    {
+      "path": "handoff/05_开工指令与变更流程.md",
+      "bytes": 3450
+    },
+    {
+      "path": "handoff/issues/D01-01.md",
+      "bytes": 1918
+    },
+    {
+      "path": "handoff/issues/E00-01.md",
+      "bytes": 1936
+    },
+    {
+      "path": "handoff/issues/E00-02.md",
+      "bytes": 1919
+    },
+    {
+      "path": "handoff/issues/E00-03.md",
+      "bytes": 1857
+    },
+    {
+      "path": "handoff/issues/E01-01.md",
+      "bytes": 1868
+    },
+    {
+      "path": "handoff/issues/E01-02.md",
+      "bytes": 1826
+    },
+    {
+      "path": "handoff/issues/E02-01.md",
+      "bytes": 1892
+    },
+    {
+      "path": "handoff/issues/E02-02.md",
+      "bytes": 1873
+    },
+    {
+      "path": "handoff/issues/E02-03.md",
+      "bytes": 1867
+    },
+    {
+      "path": "handoff/issues/E02-04.md",
+      "bytes": 1837
+    },
+    {
+      "path": "handoff/issues/E03-01.md",
+      "bytes": 1821
+    },
+    {
+      "path": "handoff/issues/E03-02.md",
+      "bytes": 1867
+    },
+    {
+      "path": "handoff/issues/E03-03.md",
+      "bytes": 1873
+    },
+    {
+      "path": "handoff/issues/E03-04.md",
+      "bytes": 1839
+    },
+    {
+      "path": "handoff/issues/E04-00.md",
+      "bytes": 1880
+    },
+    {
+      "path": "handoff/issues/E04-01.md",
+      "bytes": 1906
+    },
+    {
+      "path": "handoff/issues/E04-02.md",
+      "bytes": 1929
+    },
+    {
+      "path": "handoff/issues/E04-03.md",
+      "bytes": 1911
+    },
+    {
+      "path": "handoff/issues/E05-00.md",
+      "bytes": 1931
+    },
+    {
+      "path": "handoff/issues/E05-01.md",
+      "bytes": 1898
+    },
+    {
+      "path": "handoff/issues/E05-02.md",
+      "bytes": 1846
+    },
+    {
+      "path": "handoff/issues/E06-01.md",
+      "bytes": 1853
+    },
+    {
+      "path": "handoff/issues/E06-02.md",
+      "bytes": 1828
+    },
+    {
+      "path": "handoff/issues/E06-03.md",
+      "bytes": 1859
+    },
+    {
+      "path": "handoff/issues/E07-01.md",
+      "bytes": 1950
+    },
+    {
+      "path": "handoff/issues/E07-02.md",
+      "bytes": 1937
+    },
+    {
+      "path": "handoff/templates/CHANGE_REQUEST.md",
+      "bytes": 708
+    },
+    {
+      "path": "handoff/templates/PR_TEMPLATE.md",
+      "bytes": 1192
+    },
+    {
+      "path": "handoff/templates/SOURCE_REUSE_LEDGER.json",
+      "bytes": 423
+    },
+    {
+      "path": "handoff/templates/VERIFICATION_RECORD.json",
+      "bytes": 720
+    },
+    {
+      "path": "handoff/工程任务索引.json",
+      "bytes": 11329
+    },
+    {
+      "path": "handoff/验收执行台账_待填写.json",
+      "bytes": 20704
+    },
+    {
+      "path": "manifests/FROZEN_BASELINE.json",
+      "bytes": 11883
+    },
+    {
+      "path": "qa/01_冻结总览_桌面.png",
+      "bytes": 466995
+    },
+    {
+      "path": "qa/02_工程任务_桌面.png",
+      "bytes": 464059
+    },
+    {
+      "path": "qa/03_冻结说明_深色.png",
+      "bytes": 513707
+    },
+    {
+      "path": "qa/04_冻结说明_手机.png",
+      "bytes": 366370
+    },
+    {
+      "path": "qa/05_视觉规范_手机.png",
+      "bytes": 1268498
+    },
+    {
+      "path": "qa/README_检查范围.md",
+      "bytes": 1611
+    },
+    {
+      "path": "qa/交付内容检查.json",
+      "bytes": 2798
+    },
+    {
+      "path": "qa/阅读器测试.json",
+      "bytes": 2839
+    },
+    {
+      "path": "tools/verify_package.py",
+      "bytes": 2085
+    }
+  ]
+}

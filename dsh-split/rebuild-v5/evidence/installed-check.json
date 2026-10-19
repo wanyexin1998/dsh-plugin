@@ -1,0 +1,75 @@
+{
+  "checkedAt": "2026-10-16T18:22:32.605Z",
+  "version": "0.5.0-rebuild.7",
+  "packages": 13,
+  "serverEntry": "apply function loaded successfully",
+  "resolved": [
+    {
+      "name": "@deepseek-ai/dsh-client-ui-layout",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-layout\\lib\\client.js",
+      "sha256": "f9919213c5f9375f8e955853aef0cc1def7e56bf7f64541211c5e8790a790547"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-workspace",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-workspace\\lib\\client.js",
+      "sha256": "051f00e47941879d191fd5f012126b6585d3fec55f4566bf07ad2a42a2a1c431"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-conversation",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-conversation\\lib\\client.js",
+      "sha256": "0db263f0dac9ec1ca1e00228fa59680360f28e8a12afe9b2d8034aca92d50ae4"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-right",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-sidebar-right\\lib\\client.js",
+      "sha256": "bca044ab5f3cb261636e3aa4a327d76e4d4a929173495fa35cdf3e9686745bc7"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-attachment",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-attachment\\lib\\client.js",
+      "sha256": "eaba37ad3299504685a8de2ba49649d1f182e6941b9207ad70210d21b5864458"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-chat",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-chat\\lib\\client.js",
+      "sha256": "5c9206b5920b47e989976297b9bba69dcf1034b86e6d1a5c2dbf447131457138"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-deliverables",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-deliverables\\lib\\client.js",
+      "sha256": "9c8fe772d24245946dcfea3ad10aaebd429754c7aa7d0984c9dab347f2be9803"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-plan",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-plan\\lib\\client.js",
+      "sha256": "6ed7b0b7d7563051f353f21ae58bc91471a049c8b5082a342b6e3b1b66598670"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-reference",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-reference\\lib\\client.js",
+      "sha256": "9a2fdb4c10f0eef1b673e042042eac0bb0d720001cb8f5627a33d3c759f97075"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-schedule",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-schedule\\lib\\client.js",
+      "sha256": "55bca66e246b2d3bc9961ef22001ee70f9f309132556026476e17925b48d6066"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-skill",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-skill\\lib\\client.js",
+      "sha256": "37d5ee466f9af09faa4979cca5e93e5148c7488037d6e64ed8ee1c3300492fde"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-subagent",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\native\\@deepseek-ai\\dsh-client-ui-subagent\\lib\\client.js",
+      "sha256": "fb4d267f9cf8041991192f15e8c41d2566f6eee731154cdc16dcf43f7e955b45"
+    },
+    {
+      "name": "dsh-split",
+      "client": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\releases\\0.5.0-rebuild.7-387d279eb460\\plugin\\lib\\client.js",
+      "sha256": "3e60b47e748cec0bf1d346b064dd21e104c4eb5b6973e61cad3aaa5e7020659c"
+    }
+  ],
+  "receiptPath": "E:\\dsh-plugin\\dsh-split\\rebuild-v5\\backups\\install-2026-10-16T18-22-31-239Z\\receipt.json",
+  "desktopRestartPerformed": false
+}

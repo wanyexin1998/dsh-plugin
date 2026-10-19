@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "lib/types",
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "tsBuildInfoFile": "lib/types/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "mcp/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "build.mjs"]
+}

@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-10-19T01:45:52.117Z",
+  "testCount": 101,
+  "passed": 101,
+  "steps": [
+    {
+      "name": "typecheck",
+      "exitCode": 0,
+      "log": "evidence/typecheck.log"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "log": "evidence/build.log"
+    },
+    {
+      "name": "tests",
+      "exitCode": 0,
+      "log": "evidence/tests.log"
+    }
+  ],
+  "clientSha256": "3e60b47e748cec0bf1d346b064dd21e104c4eb5b6973e61cad3aaa5e7020659c",
+  "nativeManifestSha256": "01d7b36d4f81806bf076f9a28a6ef0570110c283fa0f129c1e3b6a245a77404b",
+  "browser": "Real native host and Chromium startup validation is separately required by tools/validate-release.mjs before installation.",
+  "desktopRestartPerformed": false
+}

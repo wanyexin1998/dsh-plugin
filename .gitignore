@@ -1,0 +1,28 @@
+# Dependencies
+**/node_modules/
+**/.pnpm-store/
+
+# Local environment and credentials
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and transient process files
+**/*.log
+**/*.pid
+**/.tmp/
+**/.tmp-*
+**/.cache/
+**/.boot-check/
+**/*.timestamp-*.mjs
+
+# Editor and operating-system files
+**/.DS_Store
+**/Thumbs.db
+**/.idea/
+**/.vscode/
+
+# Coverage and test caches
+**/coverage/
+**/.vitest/
+**/*.tsbuildinfo

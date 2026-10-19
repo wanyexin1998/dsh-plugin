@@ -1,0 +1,25 @@
+# dsh-chat bundle patch
+#
+# `dsh.bundle.patch` in package.json points here. When the plugin is installed
+# through the official CLI —
+#
+#   dsh plugin --profile <profile> add dsh-chat
+#   dsh plugin --profile <profile> add link:E:\dsh-plugin\dsh-chat
+#
+# — the command appends the package to `dsh.profile.bundles` and this layer is
+# merged into the profile tree, inserting the plugin row. No profile file edits
+# are needed. The same row can be written by hand when the plugin lives on disk
+# and is linked directly:
+#
+#   - insert:
+#       - id: dsh-chat
+#         name: 'dsh-chat'
+#         config:
+#           port: 0
+#
+# `id` is the Loader entry id (unique inside the tree); `name` must be the bare
+# package name, because the client-module scan attaches a package's browser half
+# to the row whose specifier is exactly that name.
+- insert:
+    - id: dsh-chat
+      name: 'dsh-chat'

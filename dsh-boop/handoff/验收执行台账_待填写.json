@@ -1,0 +1,780 @@
+{
+  "version": "v1.2-FROZEN-R1",
+  "statusVocabulary": [
+    "NOT_RUN",
+    "RUNNING",
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT_IN_THIS_MILESTONE"
+  ],
+  "note": "这是待执行台账。新Gate或范围变化需评审；不得由文件哈希/阅读器QA推断插件通过。G07需要钉钉、飞书分别提供子记录。",
+  "checks": [
+    {
+      "id": "G01",
+      "kind": "gate",
+      "title": "rc.2装配、鉴权与公开适配面",
+      "workItems": [
+        "E00-01",
+        "E02-04",
+        "E07-02"
+      ],
+      "milestone": "M0/M1",
+      "criteria": "加载/停用与未认证访问、冷读、逐方法能力测试；失败只读诊断",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G02",
+      "kind": "gate",
+      "title": "实际Qwen工具、JSON、流式与容量",
+      "workItems": [
+        "E05-00",
+        "E05-01",
+        "E05-02"
+      ],
+      "milestone": "M0/M1",
+      "criteria": "真实量化服务金标和实际context整数；失败不启用自主派发/历史批处理",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G03",
+      "kind": "gate",
+      "title": "代理来源、messageId、队列与对账",
+      "workItems": [
+        "E00-02",
+        "E02-03"
+      ],
+      "milestone": "M0/M1",
+      "criteria": "原Session可辨代理身份、重复发送/断连对账；失败禁代理写",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G04",
+      "kind": "gate",
+      "title": "启动门禁与谨慎恢复",
+      "workItems": [
+        "E00-02",
+        "E02-02",
+        "E02-03",
+        "E05-01"
+      ],
+      "milestone": "M0/M1",
+      "criteria": "门禁早于旧消息领取；旧BOOP业务不自启、用户原任务不误禁；失败阻断写模式",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G05",
+      "kind": "gate",
+      "title": "全写入口授权、审批、撤销与人工优先",
+      "workItems": [
+        "E02-01",
+        "E02-02",
+        "E02-03",
+        "E02-04",
+        "E06-01"
+      ],
+      "milestone": "M1/M2",
+      "criteria": "UI/工具/IM同一后端规则；伪造身份、hash变化、参数过期均拒绝；失败阻断相关写能力",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G06",
+      "kind": "gate",
+      "title": "持久化水位、CAS、源头记忆与遗忘",
+      "workItems": [
+        "E03-01",
+        "E03-02",
+        "E03-03",
+        "E03-04"
+      ],
+      "milestone": "M1",
+      "criteria": "冷读、gap、Fork、失败不推进、遗忘不复活、冲突及范围；失败限制记忆写与初始化",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G07",
+      "kind": "gate",
+      "title": "钉钉与飞书本人身份及重投隔离",
+      "workItems": [
+        "E06-01",
+        "E06-02",
+        "E06-03"
+      ],
+      "milestone": "M2",
+      "criteria": "两个平台分别记录绑定/重投/回复/危险审批测试；未配置的平台保持关闭",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G08",
+      "kind": "gate",
+      "title": "两端存储、租约、迁移和恢复",
+      "workItems": [
+        "E00-03",
+        "E01-01",
+        "E01-02"
+      ],
+      "milestone": "M0/M1",
+      "criteria": "实际runtime driver、多Host fencing、一致备份/失败迁移；失败关闭数据写管理",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "G09",
+      "kind": "gate",
+      "title": "原生UI、输入、导航与平台回归",
+      "workItems": [
+        "E04-00",
+        "E04-01",
+        "E04-02",
+        "E04-03",
+        "D01-01"
+      ],
+      "milestone": "M1",
+      "criteria": "IME、单React、窗口chrome、深浅主题、无污染、停用；失败不宣称相应环境支持",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB01",
+      "kind": "taskboard",
+      "title": "安装与卸载",
+      "criteria": "只新增 BOOP 看板，原侧栏/聊天正常",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB02",
+      "kind": "taskboard",
+      "title": "React与bundle",
+      "criteria": "单宿主 React，无 hook 错误或重复运行时",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB03",
+      "kind": "taskboard",
+      "title": "宿主Panel/窗口/分屏",
+      "criteria": "不扫描DOM，不遮窗口控件，返回保持原Session",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB04",
+      "kind": "taskboard",
+      "title": "任务状态映射",
+      "criteria": "执行结束不等于验收通过，结束/取消/豁免可区分",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB05",
+      "kind": "taskboard",
+      "title": "拖拽与按钮",
+      "criteria": "跨列拖拽关闭；同列排序不启Agent；命令受后端约束",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB06",
+      "kind": "taskboard",
+      "title": "冲突与重连",
+      "criteria": "旧版本拒绝，刷新不丢最新状态或重复命令",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB07",
+      "kind": "taskboard",
+      "title": "安全渲染与附件",
+      "criteria": "宿主授权读取，外链/Markdown不执行任意内容",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB08",
+      "kind": "taskboard",
+      "title": "CSS/主题/无障碍",
+      "criteria": "普通DSH不污染，键盘和非拖拽路径可用",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB09",
+      "kind": "taskboard",
+      "title": "停用与权限收紧",
+      "criteria": "UI与后端同样拒绝不可用动作，无CLI旁路",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "TB10",
+      "kind": "taskboard",
+      "title": "来源与发布",
+      "criteria": "固定SHA，保留修改/许可/实际依赖清单",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-01",
+      "kind": "frontend",
+      "title": "原生普通Session视觉与工具不污染",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-02",
+      "kind": "frontend",
+      "title": "重复点击定位同一主会话",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-03",
+      "kind": "frontend",
+      "title": "初始化不抢全屏、不重复发卡",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-04",
+      "kind": "frontend",
+      "title": "看板旧响应不覆盖新版本",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-05",
+      "kind": "frontend",
+      "title": "证据回跳保留草稿",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-06",
+      "kind": "frontend",
+      "title": "参数变化旧审批失效",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-07",
+      "kind": "frontend",
+      "title": "Stop范围准确",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-08",
+      "kind": "frontend",
+      "title": "IME/键盘/触屏可用",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-09",
+      "kind": "frontend",
+      "title": "深浅主题与字号可用",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-10",
+      "kind": "frontend",
+      "title": "Desktop窗口按钮不被覆盖",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-11",
+      "kind": "frontend",
+      "title": "断线不显示伪空列表",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "FE-12",
+      "kind": "frontend",
+      "title": "停用后注册/样式清理",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-01",
+      "kind": "acceptance",
+      "featureIds": "FR-01",
+      "title": "双窗口同时首次打开",
+      "criteria": "一个scope只产生一个mainSession",
+      "gates": "G01/G08",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-02",
+      "kind": "acceptance",
+      "featureIds": "FR-01",
+      "title": "另一DSH_HOST控制同数据域",
+      "criteria": "第二实例不获得写控制，不能复活旧lease",
+      "gates": "G08",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-03",
+      "kind": "acceptance",
+      "featureIds": "FR-02",
+      "title": "初始化选择新开始",
+      "criteria": "无历史全文批次、无旧Task恢复",
+      "gates": "G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-04",
+      "kind": "acceptance",
+      "featureIds": "FR-02",
+      "title": "历史整理一半断电",
+      "criteria": "重启补齐只读job，不遗漏/重复确认事实",
+      "gates": "G04/G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-05",
+      "kind": "acceptance",
+      "featureIds": "FR-02",
+      "title": "导入含部署指令与路径",
+      "criteria": "只生成unverified候选，不读任意路径、不执行",
+      "gates": "G05/G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-06",
+      "kind": "acceptance",
+      "featureIds": "FR-03",
+      "title": "两个工作区同名功能",
+      "criteria": "范围确认，不猜错Session派发",
+      "gates": "G03/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-07",
+      "kind": "acceptance",
+      "featureIds": "FR-03",
+      "title": "禁止项语义与查询不相似",
+      "criteria": "仍然强制包含当前任务禁止项",
+      "gates": "G02/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-08",
+      "kind": "acceptance",
+      "featureIds": "FR-04",
+      "title": "移除工作区注册",
+      "criteria": "不删除项目目录/文件；语义在rc.2验证",
+      "gates": "G01",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-09",
+      "kind": "acceptance",
+      "featureIds": "FR-04",
+      "title": "归档部分目标仍在运行",
+      "criteria": "精确部分成功列表，不称全成功",
+      "gates": "G01/G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-10",
+      "kind": "acceptance",
+      "featureIds": "FR-05",
+      "title": "用户仅说以后考虑",
+      "criteria": "不自动建立可执行委托",
+      "gates": "G02",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-11",
+      "kind": "acceptance",
+      "featureIds": "FR-05",
+      "title": "重复说继续已有任务",
+      "criteria": "关联原任务，不重复建卡或Session",
+      "gates": "G02/G03",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-12",
+      "kind": "acceptance",
+      "featureIds": "FR-06",
+      "title": "代理消息进入原会话",
+      "criteria": "可辨识BOOP来源，不能当作用户批准",
+      "gates": "G03/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-13",
+      "kind": "acceptance",
+      "featureIds": "FR-06",
+      "title": "enqueue后断网、服务重试",
+      "criteria": "查inbox/log；未知不换ID重发",
+      "gates": "G03",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-14",
+      "kind": "acceptance",
+      "featureIds": "FR-06",
+      "title": "待发动作前用户改方案",
+      "criteria": "taskVersion/controlEpoch校验拒绝旧动作",
+      "gates": "G04/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-15",
+      "kind": "acceptance",
+      "featureIds": "FR-06",
+      "title": "未受托Agent占用同一可写目录",
+      "criteria": "只暂停BOOP冲突动作，不停未受托Agent",
+      "gates": "G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-16",
+      "kind": "acceptance",
+      "featureIds": "FR-07",
+      "title": "Agent口头完成且测试失败",
+      "criteria": "verification=failed，不显示验收通过",
+      "gates": "G02",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-17",
+      "kind": "acceptance",
+      "featureIds": "FR-07",
+      "title": "证据版本晚于/早于目标产物",
+      "criteria": "提示不匹配，不能用过期证据完成",
+      "gates": "G02/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-18",
+      "kind": "acceptance",
+      "featureIds": "FR-07",
+      "title": "同一修复循环失败",
+      "criteria": "达到fingerprint限制停止继续派发",
+      "gates": "G02/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-19",
+      "kind": "acceptance",
+      "featureIds": "FR-08",
+      "title": "旧API响应晚于新任务事件",
+      "criteria": "旧版本不覆盖看板最新状态",
+      "gates": "G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-20",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "turn/end可见但持久化未落定",
+      "criteria": "记忆job不越过durable读取水位",
+      "gates": "G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-21",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "两次记忆提取同时提交",
+      "criteria": "CAS只接收有效版本，旧候选重算",
+      "gates": "G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-22",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "记忆纠错影响已派发任务",
+      "criteria": "记录消费关系并核查，不只改摘要",
+      "gates": "G06/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-23",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "forget后重扫相同历史",
+      "criteria": "tombstone与forget_rule防止复活",
+      "gates": "G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-24",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "Fork继承旧记录",
+      "criteria": "不重复计算交付，不覆盖父Session事实",
+      "gates": "G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-25",
+      "kind": "acceptance",
+      "featureIds": "FR-10",
+      "title": "同问题连续事件",
+      "criteria": "更新同待决对象，不重复刷屏",
+      "gates": "G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-26",
+      "kind": "acceptance",
+      "featureIds": "FR-11",
+      "title": "Host重启且native inbox有旧代理命令",
+      "criteria": "门禁先安装，业务需明确恢复",
+      "gates": "G04",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-27",
+      "kind": "acceptance",
+      "featureIds": "FR-11",
+      "title": "恢复只读历史记忆整理",
+      "criteria": "可续job但不能激活旧业务Task",
+      "gates": "G04/G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-28",
+      "kind": "acceptance",
+      "featureIds": "FR-12",
+      "title": "审批批准后改参数/目标",
+      "criteria": "hash/version/epoch不符，批准失效",
+      "gates": "G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-29",
+      "kind": "acceptance",
+      "featureIds": "FR-12",
+      "title": "模型输出自称批准",
+      "criteria": "无审批决定工具，不能生效",
+      "gates": "G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-30",
+      "kind": "acceptance",
+      "featureIds": "FR-12",
+      "title": "模型服务完全离线",
+      "criteria": "Stop/Pause确定性入口仍可操作",
+      "gates": "G05/G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-31",
+      "kind": "acceptance",
+      "featureIds": "FR-13",
+      "title": "IM未知人或其他租户",
+      "criteria": "不入站委托，不泄露项目",
+      "gates": "G07",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-32",
+      "kind": "acceptance",
+      "featureIds": "FR-13",
+      "title": "平台重投同一event",
+      "criteria": "一次admission，一项任务",
+      "gates": "G07",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-33",
+      "kind": "acceptance",
+      "featureIds": "FR-13",
+      "title": "DSH主聊天A、飞书询问B",
+      "criteria": "回复仅来源对话，不广播A信息",
+      "gates": "G07/G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-34",
+      "kind": "acceptance",
+      "featureIds": "FR-13",
+      "title": "IM批准危险操作",
+      "criteria": "回DSH精确确认，不以文本同意放行",
+      "gates": "G07/G05",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-35",
+      "kind": "acceptance",
+      "featureIds": "FR-14",
+      "title": "卸载BOOP",
+      "criteria": "不删除原Session与文件；无残留自动派单",
+      "gates": "G01/G04",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-36",
+      "kind": "acceptance",
+      "featureIds": "FR-14",
+      "title": "DB迁移失败",
+      "criteria": "一致备份保留、只读诊断，不破坏旧schema",
+      "gates": "G08",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-37",
+      "kind": "acceptance",
+      "featureIds": "FR-01/08",
+      "title": "中文IME、窄屏、深色、200%字号",
+      "criteria": "发送/焦点/卡片均可读，不横溢",
+      "gates": "G09",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-38",
+      "kind": "acceptance",
+      "featureIds": "FR-03",
+      "title": "冷历史读取",
+      "criteria": "不启动原Agent；遗失来源标记不可用",
+      "gates": "G01/G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-39",
+      "kind": "acceptance",
+      "featureIds": "FR-09",
+      "title": "记忆job输出截断和越界evidence",
+      "criteria": "不部分提交，不推进cursor",
+      "gates": "G02/G06",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    },
+    {
+      "id": "AT-40",
+      "kind": "acceptance",
+      "featureIds": "FR-01",
+      "title": "196k服务实际参数不匹配",
+      "criteria": "收紧上下文，不按名义容量填满",
+      "gates": "G02",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "reviewer": null
+    }
+  ]
+}

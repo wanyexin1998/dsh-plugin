@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "task": "E07-01",
+  "scenario": "approval-concurrency-and-forgery",
+  "capturedAt": "2026-10-17T20:20:53.208Z",
+  "host": {
+    "profile": "boop-e07-fault-approval",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-approval-1792268439805\\dsh-home",
+    "work": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e07-01-fault-approval-1792268439805"
+  },
+  "race": {
+    "approvalId": "e07-race-approval",
+    "outcomes": [
+      {
+        "accepted": true,
+        "outcome": "allowed",
+        "idempotent": false,
+        "existingStatus": null,
+        "executed": false,
+        "dispatched": false
+      },
+      {
+        "accepted": false,
+        "outcome": "already-handled",
+        "idempotent": true,
+        "existingStatus": "allowed",
+        "executed": false,
+        "dispatched": false
+      }
+    ],
+    "durable": {
+      "status": "allowed",
+      "consumedAt": "2026-10-17T20:20:53.157Z",
+      "decisionAuditRows": 1
+    },
+    "actionUntouched": true,
+    "outboxUntouched": true
+  },
+  "forgery": {
+    "approvalId": "e07-forge-approval",
+    "forgedPayloadHash": {
+      "accepted": false,
+      "code": "APPROVAL_STALE",
+      "staleCause": "payload-changed",
+      "markedInvalid": false
+    },
+    "forgedNonce": {
+      "accepted": false,
+      "code": "APPROVAL_STALE",
+      "staleCause": "nonce-mismatch",
+      "markedInvalid": false
+    },
+    "legitimateAfterForgeries": {
+      "accepted": true,
+      "outcome": "allowed",
+      "status": "allowed",
+      "consumedAt": "2026-10-17T20:20:53.325Z"
+    }
+  },
+  "userSession": {
+    "sessionId": "session-efa63e2b-e1f1-4231-8d3a-9ecc381c82a8",
+    "headBefore": 2,
+    "headAfter": 2,
+    "stoppedByControl": 0,
+    "userTurnsStopped": false
+  },
+  "knownUnknown": {
+    "auditSingleRow": "the ledger holds exactly one control/approval-decided row for the raced approval; the losing concurrent call is answered idempotently and audited separately (not as a second decision)",
+    "staleCauses": "payload-changed / nonce-mismatch are the Host taxonomy values asserted above",
+    "runtimePreStepEnforcement": "not part of the approval decision plane; see E07-01 report NOT_RUN"
+  }
+}

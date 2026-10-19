@@ -1,0 +1,496 @@
+{
+  "schemaVersion": 1,
+  "task": "E03-04",
+  "capturedAt": "2026-10-18T04:22:03.245Z",
+  "route": {
+    "service": "http://172.26.0.49:8000/v1",
+    "modelId": "qwen3.8-27b"
+  },
+  "host": {
+    "payload": "E:\\dsh-plugin\\dsh-boop\\.work\\test-host\\payload-0.2.1\\dsh",
+    "dshVersion": "0.2.1-rc.2",
+    "pinnedCommit": "332895e0f7c9d4dbfb29729f5eb367fa263ff986",
+    "node": "v24.18.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "sessions": [
+    {
+      "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+      "generation": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ]
+    },
+    {
+      "sessionId": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+      "generation": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ]
+    },
+    {
+      "sessionId": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa",
+      "generation": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ]
+    }
+  ],
+  "observation": {
+    "scopeId": "boop-2eb14b0108e9d10e",
+    "discovered": 3
+  },
+  "seeding": {
+    "proposals": [
+      "committed",
+      "committed"
+    ],
+    "facts": [
+      {
+        "factId": "fact-owner-blocker",
+        "kind": "open_item",
+        "status": "active"
+      },
+      {
+        "factId": "fact-owner-deadline",
+        "kind": "decision",
+        "status": "active"
+      },
+      {
+        "factId": "fact-owner-deploy",
+        "kind": "decision",
+        "status": "active"
+      }
+    ],
+    "evidenceRows": [
+      {
+        "factId": "fact-old-plan",
+        "seq": 8,
+        "sourceHash": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:#8"
+      },
+      {
+        "factId": "fact-owner-blocker",
+        "seq": 8,
+        "sourceHash": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:#8"
+      },
+      {
+        "factId": "fact-owner-deadline",
+        "seq": 8,
+        "sourceHash": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:#8"
+      },
+      {
+        "factId": "fact-owner-deploy",
+        "seq": 8,
+        "sourceHash": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:#8"
+      },
+      {
+        "factId": "fact-workspace-repo",
+        "seq": 8,
+        "sourceHash": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:#8"
+      }
+    ],
+    "snapshot": {
+      "coverage": {
+        "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97#session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:": {
+          "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+          "throughSeq": 17
+        }
+      },
+      "version": 1
+    }
+  },
+  "supersede": {
+    "factId": "fact-old-plan",
+    "currentText": "旧方案：单会话汇报（已被双会话方案取代）",
+    "status": "active",
+    "versionRows": 3,
+    "evidenceRows": 2
+  },
+  "conflictSemantics": {
+    "sameSubject": {
+      "disputed": [
+        "fact-conflict-no",
+        "fact-conflict-yes"
+      ],
+      "statuses": [
+        "disputed",
+        "disputed"
+      ]
+    },
+    "differentSubjects": {
+      "disputedAfterFirstProposal": [],
+      "deployStatus": "active"
+    },
+    "conservativeFallback": [
+      "fact-workspace-implicit",
+      "fact-workspace-repo"
+    ]
+  },
+  "layered": {
+    "degraded": true,
+    "ordering": [
+      {
+        "factId": "fact-owner-deploy",
+        "layer": "owner",
+        "score": 1
+      },
+      {
+        "factId": "fact-conflict-no",
+        "layer": "owner",
+        "score": 0
+      },
+      {
+        "factId": "fact-conflict-yes",
+        "layer": "owner",
+        "score": 0
+      },
+      {
+        "factId": "fact-owner-blocker",
+        "layer": "owner",
+        "score": 0
+      },
+      {
+        "factId": "fact-owner-deadline",
+        "layer": "owner",
+        "score": 0
+      },
+      {
+        "factId": "fact-old-plan",
+        "layer": "workspace",
+        "score": 0
+      },
+      {
+        "factId": "fact-workspace-implicit",
+        "layer": "workspace",
+        "score": 0
+      },
+      {
+        "factId": "fact-workspace-repo",
+        "layer": "workspace",
+        "score": 0
+      },
+      {
+        "factId": "spec-immutable-safety",
+        "layer": "global",
+        "score": 0
+      }
+    ],
+    "consumed": [
+      {
+        "factId": "fact-owner-deploy",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-conflict-no",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-conflict-yes",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-owner-blocker",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-owner-deadline",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-old-plan",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-workspace-implicit",
+        "freshness": "current"
+      },
+      {
+        "factId": "fact-workspace-repo",
+        "freshness": "current"
+      },
+      {
+        "factId": "spec-immutable-safety",
+        "freshness": "current"
+      }
+    ],
+    "evidenceChecked": [
+      {
+        "scopeId": "boop-2eb14b0108e9d10e",
+        "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+        "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+        "seq": 8
+      }
+    ]
+  },
+  "staleness": {
+    "currentGenerations": [
+      [
+        "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+        "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:"
+      ],
+      [
+        "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+        "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:"
+      ]
+    ],
+    "movedGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@999:0:",
+    "staleHits": [
+      "fact-owner-deploy",
+      "fact-conflict-no",
+      "fact-conflict-yes",
+      "fact-owner-blocker",
+      "fact-owner-deadline"
+    ],
+    "currentHits": [
+      "fact-old-plan",
+      "fact-workspace-implicit",
+      "fact-workspace-repo",
+      "spec-immutable-safety"
+    ]
+  },
+  "forgotten": {
+    "ruleId": "rule-5b043e6b-e48f-4fb7-879d-20071838ed1e",
+    "excludedFacts": [
+      "fact-owner-deploy"
+    ],
+    "hitsWithoutExclusion": [
+      "fact-owner-deploy",
+      "fact-conflict-no",
+      "fact-conflict-yes",
+      "fact-owner-blocker",
+      "fact-owner-deadline",
+      "fact-old-plan",
+      "fact-workspace-implicit",
+      "fact-workspace-repo",
+      "spec-immutable-safety"
+    ],
+    "sessionHashBefore": "2ba2d6950940932ea113d66b28ddc22d267eb8fe156b738f8c34e40464dc2c83",
+    "sessionHashAfter": "2ba2d6950940932ea113d66b28ddc22d267eb8fe156b738f8c34e40464dc2c83"
+  },
+  "realModel": {
+    "status": "committed",
+    "modelId": "qwen3.8-27b",
+    "attempts": [
+      {
+        "attempt": 1,
+        "providerId": "qwen-local",
+        "modelId": "qwen3.8-27b",
+        "elapsedMs": 3914,
+        "finishReason": "stop",
+        "usage": {
+          "promptTokens": 559,
+          "completionTokens": 248,
+          "totalTokens": 807
+        },
+        "reasoningSeparated": false,
+        "error": null
+      }
+    ],
+    "elapsedMs": 3969,
+    "fromSeq": -1,
+    "toSeq": 17,
+    "version": 1,
+    "changeCount": 3,
+    "candidates": 3,
+    "candidatesWithSubjectKey": 3,
+    "disputed": [],
+    "applied": [
+      "fact_853010d3",
+      "fact_f8dfb137",
+      "fact_57860f0e"
+    ],
+    "facts": [
+      {
+        "factId": "fact_57860f0e",
+        "kind": "open_item",
+        "text": "当前唯一阻塞是共享 GPU 排队",
+        "authority": "user_confirmed",
+        "status": "active"
+      },
+      {
+        "factId": "fact_853010d3",
+        "kind": "decision",
+        "text": "BOOP 项目本阶段不部署生产环境",
+        "authority": "user_confirmed",
+        "status": "active"
+      },
+      {
+        "factId": "fact_f8dfb137",
+        "kind": "decision",
+        "text": "E03-04 的验收标准是分层检索可复现",
+        "authority": "user_confirmed",
+        "status": "active"
+      }
+    ],
+    "evidence": [
+      {
+        "factId": "fact_853010d3",
+        "seq": 8,
+        "sourceHash": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:#8"
+      },
+      {
+        "factId": "fact_f8dfb137",
+        "seq": 8,
+        "sourceHash": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:#8"
+      },
+      {
+        "factId": "fact_57860f0e",
+        "seq": 8,
+        "sourceHash": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:#8"
+      }
+    ],
+    "retrieval": [
+      {
+        "factId": "fact_853010d3",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa",
+            "sourceGeneration": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-owner-deploy",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+            "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact_57860f0e",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa",
+            "sourceGeneration": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact_f8dfb137",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa",
+            "sourceGeneration": "session-975e2b7f-b210-4d99-97e2-5b6c83ef4bfa@4:1792297317639:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-conflict-no",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+            "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-conflict-yes",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+            "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-owner-blocker",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+            "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-owner-deadline",
+        "layer": "owner",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97",
+            "sourceGeneration": "session-cfc896f1-ccd3-4e80-9a42-178b2c1fea97@4:1792297317456:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-old-plan",
+        "layer": "workspace",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+            "sourceGeneration": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:",
+            "seq": 8
+          },
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+            "sourceGeneration": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-workspace-implicit",
+        "layer": "workspace",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+            "sourceGeneration": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "fact-workspace-repo",
+        "layer": "workspace",
+        "evidence": [
+          {
+            "scopeId": "boop-2eb14b0108e9d10e",
+            "sessionId": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f",
+            "sourceGeneration": "session-8c0c1fb0-0708-47b0-a844-eec85ee7ec4f@4:1792297317570:",
+            "seq": 8
+          }
+        ]
+      },
+      {
+        "factId": "spec-immutable-safety",
+        "layer": "global",
+        "evidence": []
+      }
+    ],
+    "sessionSha256": {
+      "before": "74d0197bf31b7bdecaaf527e208f7098be36fcb4620cd1d37bdb3aaf7afc1677",
+      "after": "74d0197bf31b7bdecaaf527e208f7098be36fcb4620cd1d37bdb3aaf7afc1677"
+    }
+  }
+}

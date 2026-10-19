@@ -1,0 +1,78 @@
+{
+  "name": "dsh-boop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BOOP（波波）— DSH 原生个人项目助理插件：唯一身份、主聊天、任务看板、源头工作记忆与谨慎恢复。",
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": "0.2.1-rc.2"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./tools": {
+      "default": "./lib/tools.js"
+    },
+    "./api": {
+      "default": "./lib/api.js"
+    },
+    "./assets": {
+      "default": "./lib/assets.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": [
+        "./cordis.patch.yml",
+        "./presets/boop.patch.yml"
+      ]
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib/*.js",
+    "cordis.patch.yml",
+    "presets",
+    "assets/3d",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "pack:verify": "node tools/package-boop.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:host-contract": "node --test tests/host/*.test.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.28.2",
+    "esbuild-wasm": "0.28.2",
+    "jsdom": "^30.1.2",
+    "playwright-core": "^1.64.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "^5.9.2"
+  },
+  "license": "Apache-2.0"
+}

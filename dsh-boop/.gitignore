@@ -1,0 +1,23 @@
+# Build outputs
+/dist/
+/lib/
+/build/
+
+# Dependencies
+/node_modules/
+
+# Local host reference extraction (derived from the installed app binary; regenerable)
+/host-rc2/
+
+# Test artifacts
+/coverage/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example
+.work/
+
+# Local host reference extraction (rc.2.1, regenerable from the installed app)
+/host-rc21/

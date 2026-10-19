@@ -1,0 +1,20 @@
+{
+  "name": "dsh-profile-desktop",
+  "private": true,
+  "dependencies": {
+    "dsh-chat": "link:E:/dsh-plugin/dsh-chat",
+    "dsh-split": "link:E:/dsh-plugin/dsh-split"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-split",
+        "@deepseek-ai/dsh-experimental-agent-team-profile",
+        "@deepseek-ai/dsh-experimental-voice-input-bundle",
+        "dsh-chat"
+      ]
+    }
+  }
+}

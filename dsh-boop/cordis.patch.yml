@@ -1,0 +1,108 @@
+# BOOP bundle patch: host rows, BOOP management tools, and the browser half.
+#
+# Layer order: dsh-base -> dsh-web-app (or desktop profile) -> dsh-boop -> profile patch.
+# A patch replaces the targeted row's whole `config`; rows here only ADD the BOOP
+# namespace and never override native persona, default preset, search providers,
+# official sidebar or settings rows (frozen constraint 00§4).
+#
+# `dsh-boop` is the host half (package main). The client-module scan attaches the
+# browser half (`exports["./client"]`) to the row whose specifier is exactly this
+# package name, so the row name MUST stay the bare package specifier.
+- insert:
+    # Host runtime: lifecycle gate, scope lease, task ledger, memory pipeline.
+    - id: dsh-boop
+      name: 'dsh-boop'
+
+    # BOOP management tools (read-only catalog/context/history first; write
+    # dispatch stays disabled until G01-G06 gates pass).
+    - id: boop-tools
+      name: 'dsh-boop/tools'
+
+    # BOOP read-only diagnostics API over the authenticated host connection.
+    - id: boop-api
+      name: 'dsh-boop/api'
+
+    # Read-only exact asset routes for the 3D character (model + state PNGs).
+    # Whitelisted paths only; nothing outside the table can be served.
+    - id: boop-assets
+      name: 'dsh-boop/assets'
+
+    # Workspace & Session management plane (E02-04): exact target resolution,
+    # read/preview over ctx.workspaceRegistry + the cold-safe Session list, and
+    # fail-closed commits behind boop.isWriteModeEnabled() (false until G02/G05
+    # pass). Mounted as a separate row so it can be disabled or tested alone.
+    # rc.2.1 anchors an inserted RELATIVE plugin path beside this patch file
+    # (dsh-app-boot `anchorInsertedPluginNames`: absolute/./../ names become
+    # file URLs relative to the patch), so `./lib/workspace-api.js` resolves to
+    # the built module inside this package and no package.json export is needed.
+    - id: boop-workspace
+      name: './lib/workspace-api.js'
+
+    # Taskboard read-only projection plane (E04-02): the four display groups are
+    # derived from the ONE task/action/approval ledger (no second state store,
+    # no second "done" field). Mounted as its own row so the board can be
+    # disabled or tested alone. The row exposes NO command that can change
+    # lifecycle/verification/approval; the only write-ish endpoint
+    # (`setPriority`, a same-column ordering request) is fail-closed with
+    # CAPABILITY_UNAVAILABLE while `boop.isWriteModeEnabled()` is false
+    # (G02/G05 not PASS) and records an audit row. Same rc.2.1 relative-path
+    # anchoring as `boop-workspace` above: `./lib/tasks-api.js` needs no
+    # package.json export.
+    - id: boop-tasks
+      name: './lib/tasks-api.js'
+
+    # Human control plane (E04-03): pending/expired/moved approvals with their
+    # binding, BOOP-owned action/outbox states, deterministic stop and the
+    # explicit restart-recovery release. Mounted as its own row so the human
+    # approval/stop/recovery act can be disabled or tested alone. It has NO
+    # dispatch endpoint, NO model-facing approval tool (03§10) and NO
+    # verification/approval-run command: `decideApproval` only lands the human
+    # conclusion (single-use CAS bound to payloadHash/taskVersion/policyEpoch/
+    # nonce) and `stop` only cancels BOOP's own undelivered work. Same rc.2.1
+    # relative-path anchoring as `boop-workspace`: no package.json export needed.
+    - id: boop-control
+      name: './lib/control-api.js'
+
+    # Runtime recovery-gate enforcement (G04 closure): registers the official
+    # rc.2.1 `agent/pre-step` WATERFALL listener. BOOP proxy commands
+    # (`source.kind = boop-command`) that a human has not explicitly released are
+    # held before advisory admission and then fail-closed rejected (bounded
+    # wait); the moment `boop-control` release flips the gate entry, the SAME
+    # claimed message is admitted exactly once (consumed id registry). Ordinary
+    # user messages are passed through untouched. The row also provides
+    # `boopGateRuntime` so the control plane reports the REAL
+    # `recovery.runtimeEnforcement.composed` (true only when this row actually
+    # registered the listener), and a read-only `boopGate/status` Remote method.
+    # Same rc.2.1 relative-path anchoring as `boop-workspace`: no package.json
+    # export is needed.
+    - id: boop-gate
+      name: './lib/pre-step-api.js'
+
+    # Foreground/background scheduler + read-only patrol + native automation
+    # (E05-01): ONE shared model permit for all BOOP self-managed jobs, 2s
+    # same-topic merge, P2<P3<P4 queue (P0/P1 are deterministic foreground
+    # states, not model jobs), and a 60s model-free compensation scan. The row
+    # also binds BOOP's active-rhythm task to the mounted native `schedule`
+    # service; when that service is absent the row reports `unavailable` instead
+    # of inventing a side-channel timer (03§77). Background model batches are
+    # CLOSED by default (`pocEnabled` off) and the deterministic pause/resume/
+    # cancel entries stay available while write mode is OFF (they are safety
+    # acts, never dispatch). Same rc.2.1 relative-path anchoring: no
+    # package.json export is needed.
+    - id: boop-scheduler
+      name: './lib/scheduler-api.js'
+
+    # Evidence-verification plane (E05-02): read-only acceptance verification
+    # over the ONE BOOP ledger (original user criteria -> artifact version ->
+    # durable evidence -> uncovered items) plus a bounded self-heal PREVIEW.
+    # An Agent claim or a finished turn is never a pass (AT-16); evidence from a
+    # different task/artifact version is `stale`, never accepted (AT-17); the
+    # same failure fingerprint may drive at most 2 auto-repair attempts before
+    # the loop stops and keeps the state (AT-18). This row NEVER executes or
+    # dispatches: a real repair remains the dispatcher's single write path, and
+    # while write mode is closed the value is a CAPABILITY_UNAVAILABLE preview
+    # that is still audited. It also serves the model-facing `boop_verify` tool
+    # registered by the `boop-tools` row. Same rc.2.1 relative-path anchoring as
+    # `boop-workspace`: no package.json export is needed.
+    - id: boop-verify
+      name: './lib/verify-api.js'

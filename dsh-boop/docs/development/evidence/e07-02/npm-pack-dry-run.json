@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "E07-02",
+  "command": "npm pack --dry-run --json --ignore-scripts",
+  "capturedAt": "2026-10-17T20:17:58.651Z",
+  "environment": {
+    "node": "v24.18.0",
+    "npm": "11.16.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "package": {
+    "name": "dsh-boop",
+    "version": "0.1.0",
+    "filename": "dsh-boop-0.1.0.tgz"
+  },
+  "predicted": {
+    "tarballBytes": 1066516,
+    "unpackedSize": 2310062,
+    "sha512Integrity": "sha512-iQqIIMZMCesqb0IxZ9QQ/WqLBofsjAr/gfYu4vk0KmhJPkdeSB0Y/6KB/f9VoR8dCbDBAQfhoaIckmrYkEV/XA==",
+    "fileCount": 24
+  },
+  "files": [
+    {
+      "path": "assets/3d/boop-assistant.d.ts",
+      "bytes": 937
+    },
+    {
+      "path": "assets/3d/boop-assistant.js",
+      "bytes": 14902
+    },
+    {
+      "path": "assets/3d/boop.glb",
+      "bytes": 1389436
+    },
+    {
+      "path": "assets/3d/README.md",
+      "bytes": 1020
+    },
+    {
+      "path": "assets/3d/states/boop-error-256.png",
+      "bytes": 34847
+    },
+    {
+      "path": "assets/3d/states/boop-idle-256.png",
+      "bytes": 35390
+    },
+    {
+      "path": "assets/3d/states/boop-listen-256.png",
+      "bytes": 36005
+    },
+    {
+      "path": "assets/3d/states/boop-success-256.png",
+      "bytes": 35428
+    },
+    {
+      "path": "assets/3d/states/boop-think-256.png",
+      "bytes": 35765
+    },
+    {
+      "path": "cordis.patch.yml",
+      "bytes": 4420
+    },
+    {
+      "path": "lib/api.js",
+      "bytes": 44346
+    },
+    {
+      "path": "lib/assets.js",
+      "bytes": 3564
+    },
+    {
+      "path": "lib/client.js",
+      "bytes": 268061
+    },
+    {
+      "path": "lib/control-api.js",
+      "bytes": 49609
+    },
+    {
+      "path": "lib/index.js",
+      "bytes": 89111
+    },
+    {
+      "path": "lib/scheduler-api.js",
+      "bytes": 125901
+    },
+    {
+      "path": "lib/tasks-api.js",
+      "bytes": 32051
+    },
+    {
+      "path": "lib/tools.js",
+      "bytes": 2441
+    },
+    {
+      "path": "lib/workspace-api.js",
+      "bytes": 81845
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 11558
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 4063
+    },
+    {
+      "path": "package.json",
+      "bytes": 1930
+    },
+    {
+      "path": "presets/boop.patch.yml",
+      "bytes": 1900
+    },
+    {
+      "path": "README.md",
+      "bytes": 5532
+    }
+  ],
+  "assertions": {
+    "expectedRuntimeAssets": true,
+    "hasReadme": true,
+    "hasLicense": true,
+    "hasNotice": true,
+    "noTestBundles": true,
+    "noSourceTree": true,
+    "noLockfile": true
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-16",
+  "mode": "offline diagnostic, actual patched functions with synthetic dependencies",
+  "sources": {
+    "sidebar": "e37efd9153ee2a6595f36291e99347f202dbb0f9d666336c54dd2766ba080a0a",
+    "attachment": "f3a96aa5446409eead370a4051883581cb54745e23130ce3144e18d93fa38f9b"
+  },
+  "sidebar": {
+    "scenario": "A remains mounted; select B; A has no keepMounted tab holds",
+    "expectedVisibleSessions": [
+      "synthetic-A",
+      "synthetic-B"
+    ],
+    "actualVisibleSessions": [
+      "synthetic-B"
+    ],
+    "releasedAAfterFocusB": true,
+    "reproduced": true
+  },
+  "fileDrop": {
+    "scenario": "A document listener registered first; drop a synthetic file inside B",
+    "expectedRecipient": "synthetic-B",
+    "actualRecipients": [
+      "synthetic-A"
+    ],
+    "reproduced": true
+  },
+  "limitation": "Does not run the full native Sidebar, attachment upload, transport, terminal, or model."
+}

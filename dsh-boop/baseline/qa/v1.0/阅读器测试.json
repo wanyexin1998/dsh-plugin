@@ -1,0 +1,97 @@
+{
+  "checks": [
+    {
+      "test": "overview visible",
+      "passed": true
+    },
+    {
+      "test": "doc1 render",
+      "passed": true
+    },
+    {
+      "test": "doc1 no document overflow",
+      "passed": true
+    },
+    {
+      "test": "doc2 render",
+      "passed": true
+    },
+    {
+      "test": "doc2 no document overflow",
+      "passed": true
+    },
+    {
+      "test": "doc3 render",
+      "passed": true
+    },
+    {
+      "test": "doc3 no document overflow",
+      "passed": true
+    },
+    {
+      "test": "doc4 render",
+      "passed": true
+    },
+    {
+      "test": "doc4 no document overflow",
+      "passed": true
+    },
+    {
+      "test": "doc5 render",
+      "passed": true
+    },
+    {
+      "test": "doc5 no document overflow",
+      "passed": true
+    },
+    {
+      "test": "cross-document search",
+      "passed": true
+    },
+    {
+      "test": "search navigates to heading",
+      "passed": true
+    },
+    {
+      "test": "standalone markdown export",
+      "passed": true
+    },
+    {
+      "test": "sample never executes real action",
+      "passed": true
+    },
+    {
+      "test": "dark theme",
+      "passed": true
+    },
+    {
+      "test": "mobile overview no overflow",
+      "passed": true
+    },
+    {
+      "test": "mobile menu navigate",
+      "passed": true
+    },
+    {
+      "test": "mobile article no overflow",
+      "passed": true
+    },
+    {
+      "test": "all chapter anchors exist",
+      "passed": true
+    },
+    {
+      "test": "no external dependency requests",
+      "passed": true
+    },
+    {
+      "test": "no JavaScript runtime error",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "allPassed": true,
+  "note": "Tests cover this documentation reader, not BOOP plugin implementation.",
+  "environmentNote": "Playwright Chromium rendered the exact self-contained HTML via page.set_content; file:// navigation was disallowed by the sandbox environment. Actual OS browser file opening was not tested."
+}

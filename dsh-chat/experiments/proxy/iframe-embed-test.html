@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  A/B iframe embedding test, served from a DIFFERENT origin (http://127.0.0.1:8099) than the bridge
+  (http://127.0.0.1:3377), which is exactly the situation of the DSH Web GUI at 127.0.0.1:19387.
+
+  Left  : https://chat.deepseek.com  directly  -> must be refused (CSP frame-ancestors 'none')
+  Right : http://127.0.0.1:3377/     via bridge -> must render the DeepSeek sign-in page
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>bridge iframe A/B test</title>
+    <style>
+      body { margin: 0; background: #0f1115; color: #e6e6e6; font: 13px/1.4 system-ui, sans-serif; }
+      header { padding: 8px 12px; }
+      .row { display: flex; gap: 10px; padding: 0 12px 12px; }
+      .cell { flex: 1; }
+      .cell h2 { font-size: 13px; margin: 4px 0; font-weight: 600; }
+      .a h2 { color: #ff7b72; }
+      .b h2 { color: #3fb950; }
+      iframe { width: 100%; height: 760px; border: 2px solid #444; background: #fff; }
+      .a iframe { border-color: #ff7b72; }
+      .b iframe { border-color: #3fb950; }
+      #status { padding: 0 12px; color: #8b949e; }
+    </style>
+  </head>
+  <body>
+    <header><strong>iframe embedding A/B test</strong> — parent origin: <code id="origin"></code></header>
+    <div class="row">
+      <div class="cell a">
+        <h2>A. direct https://chat.deepseek.com (expected: refused)</h2>
+        <iframe id="direct" src="https://chat.deepseek.com/" onload="mark('direct')"></iframe>
+      </div>
+      <div class="cell b">
+        <h2>B. via bridge http://127.0.0.1:3377 (expected: renders)</h2>
+        <iframe id="bridge" src="http://127.0.0.1:3377/" onload="mark('bridge')"></iframe>
+      </div>
+    </div>
+    <div id="status">waiting…</div>
+    <script>
+      document.getElementById('origin').textContent = location.origin;
+      const loaded = {};
+      function mark(which) {
+        loaded[which] = true;
+        document.getElementById('status').textContent =
+          'onload fired: ' + Object.keys(loaded).map((k) => `${k}=${loaded[k]}`).join(', ');
+        document.title = 'iframe-test ' + Object.keys(loaded).join('+');
+      }
+    </script>
+  </body>
+</html>

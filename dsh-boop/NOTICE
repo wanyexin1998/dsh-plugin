@@ -1,0 +1,73 @@
+BOOP（波波）— DSH 原生个人项目助理
+Copyright 2026 BOOP contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+======================================================================
+Third-party source code included (rewritten extraction, Apache-2.0)
+======================================================================
+
+BOOP's Taskboard client components are a REWRITTEN extraction of the upstream
+project below. They are not verbatim copies; each file was re-implemented
+against BOOP's own task/ledger facts and its frozen UI rules.
+
+  Upstream repository : chuspeeism/dashi-taskboard
+  Fixed commit        : 723c400eec86c454c1ffa56ee1b500746d41e142
+  Upstream license    : Apache License, Version 2.0
+                        (https://github.com/chuspeeism/dashi-taskboard/blob/723c400eec86c454c1ffa56ee1b500746d41e142/LICENSE)
+  Upstream NOTICE     : none in the upstream repository root at that commit
+
+  Imported as rewritten extraction:
+    web/src/components/BoardColumn.tsx  -> src/client/taskboard/BoardColumn.tsx
+    web/src/components/TaskCard.tsx     -> src/client/taskboard/TaskCard.tsx
+    web/src/components/IssueListView.tsx-> src/client/taskboard/IssueListView.tsx
+    web/src/taskFilters.ts              -> src/client/taskboard/view-model.ts (filter section)
+    web/src/types.ts                    -> src/client/taskboard/view-model.ts (field-shape reference only)
+
+  Modifications (declared):
+    - columns are driven by BOOP's four derived display groups instead of the
+      upstream single status; task facts come from BOOP's own ledger API;
+    - all drag/drop, upstream Codex API/actors/taskConversations, attachment URL
+      resolution, Markdown pipeline, i18n, icon and brand assets were removed;
+    - keyboard/menu alternatives and scoped [data-boop-taskboard] styles added;
+    - React stays a host-provided platform module (never bundled).
+    See the repository's docs/development/taskboard-sources.md for the
+    file-by-file register.
+
+======================================================================
+Visual assets (user-provided, not third-party open source)
+======================================================================
+
+  - The BOOP character design, the 3D model, its five state images and the
+    WebGL2 player shipped under assets/3d were provided by the project owner.
+    They are copied unmodified from the owner-provided asset pack
+    "BOOP_3D_Animation_v0.1" (GLB SHA-256
+    379e9845c597681f53b90e851bcb88ee31a01a1ace80b3e63478539f4807b56b).
+    That asset pack states it contains no third-party character meshes,
+    textures, fonts or JavaScript runtime libraries.
+  - The approved 2D visual baseline used to design the character is kept in
+    the internal design repository and is NOT part of this distribution.
+  - No third-party brand, icon, font or screenshot asset is bundled in this
+    distribution.
+
+======================================================================
+Host-provided dependencies (NOT bundled in this distribution)
+======================================================================
+
+  @deepseek-ai/dsh                        0.2.1-rc.2   MIT (c) 2026 DeepSeek
+  @deepseek-ai/dsh-tools                  0.2.1-rc.2   MIT (c) 2026 DeepSeek
+  @deepseek-ai/dsh-typert-protocol        0.2.1-rc.2   MIT (c) 2026 DeepSeek
+  @deepseek-ai/dsh-client-ui-primitives   0.2.1-rc.2   MIT (c) 2026 DeepSeek
+
+React and React DOM are supplied by the DSH host platform (18.3.1, MIT) and
+are explicitly external to the BOOP client bundle.
+
+======================================================================
+Scope of this distribution
+======================================================================
+
+This package contains the runtime plugin only (lib/, cordis.patch.yml,
+presets/, assets/3d/, README.md, LICENSE, NOTICE). Internal design baselines,
+handoff material, QA screenshots, reference images, the offline 3D studio and
+preview videos are NOT part of this distribution and are not licensed for
+redistribution with it.

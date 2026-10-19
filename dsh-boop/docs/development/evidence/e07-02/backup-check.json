@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "E07-02",
+  "generatedAt": "2026-10-17T20:17:18.611Z",
+  "isolation": {
+    "note": "synthetic ledger under .work/e07-02-backup; no user profile, no ~/.dsh, no real conversation data",
+    "dshHomeUsed": false
+  },
+  "live": {
+    "path": "<repo>/.work/e07-02-backup/boop.sqlite",
+    "schemaVersion": 1,
+    "counts": {
+      "task": 1,
+      "task_revision": 1,
+      "audit_event": 2
+    }
+  },
+  "mechanisms": {
+    "repository": {
+      "description": "BoopDatabase snapshotBackup() = SQLite VACUUM INTO (repo API)",
+      "snapshot": {
+        "path": ".work/e07-02-backup/backup/boop-snapshot.sqlite",
+        "bytes": 253952,
+        "sha256": "2fe6eb6b73b2b5365e7827a9f10feef8a34120db0cf754f8323863032c9a57a1",
+        "schemaVersion": 1,
+        "counts": {
+          "task": 1,
+          "task_revision": 1,
+          "audit_event": 2
+        },
+        "verify": {
+          "ok": true,
+          "integrity": "ok",
+          "foreignKeys": []
+        },
+        "countsMatch": true
+      }
+    },
+    "runbookOneLiner": {
+      "description": "node -e \"const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(src,{readOnly:true});db.prepare('VACUUM INTO ?').run(dst);db.close()\"",
+      "snapshot": {
+        "path": ".work/e07-02-backup/backup/boop-runbook-snapshot.sqlite",
+        "bytes": 253952,
+        "sha256": "2fe6eb6b73b2b5365e7827a9f10feef8a34120db0cf754f8323863032c9a57a1",
+        "schemaVersion": 1,
+        "counts": {
+          "task": 1,
+          "task_revision": 1,
+          "audit_event": 2
+        },
+        "verify": {
+          "ok": true,
+          "integrity": "ok",
+          "foreignKeys": []
+        },
+        "countsMatch": true
+      }
+    }
+  },
+  "verdict": "PASS (both documented backup mechanisms on synthetic data)",
+  "notVerified": [
+    "backup of a real user profile / real ledger (NOT_RUN; runbook step only)",
+    "restore-drill on a real Host and rollback to an older plugin (NOT_RUN)",
+    "file-copy fallback while WAL is active (explicitly NOT recommended by the runbook)"
+  ]
+}

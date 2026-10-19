@@ -1,0 +1,75 @@
+{
+  "scope": "v1.2 文档/阅读器检查，不代表插件运行、Logo微尺寸或三维资产验收",
+  "method": "通过 set_content 注入本地 HTML 渲染；当前环境禁用 file/localhost 导航，未声称实际 file:// 打开已验收",
+  "checks": [
+    {
+      "name": "desktop overview no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "original embedded image dimensions",
+      "passed": true,
+      "actual": {
+        "kv": [
+          1536,
+          1024
+        ],
+        "character": [
+          1254,
+          1254
+        ]
+      }
+    },
+    {
+      "name": "lightbox opens and Escape closes",
+      "passed": true
+    },
+    {
+      "name": "export matches updated visual Markdown",
+      "passed": true
+    },
+    {
+      "name": "search finds updated visual volume",
+      "passed": true
+    },
+    {
+      "name": "dark theme works",
+      "passed": true
+    },
+    {
+      "name": "all document navigation works",
+      "passed": true
+    },
+    {
+      "name": "mobile visual no horizontal overflow",
+      "passed": true
+    },
+    {
+      "name": "mobile menu and visual volume navigation",
+      "passed": true
+    },
+    {
+      "name": "print preserves embedded figures",
+      "passed": true
+    },
+    {
+      "name": "no JS errors",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "name": "local preview requires no external resources",
+      "passed": true,
+      "requests": []
+    }
+  ],
+  "screenshots": [
+    "v1.2_overview_desktop.png",
+    "v1.2_visual_desktop.png",
+    "v1.2_kv_lightbox_desktop.png",
+    "v1.2_doc5_desktop.png",
+    "v1.2_visual_dark.png",
+    "v1.2_visual_mobile.png",
+    "v1.2_doc5_mobile.png"
+  ]
+}

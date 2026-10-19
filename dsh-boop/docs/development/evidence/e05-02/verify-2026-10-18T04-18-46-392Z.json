@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-18T04:18:46.390Z",
+  "environment": {
+    "dshVersion": "0.2.1-rc.2",
+    "profile": "boop-verify",
+    "isolatedDshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\e05-02-1792297097926\\dsh-home"
+  },
+  "writer": {
+    "writeMode": {
+      "enabled": false,
+      "blockedByGates": [
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G08",
+        "G09"
+      ]
+    },
+    "gates": {
+      "G01": "PASS",
+      "G02": "PASS",
+      "G03": "NOT_RUN",
+      "G04": "NOT_RUN",
+      "G05": "NOT_RUN",
+      "G06": "NOT_RUN",
+      "G07": "BLOCKED",
+      "G08": "NOT_RUN",
+      "G09": "NOT_RUN"
+    },
+    "ledgerWrites": 0
+  },
+  "tools": {
+    "name": "boop_verify",
+    "registered": true
+  },
+  "ledgerRowsBefore": {
+    "scopes": 1,
+    "task": 3,
+    "task_revision": 4,
+    "action": 3,
+    "approval": 0,
+    "command_outbox": 0,
+    "fact": 3,
+    "fact_version": 3,
+    "fact_evidence": 3,
+    "fact_consumption": 3,
+    "source_cursor": 3,
+    "memory_snapshot": 0,
+    "audit_event": 0
+  },
+  "ledgerRowsAfter": {
+    "scopes": 1,
+    "task": 3,
+    "task_revision": 4,
+    "action": 3,
+    "approval": 0,
+    "command_outbox": 0,
+    "fact": 3,
+    "fact_version": 3,
+    "fact_evidence": 3,
+    "fact_consumption": 3,
+    "source_cursor": 3,
+    "memory_snapshot": 0,
+    "audit_event": 0
+  },
+  "sample": {
+    "passed": {
+      "taskId": "task-e05-02-pass",
+      "conclusion": "passed",
+      "reason": null,
+      "recommendedVerification": "passed",
+      "gates": {
+        "criteriaCovered": true,
+        "evidenceVersionMatched": true,
+        "evidenceCurrent": true,
+        "noAgentClaimOnly": true
+      },
+      "coverage": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0,
+        "uncovered": 0,
+        "unknown": 0
+      },
+      "evidence": [
+        {
+          "ref": "session:session-e05-02-a#seq:5",
+          "resolved": true,
+          "version": 1,
+          "versionMatchesTask": true,
+          "generationMoved": false,
+          "staleReason": null,
+          "agentClaim": false
+        }
+      ],
+      "attempt": 0,
+      "fingerprint": "cce8ad7d58b4885f1aceef2f996bf503"
+    },
+    "versionStale": {
+      "taskId": "task-e05-02-version-stale",
+      "conclusion": "stale",
+      "reason": "EVIDENCE_VERSION_MISMATCH:evidence v1 != task v2",
+      "recommendedVerification": "pending",
+      "gates": {
+        "criteriaCovered": false,
+        "evidenceVersionMatched": false,
+        "evidenceCurrent": true,
+        "noAgentClaimOnly": true
+      },
+      "coverage": {
+        "total": 2,
+        "passed": 0,
+        "failed": 0,
+        "uncovered": 2,
+        "unknown": 0
+      },
+      "evidence": [
+        {
+          "ref": "session:session-e05-02-b#seq:7",
+          "resolved": true,
+          "version": 1,
+          "versionMatchesTask": false,
+          "generationMoved": false,
+          "staleReason": "EVIDENCE_VERSION_MISMATCH:evidence v1 != task v2",
+          "agentClaim": false
+        }
+      ],
+      "attempt": 0,
+      "fingerprint": "a9e3336f0d9ef6524e719defa9850f95"
+    },
+    "agentClaimOnly": {
+      "taskId": "task-e05-02-pass",
+      "conclusion": "unknown",
+      "reason": "NO_CRITERIA_COVERAGE",
+      "recommendedVerification": "pending",
+      "gates": {
+        "criteriaCovered": false,
+        "evidenceVersionMatched": true,
+        "evidenceCurrent": true,
+        "noAgentClaimOnly": true
+      },
+      "coverage": {
+        "total": 2,
+        "passed": 0,
+        "failed": 0,
+        "uncovered": 2,
+        "unknown": 0
+      },
+      "evidence": [
+        {
+          "ref": "session:session-e05-02-a#seq:5",
+          "resolved": true,
+          "version": 1,
+          "versionMatchesTask": true,
+          "generationMoved": false,
+          "staleReason": null,
+          "agentClaim": false
+        },
+        {
+          "ref": "claim:我已经完成并且全部测试通过",
+          "resolved": false,
+          "version": null,
+          "versionMatchesTask": null,
+          "generationMoved": false,
+          "staleReason": null,
+          "agentClaim": true
+        }
+      ],
+      "attempt": 0,
+      "fingerprint": "1fb47a228aacb846ba8dce1c4f388127"
+    },
+    "taskNotFound": {
+      "taskId": "task-does-not-exist",
+      "conclusion": "unknown",
+      "reason": "TASK_NOT_FOUND",
+      "recommendedVerification": "pending",
+      "gates": {
+        "criteriaCovered": false,
+        "evidenceVersionMatched": false,
+        "evidenceCurrent": false,
+        "noAgentClaimOnly": false
+      },
+      "coverage": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "uncovered": 0,
+        "unknown": 0
+      },
+      "evidence": [],
+      "attempt": 0,
+      "fingerprint": ""
+    }
+  },
+  "note": "Fixture rows were seeded directly into the isolated ledger before the verify boot; verify itself changed no row."
+}

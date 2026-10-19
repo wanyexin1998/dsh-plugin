@@ -1,0 +1,19 @@
+node_modules/
+lib/
+dist/
+build/
+coverage/
+*.tgz
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.workbuddy/
+bridge/*.jar
+bridge/*.class
+!bridge/*.java
+.vitest/
+
+# local CDP/smoke scratch space
+.tmp/

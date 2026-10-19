@@ -1,0 +1,1271 @@
+/*
+ * SQL 工作台 — 右栏 tab 面板样式
+ *
+ * 约束（AGENTS.md §3 UI）：
+ *   - 只用 --dsw-alias-* 语义 token，禁硬编码颜色；
+ *   - 禁 [data-ds-dark-theme] 之类主题选择器；
+ *   - 浮层需自行 rebind --dsh-scrollbar-thumb 到 l2 对。
+ *
+ * 类名保持字面量（不做 hash）：本包由 window.__ModuleLoader__ 以 factory 形式
+ * 载入，构建期把本文件按 text 内联进产物，样式在 factory 内注入。
+ */
+
+.sqlWorkbenchPanel {
+  /* Restrained geometry, shared by every panel: one radius, one gap. Separation
+     comes from the gap — the sashes themselves are invisible until hovered. */
+  --sql-radius: 10px;
+  --sql-gap: 8px;
+  --sql-space: 8px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+  font-size: var(--dsw-font-s-14);
+}
+
+.connectionBar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.select,
+.input {
+  height: 32px;
+  padding: 0 8px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.select {
+  min-width: 160px;
+}
+
+.button,
+.primaryButton,
+.dangerButton {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.primaryButton {
+  background: var(--dsw-alias-state-business-primary);
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dangerButton {
+  background: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.button:disabled,
+.primaryButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.dotOk,
+.dotBad,
+.dotPending {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dotBad {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.dotPending {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-style: normal;
+  text-overflow: ellipsis;
+  /* One line, always: a wrapped hint used to eat 147px of a 200px editor. */
+  white-space: nowrap;
+}
+
+.placeholder {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+}
+
+.sqlWorkbenchTitle {
+  font-size: var(--dsw-font-m-16);
+  font-weight: 600;
+}
+
+.sqlWorkbenchHint {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dialogBackdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--dsw-alias-bg-base);
+  /* 浮层：滚动条 token 重绑到 l2 对 */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  padding: 16px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: var(--dsw-font-m-16);
+  font-weight: 600;
+}
+
+.fieldGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.fieldError {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.dialogActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── 编辑器（CodeMirror 6，03 §4.3 上部） ─────────────────── */
+
+.editor {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.editorBar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+}
+
+/* CodeMirror paints its own surface; this element only bounds it. The old
+   textarea + <pre> overlay pair (`.sqlInput` / `.highlight`) is gone. */
+.editorHost {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editorHost .cm-editor {
+  height: 100%;
+}
+
+.editorHost .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editorHost[aria-readonly='true'] {
+  opacity: 0.75;
+}
+
+/* ── 结果网格（03 §6） ───────────────────────────────────── */
+
+.grid {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 132px;
+  /* The scroll happens inside .gridScroll; the status bar stays put. */
+  min-height: 0;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
+.gridPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.gridError {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 12px;
+  padding: 10px 12px;
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  background: var(--dsw-specific-sidebar-fill);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  height: 30px;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.table td[data-align='right'] {
+  text-align: right;
+}
+
+.table td[data-null] {
+  color: var(--dsw-alias-label-tertiary);
+  font-style: italic;
+}
+
+.table tbody tr:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.sortHeader {
+  width: 100%;
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-secondary);
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sortHeader:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 分页条（03 §4.3 下部） ──────────────────────────────── */
+
+.pager {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.pagerRange {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.pagerButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.pagerButtons .button {
+  height: 26px;
+  padding: 0 8px;
+  font-size: var(--dsw-font-xs-13);
+}
+
+.pagerSize {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.pagerSize .select {
+  height: 26px;
+  min-width: 72px;
+  font-size: var(--dsw-font-xs-13);
+}
+
+.pagerMeta {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+/* ── 编辑区在面板里的填空 ─────────────────────────────────── */
+
+.editorBlock {
+  display: flex;
+  /* The grid row sets the height; the block just fills it. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editorBlock > .editor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── 编辑器/结果分割条（03 §1「区高可拖拽」） ────────────────── */
+
+/* ── 对象条 + 对象树（01 N2 的窄版） ─────────────────────────── */
+
+.buttonActive {
+  padding: 2px 8px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+}
+
+.schemaSummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaTree {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.schemaTreeBar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.schemaFilter {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 8px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  font-size: var(--dsw-font-s-12);
+}
+
+.schemaNote {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 10px 6px;
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: var(--dsw-font-s-12);
+}
+
+.schemaList,
+.schemaColumns {
+  margin: 0;
+  padding: 0 0 6px;
+  overflow: auto;
+  list-style: none;
+}
+
+.schemaList {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.schemaRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+}
+
+.schemaToggle {
+  width: 16px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.schemaName {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  padding: 1px 4px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-12);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaName:hover,
+.schemaColumn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.schemaCount {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+}
+
+.schemaColumn {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 4px 1px 28px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-12);
+  text-align: left;
+}
+
+.schemaColumnName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaColumnType {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+}
+
+/* ── 对象树层级（03 §4.4：数据源 → 库 → 表/视图 → 表 → 列） ─────── */
+
+/* Root caption: the data source level of DataGrip's explorer. */
+.schemaRoot {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 10px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+  letter-spacing: 0.02em;
+}
+
+.schemaDatabase {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaFolder {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-s-11);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schemaKindBadge {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  color: var(--dsw-alias-label-tertiary);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 3px;
+  font-family: var(--ds-font-family-code);
+  font-size: 9px;
+  line-height: 12px;
+}
+
+/* Each nesting level indents by one step; the column rows sit one step deeper. */
+.schemaList .schemaColumns > li > .schemaRow {
+  padding-left: 20px;
+}
+
+.schemaList .schemaColumns .schemaColumns > li > .schemaRow {
+  padding-left: 36px;
+}
+
+.schemaColumns .schemaColumns .schemaColumn {
+  padding-left: 52px;
+}
+
+/* ── 对象树右键菜单 ───────────────────────────────────────────── */
+
+.schemaMenu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px var(--dsw-alias-border-l1);
+  backdrop-filter: blur(12px);
+}
+
+.schemaMenuTitle {
+  margin: 0;
+  padding: 4px 8px 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaMenuItem {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  text-align: left;
+}
+
+.schemaMenuItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.schemaMenuHint {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+}
+
+/* ── DDL 查看器（03 §4.4：右键「查看 DDL」） ───────────────────── */
+
+.schemaDdl {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  /* The tree itself is 220px tall; a DDL card inside it would be unusable. */
+  width: min(520px, calc(100vw - 32px));
+  max-height: 60vh;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px var(--dsw-alias-border-l1);
+}
+
+.schemaDdlHead {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.schemaDdlTitle {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaDdlBody {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-12);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.schemaDdlError {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: var(--dsw-font-s-12);
+}
+
+/* ── 多语句结果标签（03 §4.3：每条语句一个结果页） ───────────── */
+
+.scriptResults {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.scriptTabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 2px 6px 0;
+  background: var(--dsw-alias-bg-layer-1);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.scriptTab,
+.scriptTabActive {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  white-space: nowrap;
+}
+
+.scriptTabActive {
+  color: var(--dsw-alias-label-primary);
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+}
+
+.scriptTabMeta {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+}
+
+/* Keep the toolbar labels on one line in a narrow pane. */
+.primaryButton,
+.button {
+  white-space: nowrap;
+}
+
+/* 行号、当前行、括号匹配与折叠现在由 CodeMirror 的扩展负责（见
+   `editor-cm.ts` 的 theme / lineNumbers / highlightActiveLine / bracketMatching）。 */
+
+/* ── 结果网格工具条 / 筛选 / 列宽 / 选区（03 §6） ────────────── */
+
+.gridBar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  /* One line, scrollable: in a 300px result panel the buttons wrapped and the
+     row count broke across two lines, which looked broken. */
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.gridCount {
+  /* Never shrink: "2…" told the user nothing. Buttons can scroll instead. */
+  flex: 0 0 auto;
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gridScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.gridScroll:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.filterButton,
+.filterButtonActive {
+  margin-left: 2px;
+  padding: 0 2px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.filterButtonActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.filterRow th {
+  padding: 0 4px 4px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.filterInput {
+  width: 100%;
+  padding: 2px 6px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  font-size: var(--dsw-font-s-12);
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.resizeHandle:hover {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.table th {
+  position: relative;
+}
+
+.table td[data-selected] {
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-bg-base);
+}
+
+/* 单元格选区：拖拽时不要变成选文字 */
+.table td {
+  user-select: none;
+}
+
+.table td[data-selected] {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.exportFormat {
+  padding: 2px 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+  font-size: var(--dsw-font-s-12);
+}
+
+/* ── 多控制台标签（对齐 DataGrip 的 console 条） ─────────────── */
+
+.documentTabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 2px 6px 0;
+  /* The strip is the editor pane's own header now, so the rule goes below it. */
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.documentTab,
+.documentTabActive {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 8px;
+  border-bottom: 2px solid transparent;
+}
+
+.documentTabActive {
+  background: var(--dsw-alias-bg-base);
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+}
+
+.documentTabButton {
+  padding: 2px 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  white-space: nowrap;
+}
+
+.documentTabActive .documentTabButton {
+  color: var(--dsw-alias-label-primary);
+}
+
+.documentTabClose,
+.documentTabAdd {
+  padding: 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  line-height: 1;
+}
+
+.documentTabClose:hover,
+.documentTabAdd:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.documentDirty {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* Connection colour chips on the tab strip. */
+.tabColor0,
+.tabColor1,
+.tabColor2,
+.tabColor3 {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.tabColor0 { background: var(--dsw-alias-state-business-primary); }
+.tabColor1 { background: var(--dsw-alias-state-success-primary); }
+.tabColor2 { background: var(--dsw-alias-state-warn-primary); }
+.tabColor3 { background: var(--dsw-alias-state-error-primary); }
+
+/* ── 状态栏聚合 / 窗口化行 / 值查看器（03 §6.6，批次 5） ─────────── */
+
+.gridStatus {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-1);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font-size: var(--dsw-font-s-11);
+}
+
+.gridScope {
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aggregateSelect {
+  padding: 1px 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+  font-size: var(--dsw-font-s-11);
+}
+
+.gridStat {
+  /* Keep the readout readable; anything that does not fit scrolls or hides. */
+  flex: 0 0 auto;
+  min-width: 96px;
+  overflow: hidden;
+  padding: 1px 6px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gridStat:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.gridStat:disabled {
+  cursor: default;
+}
+
+.gridCharset {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  white-space: nowrap;
+}
+
+/* The window spacer rows must not paint a border of their own. */
+.table tbody tr[data-window-pad] td {
+  height: auto;
+  max-width: none;
+  border: 0;
+  padding: 0;
+}
+
+/* ── 值查看器（Shift+Enter / 双击单元格） ─────────────────────── */
+
+.valueViewer {
+  position: absolute;
+  /* A card in the corner, not a full-width sheet: the grid behind it stays
+     readable, which matters in a 100px-tall result area. */
+  right: 10px;
+  bottom: 28px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100% - 20px));
+  max-height: 70%;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px var(--dsw-alias-border-l1);
+}
+
+.valueViewerHead {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.valueViewerTitle {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.valueViewerBody {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-12);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── 三面板工作区：对象树 / 编辑区 / 结果区（批次 6） ─────────────
+   参考 dsh-split 的 Dockview 皮肤：统一圆角、透明 sash、靠间距分隔，
+   面板本身不再画分隔线。所有尺寸由 grid-template-* 内联给出，sash 只是
+   那一条 8px 的 gap，hover / 拖拽时才显出一条 2px 的抓手。 */
+
+.workspace {
+  display: grid;
+  flex: 1 1 auto;
+  /* Grid items must be allowed to shrink below their content size. */
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  /* Recessed backdrop: bg-base and bg-layer-1 are the same white, so the gutter
+     needs the one token that differs or the cards are invisible. */
+  background: var(--dsw-specific-sidebar-fill);
+  padding: var(--sql-space);
+  overflow: hidden;
+}
+
+.paneColumn {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wbPanel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1);
+  /* Hairline only — the gap does the separating, this just defines the edge. */
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--sql-radius);
+}
+
+.wbPanelHead {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.wbPanelTitle {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsw-font-s-11);
+  letter-spacing: 0.04em;
+}
+
+.wbPanelMeta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbPanelActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.panelIconButton {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.panelIconButton:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panelIconButton:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.wbPanelBody,
+.treeFill {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* The gap is the handle: invisible until you point at it. */
+.wbSash {
+  position: relative;
+  flex: 0 0 auto;
+  touch-action: none;
+  outline: none;
+}
+
+.wbSash[data-orientation='vertical'] {
+  cursor: col-resize;
+}
+
+.wbSash[data-orientation='horizontal'] {
+  cursor: row-resize;
+}
+
+.wbSashGrip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 2px;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  transition: background 0.12s ease;
+}
+
+.wbSash[data-orientation='vertical'] .wbSashGrip {
+  width: 2px;
+  height: 36px;
+}
+
+.wbSash[data-orientation='horizontal'] .wbSashGrip {
+  width: 36px;
+  height: 2px;
+}
+
+.wbSash:hover .wbSashGrip,
+.wbSash:focus-visible .wbSashGrip,
+.wbSash[data-dragging] .wbSashGrip {
+  background: var(--dsw-alias-border-l2);
+}
+
+.wbSash[data-dragging] .wbSashGrip {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+/* Collapsed object browser: a thin rail that reopens it. */
+.treeRail {
+  width: 22px;
+  /* The rail sits on the recessed backdrop too. */
+  border: 1px solid var(--dsw-alias-border-l1);
+  padding: 8px 0;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0;
+  border-radius: var(--sql-radius);
+  cursor: pointer;
+  font-size: var(--dsw-font-s-11);
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+}
+
+.treeRail:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Narrow result panel (dsh's sidebar can be ~300px): the charset is the first
+   thing to go — DataGrip drops it too, and the value is inferable from the data. */
+@container (max-width: 360px) {
+  .gridCharset {
+    display: none;
+  }
+
+  /* The readout already names its function (`SUM(amount) = …`), so the picker is
+     the next thing to go; widen the panel and it comes back. */
+  .aggregateSelect {
+    display: none;
+  }
+}

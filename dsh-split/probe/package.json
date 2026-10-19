@@ -1,0 +1,25 @@
+{
+  "name": "dsh-split-probe",
+  "version": "0.0.1",
+  "private": true,
+  "description": "dsh-split v5 P0 probe: read-only + reversible runtime checks for W003/W004 on the locked rc.2 host. Not production code.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

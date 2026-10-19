@@ -1,0 +1,361 @@
+{
+  "handoffVersion": "v1.2-FROZEN-R1",
+  "designBaseline": "1.2",
+  "freezeDate": "2026-10-17",
+  "approval": "用户确认按v1.2钉住并移交开发",
+  "approvalDoesNotImplyRuntimePassed": true,
+  "sourceArchive": "BOOP_Design_Pack_v1.2.zip",
+  "sourceArchiveSha256": "6e5fb260b542c1f348d93885961b2b1362c69ece0f6b917a64ac259e802b6e8d",
+  "preservedDirectory": "baseline",
+  "preservedFiles": [
+    {
+      "path": "BOOP_方案阅读器.html",
+      "bytes": 5336436,
+      "sha256": "656f2032585824bb2375d5de248d858798dcd2f23189667b9342fe4c9928771e"
+    },
+    {
+      "path": "CHANGELOG_v1.1.md",
+      "bytes": 1086,
+      "sha256": "b7aff5544e3ffa74e3a431959f7f060833509f6207eaa84a16a1747dbdbfd30f"
+    },
+    {
+      "path": "CHANGELOG_v1.2.md",
+      "bytes": 1074,
+      "sha256": "0e80ab4218ce5f62d5d1381fb6974229daea92ea94ac94a377a98ce8fa3f7265"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1292,
+      "sha256": "738753203ffcfd1983ac48a069476e7338266c4d55e4edc8c5e4e139eb5a7d8e"
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "bytes": 6204,
+      "sha256": "308681082d9baa203ba52d7305343de1804e2b7c3b7b0206edb1799c5f2ebb3d"
+    },
+    {
+      "path": "appendix/ADR-v1.1.md",
+      "bytes": 496,
+      "sha256": "58412c1b43a7198226730ea54ae6f682972e1f66078acc657178d6526eef0f79"
+    },
+    {
+      "path": "appendix/boop-config.example.json",
+      "bytes": 1566,
+      "sha256": "22e75da61c4d6dc6a7de09da32a1c68afd081b485d0b41effaebf37d93d75870"
+    },
+    {
+      "path": "appendix/boop-contracts.ts",
+      "bytes": 3463,
+      "sha256": "15e42eaaa056df035caa2e62335455b403d7a725ae2b62cdb713680fd8004271"
+    },
+    {
+      "path": "appendix/boop-schema.sql",
+      "bytes": 10118,
+      "sha256": "d731102b28635e4ac4d8c5bf0d2af189438d62b0b5750d0c4a8d468f1dc7afe4"
+    },
+    {
+      "path": "appendix/sources.json",
+      "bytes": 9849,
+      "sha256": "9a3b58f3559458083338d089e6c51586d57ab8c6a83ed2fd61ec178d978d8902"
+    },
+    {
+      "path": "appendix/taskboard-reuse-map.json",
+      "bytes": 711,
+      "sha256": "177cd94dbee872bb9d0a745f06a7da02d6f440ddd69e04f98edea2bc2fa94ef9"
+    },
+    {
+      "path": "appendix/决策记录.csv",
+      "bytes": 1566,
+      "sha256": "5232c610c1089b6353e7a07780524751f95474b6dbbb664310fb666fd832aabf"
+    },
+    {
+      "path": "appendix/来源与验证台账.md",
+      "bytes": 9386,
+      "sha256": "b7609ed4fa7e57f7dc5b36708c4fc69daa02a47dbf6db22ead188f4857bae637"
+    },
+    {
+      "path": "appendix/验收矩阵.csv",
+      "bytes": 3685,
+      "sha256": "ff9979aedff4fb84e3302fcb663f93868e451f5e014f52af3e8509f6e34ba0cd"
+    },
+    {
+      "path": "assets/README.md",
+      "bytes": 823,
+      "sha256": "8daca53f3bd24247e3b5707ea58c590ac89cf96861ddc3bed138997cd91eab29"
+    },
+    {
+      "path": "assets/boop-brand-tokens.json",
+      "bytes": 431,
+      "sha256": "0144ee098aba61c39de03183c014b40d1f70dd1a3ce61ac3cb7c14997f1d009f"
+    },
+    {
+      "path": "assets/boop-character-approved.png",
+      "bytes": 1614648,
+      "sha256": "7652b44586111b86047fa86ffe883069570990763ec446f66aad568a4c23e71e"
+    },
+    {
+      "path": "assets/boop-kv-approved.png",
+      "bytes": 1684527,
+      "sha256": "8441a468bc524ffcc783f0d2cc8ae9fbdc270d310d57103fb575cadc749c55b2"
+    },
+    {
+      "path": "assets/boop-mark-concept-v1.0-deprecated.svg",
+      "bytes": 760,
+      "sha256": "a3ce9d5f6185d2d9381ffd07339cdb7d3ff0bfdc441d084a25f8e46f4f2d146b"
+    },
+    {
+      "path": "assets/boop-tokens.json",
+      "bytes": 1238,
+      "sha256": "8d79328c9368704443decdefb9e619cd64faa2510a09e38f27f80a65c19e4115"
+    },
+    {
+      "path": "assets/boop-ui-scope-v1.1.css",
+      "bytes": 359,
+      "sha256": "9f9ea6a42744f0c9e77536d819714195fa5bb7504bd68124ce75ac4c98c7bc1a"
+    },
+    {
+      "path": "assets/boop-visual-assets.json",
+      "bytes": 1306,
+      "sha256": "5118ca43aaadaadbe90b7eeb81dfb745e9bb176f90ffb9d0315ea6a32d7b4973"
+    },
+    {
+      "path": "assets/boop.tokens.css",
+      "bytes": 1230,
+      "sha256": "9ab429d540420898ec6c71fc724d14e07cd4b499023fcd7969cdd1b684bde73d"
+    },
+    {
+      "path": "assets/cellgent-character-reference.png",
+      "bytes": 288772,
+      "sha256": "a3af5276556a69babebf84384d7dcfd547579cfa349d098a5a0df314dd5edfbe"
+    },
+    {
+      "path": "assets/cellgent-kv-reference.jpg",
+      "bytes": 181557,
+      "sha256": "91b2a38c79a6d66105bb56907e3af269718fe784239a9d9338a269be23f9adb3"
+    },
+    {
+      "path": "diagrams/01_整体架构.mmd",
+      "bytes": 793,
+      "sha256": "68a8dc7e2afe7567b420e122272dd104c09748ecd541255df958383ccfedd358"
+    },
+    {
+      "path": "diagrams/02_动作状态.mmd",
+      "bytes": 777,
+      "sha256": "cf4e97024019b52eadcc09a566dbff1f4682141213babad1feef8659ac623262"
+    },
+    {
+      "path": "diagrams/03_记忆提交时序.mmd",
+      "bytes": 704,
+      "sha256": "5e1ac5300f999adbe34980cdb1635e603ffc4748034933f5fe4b1f24e2d6f286"
+    },
+    {
+      "path": "diagrams/04_谨慎恢复.mmd",
+      "bytes": 528,
+      "sha256": "62e831053e3ed32ae792260f91195824e51bb1ebd76f9e741a4fab058a3b61c2"
+    },
+    {
+      "path": "docs/01_产品功能架构书.md",
+      "bytes": 18289,
+      "sha256": "68d0841edf2f61ed51a52fc2fd30c96a56db9ec421dcda89273f5206900050e7"
+    },
+    {
+      "path": "docs/02_Agent_Harness与Loop技术方案.md",
+      "bytes": 19266,
+      "sha256": "6e1a99b0492f6b08a31110069c3007449233904e2cdcbf79f04f4ac069372969"
+    },
+    {
+      "path": "docs/03_插件完整技术详细方案.md",
+      "bytes": 35335,
+      "sha256": "46fc0801d53f24632633ea5ba5387f7771b1590ebf4fff982cac74da176abcfa"
+    },
+    {
+      "path": "docs/04_前端设计方案.md",
+      "bytes": 16437,
+      "sha256": "68818d2cf0e1c68b5f80797c9e3bb950b4fecc6982618a6cfe320b19881c6216"
+    },
+    {
+      "path": "docs/05_BOOP（波波）视觉设计方案.md",
+      "bytes": 13741,
+      "sha256": "cb378499fbef2e65ce5991dedf12643156ef4c5f75274e8d39e62ae73d8ed89c"
+    },
+    {
+      "path": "docs/06_Taskboard复用审查与接入决策.md",
+      "bytes": 10808,
+      "sha256": "c0acf61118c98a6a6283558019c45c466b763f8fd3e3d7e33bdd2fd6a28f6cc5"
+    },
+    {
+      "path": "qa/v1.0/01_阅读器总览_桌面.png",
+      "bytes": 321028,
+      "sha256": "0c1ef0805a7bf6d4d23de1e62648cf548bfd859d1b6c143956f8f84aff54d571"
+    },
+    {
+      "path": "qa/v1.0/02_技术方案_桌面.png",
+      "bytes": 283264,
+      "sha256": "516e17f02180aef3996d065416421f77975791a51aec43e7475932afd5d6e167"
+    },
+    {
+      "path": "qa/v1.0/03_视觉样张_桌面.png",
+      "bytes": 242963,
+      "sha256": "395e7a4cea6b7d7833e57ac7896a32b1c66a4e7f66a201dd77e81b4e41dba17e"
+    },
+    {
+      "path": "qa/v1.0/04_视觉样张_深色.png",
+      "bytes": 204809,
+      "sha256": "4918ae08674bfe3205bc17c1a08e2ce585d9f448220490265775509aa5069dbc"
+    },
+    {
+      "path": "qa/v1.0/05_阅读器总览_手机.png",
+      "bytes": 236068,
+      "sha256": "6a342843c6ea1a839a47b872bd43ef44cda45133b216ebfb7d97d7b3eed205c2"
+    },
+    {
+      "path": "qa/v1.0/06_前端方案_手机.png",
+      "bytes": 73647,
+      "sha256": "ac5bd3b48e9cc9afa2b1fe78475f03ed91a80fdf2bfa7c6ca664042b4c1ec205"
+    },
+    {
+      "path": "qa/v1.0/交付质量检查.json",
+      "bytes": 1772,
+      "sha256": "5875e70b7cedb18d8ca3a5d6eab477492291a6f0a369904f90389e16a3cde8e0"
+    },
+    {
+      "path": "qa/v1.0/阅读器测试.json",
+      "bytes": 1995,
+      "sha256": "8710ec4c8092b99cb15d7c95e0866299cd6aafa16c6fa4d051e82026921115af"
+    },
+    {
+      "path": "qa/v1.0/颜色对比度.json",
+      "bytes": 1848,
+      "sha256": "2529fa8e328cccefa52d910769142952fcf83540e73d3e8159adcd389bb9614f"
+    },
+    {
+      "path": "qa/v1.1_doc5_desktop.png",
+      "bytes": 210847,
+      "sha256": "ea9e28ef00831a9d1acde59d13daeb0a0725090172428e71135dcd3d2080d2a1"
+    },
+    {
+      "path": "qa/v1.1_doc6_desktop.png",
+      "bytes": 241411,
+      "sha256": "b0cdf7f979f279e08457905342515ccae21f58a3fee42cfefb79806812e4de80"
+    },
+    {
+      "path": "qa/v1.1_doc6_mobile.png",
+      "bytes": 80488,
+      "sha256": "52e945dcae8282a5c759b12cc754f44f7a6a75ea8b81b9b265f452bec9b4a917"
+    },
+    {
+      "path": "qa/v1.1_overview_desktop.png",
+      "bytes": 176265,
+      "sha256": "9948137684cc9313a5000ff714ffc1c60716dbcf70a9da9934e435b5c56148a8"
+    },
+    {
+      "path": "qa/v1.1_overview_mobile.png",
+      "bytes": 71071,
+      "sha256": "5df512072335dfe9300d1fb56e5521331ba41ed97e05de319c2d0e69956fc176"
+    },
+    {
+      "path": "qa/v1.1_visual_desktop.png",
+      "bytes": 1146833,
+      "sha256": "9021f2c9310302f41483307258f42ae3c99657df80512e8b4be13c740506f210"
+    },
+    {
+      "path": "qa/v1.1_visual_mobile.png",
+      "bytes": 167366,
+      "sha256": "27275b393bf0845a0eca57e5a70952c670072f4aac03c4e5e83d1149ada2f9d4"
+    },
+    {
+      "path": "qa/v1.1_候选文本色对比度.json",
+      "bytes": 1167,
+      "sha256": "4d4566ca66f99608ceb40d1bc5e2cb1acd8c3508cbcf77e11f0875706b3a7ab5"
+    },
+    {
+      "path": "qa/v1.1_阅读器检查.json",
+      "bytes": 1105,
+      "sha256": "5a292a4669b199880dcfc67e21fed226b910ab6199e4196dca28c533ba2ad0fe"
+    },
+    {
+      "path": "qa/v1.2/v1.2_doc5_desktop.png",
+      "bytes": 733750,
+      "sha256": "5062136cbd68aa7274c3db6191aaa61e40a8dd017ec369de431f6420a4de21a6"
+    },
+    {
+      "path": "qa/v1.2/v1.2_doc5_mobile.png",
+      "bytes": 117794,
+      "sha256": "1a27b2f40712619e6444409a810c99d9403ad9248cec24b8ade5d892165816ea"
+    },
+    {
+      "path": "qa/v1.2/v1.2_kv_lightbox_desktop.png",
+      "bytes": 1188566,
+      "sha256": "1ecdfa63b352111674f471fc8272538b6f829f5f1f5b527a35d05dd758fd891c"
+    },
+    {
+      "path": "qa/v1.2/v1.2_overview_desktop.png",
+      "bytes": 453862,
+      "sha256": "9309bcb06575821d4addf404ea1bc556ac386e7880f5155fd8eaa7d5a8645b67"
+    },
+    {
+      "path": "qa/v1.2/v1.2_visual_dark.png",
+      "bytes": 913116,
+      "sha256": "99565dc55a3402b5cfd05bdcaf24dc8a0bb61f798396e28b58a7cd3690def41b"
+    },
+    {
+      "path": "qa/v1.2/v1.2_visual_desktop.png",
+      "bytes": 1304215,
+      "sha256": "c1c91a19159c42eee6438d644178ddc47a39d05694ca05b9d48066cba36995fd"
+    },
+    {
+      "path": "qa/v1.2/v1.2_visual_mobile.png",
+      "bytes": 395996,
+      "sha256": "9d176fb572519b5a7e79c7952b27db5abc90d744e4a54d18c8f75ebcfc9be006"
+    },
+    {
+      "path": "qa/v1.2/v1.2_内容与资产校验.json",
+      "bytes": 1345,
+      "sha256": "6ec76552f27017796f1b2eae18564f98ffa8d0300af1581e3272f17df5d49ff7"
+    },
+    {
+      "path": "qa/v1.2/v1.2_阅读器检查.json",
+      "bytes": 1707,
+      "sha256": "3e161e711430ed160a4a3e0a3fe099f84ae310d13e36fa06661765e34b4d284b"
+    },
+    {
+      "path": "references/Cellgent_KV_用户参考.png",
+      "bytes": 2280026,
+      "sha256": "53a0d708ff711d6dc759e4118fcede04e61a03906235d939503bccecbcb2ff5e"
+    },
+    {
+      "path": "references/Cellgent_角色_用户参考.png",
+      "bytes": 927859,
+      "sha256": "3f38179a36bca92d6353fe12e08a68d04d6e2debda6b9df2c134b777b86cac1e"
+    },
+    {
+      "path": "references/README.md",
+      "bytes": 225,
+      "sha256": "24d98c13e05d49b08f6332b7fe22f7b92291dc83a0bb33ad63dee180c9d88e4f"
+    }
+  ],
+  "upstreamPins": {
+    "dsh": {
+      "tag": "dsh-v0.2.0-rc.2",
+      "commit": "639ed015397290b3745d163aafe02ffee4aa3f84"
+    },
+    "deepseekBot": {
+      "commit": "9411ac3629f4c0494c7963a371dee703c2cfd7aa"
+    },
+    "nanoMuse": {
+      "commit": "3d8f1a787bc9c32058e44d2fe6434dec41b7647d"
+    },
+    "dashiTaskboard": {
+      "commit": "723c400eec86c454c1ffa56ee1b500746d41e142"
+    }
+  },
+  "model": {
+    "name": "qwen3.8-27b",
+    "quantization": "4bit",
+    "contextDeclared": "196k",
+    "verifiedContextTokens": null,
+    "verificationStatus": "NOT_RUN",
+    "externalFallbackAllowed": false
+  },
+  "note": "上游pins来自已交付基线，本轮未追踪更新、不重新拉取或更换参考源码。"
+}

@@ -1,0 +1,12 @@
+# Bundle layer for dsh-split-probe: one Loader row that mounts the probe's host half.
+#
+# Same shape as the plugin's own patch: `name` must be the bare package specifier,
+# because the client-module scan attaches a package's browser half
+# (`exports["./client"]`) to the row whose specifier is exactly that name. The
+# bundle also has to be listed in the profile's `dsh.profile.bundles`.
+#
+# This package exists only for P0 evidence collection (W003/W004) and is removed
+# from the profile once the gate is decided.
+- insert:
+    - id: dsh-split-probe
+      name: 'dsh-split-probe'

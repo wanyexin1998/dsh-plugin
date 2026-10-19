@@ -1,0 +1,448 @@
+{
+  "baseline": "v1.2-FROZEN-R1",
+  "liveGithubIssuesCreated": false,
+  "tasks": [
+    {
+      "id": "E00-01",
+      "title": "rc.2 插件加载与公开适配面验证",
+      "milestone": "M0",
+      "ownerRole": "Host/集成",
+      "dependencies": "无",
+      "gates": [
+        "G01"
+      ],
+      "acceptance": "AT-08,AT-35,AT-38",
+      "path": "issues/E00-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E00-02",
+      "title": "代理消息与谨慎恢复门禁 PoC",
+      "milestone": "M0",
+      "ownerRole": "Host/安全",
+      "dependencies": "E00-01",
+      "gates": [
+        "G03",
+        "G04"
+      ],
+      "acceptance": "AT-12,AT-13,AT-14,AT-26",
+      "path": "issues/E00-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E00-03",
+      "title": "SQLite、单控制者与备份可行性验证",
+      "milestone": "M0",
+      "ownerRole": "数据/Host",
+      "dependencies": "E00-01",
+      "gates": [
+        "G08"
+      ],
+      "acceptance": "AT-02,AT-36",
+      "path": "issues/E00-03.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E05-00",
+      "title": "自有 Qwen 接入与能力金标验证",
+      "milestone": "M0",
+      "ownerRole": "Agent/模型",
+      "dependencies": "E00-01；真实服务参数",
+      "gates": [
+        "G02"
+      ],
+      "acceptance": "AT-07,AT-10,AT-16,AT-39,AT-40",
+      "path": "issues/E05-00.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E04-00",
+      "title": "Taskboard 组件提取兼容性 Spike",
+      "milestone": "M0",
+      "ownerRole": "前端",
+      "dependencies": "E00-01",
+      "gates": [
+        "G09",
+        "TB01",
+        "TB02",
+        "TB03",
+        "TB10"
+      ],
+      "acceptance": "FE-01,FE-10,FE-12",
+      "path": "issues/E04-00.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E01-01",
+      "title": "结构化账本与数据迁移",
+      "milestone": "M1",
+      "ownerRole": "数据/后端",
+      "dependencies": "E00-01,E00-03",
+      "gates": [
+        "G08"
+      ],
+      "acceptance": "AT-02,AT-21,AT-36",
+      "path": "issues/E01-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E01-02",
+      "title": "唯一身份、主 Session 与数据域绑定",
+      "milestone": "M1",
+      "ownerRole": "Host/后端",
+      "dependencies": "E01-01",
+      "gates": [
+        "G01",
+        "G08"
+      ],
+      "acceptance": "AT-01,AT-02,AT-35",
+      "path": "issues/E01-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E02-01",
+      "title": "委托任务、三轴状态与资源冲突",
+      "milestone": "M1",
+      "ownerRole": "后端/产品逻辑",
+      "dependencies": "E01-01,E01-02",
+      "gates": [
+        "G05"
+      ],
+      "acceptance": "AT-06,AT-10,AT-11,AT-15,AT-16",
+      "path": "issues/E02-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E02-02",
+      "title": "双层授权、审批与确定性停止",
+      "milestone": "M1",
+      "ownerRole": "安全/后端",
+      "dependencies": "E02-01,E00-02",
+      "gates": [
+        "G04",
+        "G05"
+      ],
+      "acceptance": "AT-14,AT-28,AT-29,AT-30",
+      "path": "issues/E02-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E02-03",
+      "title": "原 Session 可靠派发与对账",
+      "milestone": "M1",
+      "ownerRole": "Host/后端",
+      "dependencies": "E02-01,E02-02,E00-02",
+      "gates": [
+        "G03",
+        "G04",
+        "G05"
+      ],
+      "acceptance": "AT-12,AT-13,AT-14,AT-26",
+      "path": "issues/E02-03.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E02-04",
+      "title": "工作区与 Session 管理适配",
+      "milestone": "M1",
+      "ownerRole": "Host/后端",
+      "dependencies": "E02-02,E00-01",
+      "gates": [
+        "G01",
+        "G05",
+        "G09"
+      ],
+      "acceptance": "AT-06,AT-08,AT-09,AT-38",
+      "path": "issues/E02-04.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E03-01",
+      "title": "全域轻量观察与持久化读取水位",
+      "milestone": "M1",
+      "ownerRole": "数据/Host",
+      "dependencies": "E01-01,E00-01",
+      "gates": [
+        "G06"
+      ],
+      "acceptance": "AT-20,AT-24,AT-27,AT-38",
+      "path": "issues/E03-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E03-02",
+      "title": "Session 工作记忆与工作区聚合",
+      "milestone": "M1",
+      "ownerRole": "Agent/数据",
+      "dependencies": "E03-01,E05-00",
+      "gates": [
+        "G02",
+        "G06"
+      ],
+      "acceptance": "AT-21,AT-22,AT-39",
+      "path": "issues/E03-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E03-03",
+      "title": "三种初始化、导入、纠错与遗忘",
+      "milestone": "M1",
+      "ownerRole": "数据/后端",
+      "dependencies": "E03-02",
+      "gates": [
+        "G05",
+        "G06"
+      ],
+      "acceptance": "AT-03,AT-04,AT-05,AT-22,AT-23,AT-27",
+      "path": "issues/E03-03.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E03-04",
+      "title": "分层项目上下文与轻量 RAG",
+      "milestone": "M1",
+      "ownerRole": "Agent/数据",
+      "dependencies": "E02-01,E03-02,E03-03",
+      "gates": [
+        "G02",
+        "G05",
+        "G06"
+      ],
+      "acceptance": "AT-06,AT-07,AT-17,AT-23,AT-38",
+      "path": "issues/E03-04.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E04-01",
+      "title": "原生主聊天、初始化与来源交互",
+      "milestone": "M1",
+      "ownerRole": "前端",
+      "dependencies": "E01-02,E03-03,E03-04",
+      "gates": [
+        "G09"
+      ],
+      "acceptance": "AT-01,AT-03,AT-04,AT-25,AT-37,FE-01,FE-02,FE-03,FE-05,FE-08,FE-09",
+      "path": "issues/E04-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E04-02",
+      "title": "Taskboard 适配与唯一任务状态视图",
+      "milestone": "M1",
+      "ownerRole": "前端",
+      "dependencies": "E04-00,E02-01,E02-02,E04-01",
+      "gates": [
+        "G09",
+        "TB01",
+        "TB02",
+        "TB03",
+        "TB04",
+        "TB05",
+        "TB06",
+        "TB07",
+        "TB08",
+        "TB09"
+      ],
+      "acceptance": "AT-19,AT-37,FE-04,FE-09,FE-10",
+      "path": "issues/E04-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E04-03",
+      "title": "审批、停止、恢复与异常端到端交互",
+      "milestone": "M1",
+      "ownerRole": "前端/QA",
+      "dependencies": "E04-01,E04-02,E02-02,E02-03",
+      "gates": [
+        "G04",
+        "G05",
+        "G09"
+      ],
+      "acceptance": "AT-09,AT-25,AT-26,AT-28,AT-30,AT-37,FE-06,FE-07,FE-10,FE-11,FE-12",
+      "path": "issues/E04-03.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E05-01",
+      "title": "前后台调度、原生自动化与巡检",
+      "milestone": "M1",
+      "ownerRole": "Agent/Host",
+      "dependencies": "E02-03,E03-02,E05-00",
+      "gates": [
+        "G02",
+        "G04",
+        "G05"
+      ],
+      "acceptance": "AT-18,AT-25,AT-26,AT-27,AT-30",
+      "path": "issues/E05-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E05-02",
+      "title": "证据验收与有限自愈",
+      "milestone": "M1",
+      "ownerRole": "Agent/QA",
+      "dependencies": "E02-01,E02-03,E03-04,E05-01",
+      "gates": [
+        "G02",
+        "G05"
+      ],
+      "acceptance": "AT-16,AT-17,AT-18",
+      "path": "issues/E05-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "D01-01",
+      "title": "确认视觉的生产资产适配",
+      "milestone": "M1",
+      "ownerRole": "视觉/前端",
+      "dependencies": "无；已确认两张PNG",
+      "gates": [
+        "G09",
+        "TB08"
+      ],
+      "acceptance": "FE-01,FE-09,AT-37",
+      "path": "issues/D01-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E06-01",
+      "title": "IM 通用身份、去重与回复关联",
+      "milestone": "M2",
+      "ownerRole": "渠道/安全",
+      "dependencies": "E02-02,E02-03,E04-01",
+      "gates": [
+        "G05",
+        "G07"
+      ],
+      "acceptance": "AT-31,AT-32,AT-33,AT-34",
+      "path": "issues/E06-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E06-02",
+      "title": "钉钉应用机器人双向接入",
+      "milestone": "M2",
+      "ownerRole": "渠道",
+      "dependencies": "E06-01；钉钉应用凭证与本人绑定",
+      "gates": [
+        "G07"
+      ],
+      "acceptance": "AT-31,AT-32,AT-33,AT-34",
+      "path": "issues/E06-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E06-03",
+      "title": "飞书应用机器人双向接入",
+      "milestone": "M2",
+      "ownerRole": "渠道",
+      "dependencies": "E06-01；飞书应用凭证与本人绑定",
+      "gates": [
+        "G07"
+      ],
+      "acceptance": "AT-31,AT-32,AT-33,AT-34",
+      "path": "issues/E06-03.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E07-01",
+      "title": "故障注入、回归与兼容性验收",
+      "milestone": "M1/M2",
+      "ownerRole": "QA/安全",
+      "dependencies": "M1实现完成；M2渠道完成后补测",
+      "gates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "G09",
+        "TB01",
+        "TB02",
+        "TB03",
+        "TB04",
+        "TB05",
+        "TB06",
+        "TB07",
+        "TB08",
+        "TB09",
+        "TB10"
+      ],
+      "acceptance": "AT-01—AT-40,FE-01—FE-12",
+      "path": "issues/E07-01.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    },
+    {
+      "id": "E07-02",
+      "title": "安装包、许可清单、运维与开源准备",
+      "milestone": "M1/M3",
+      "ownerRole": "发布/技术负责人",
+      "dependencies": "对应阶段验收完成",
+      "gates": [
+        "G01",
+        "G08",
+        "G09",
+        "TB10"
+      ],
+      "acceptance": "AT-35,AT-36,FE-12",
+      "path": "issues/E07-02.md",
+      "status": "NOT_STARTED",
+      "assignee": null,
+      "githubIssue": null
+    }
+  ]
+}

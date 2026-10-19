@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "task": "E02-03/G03",
+  "scenario": "at-13-duplicate-disconnect-reconciliation",
+  "capturedAt": "2026-10-18T04:19:30.308Z",
+  "env": {
+    "modelConfigured": false,
+    "modelId": null,
+    "baseUrl": null,
+    "node": "v24.18.0"
+  },
+  "host": {
+    "payload": "E:\\dsh-plugin\\dsh-boop\\.work\\test-host\\payload-0.2.1\\dsh",
+    "dshVersion": "0.2.1-rc.2",
+    "pinnedCommit": "332895e0f7c9d4dbfb29729f5eb367fa263ff986",
+    "node": "v24.18.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "ledger": {
+    "scopeId": "boop-45183de202c33715",
+    "schemaVersion": 1
+  },
+  "sessions": {
+    "dispatchTarget": "session-78933af3-c70f-4f8b-96ec-fbf1ef5fa869",
+    "untouchedUserSession": "session-461ce46d-0f44-4590-95e4-72dce3882ef7"
+  },
+  "scenarios": {
+    "harness": {
+      "available": true,
+      "ledgerWritable": true
+    },
+    "normalPath": {
+      "actionId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3",
+      "firstDispatch": {
+        "kind": "accepted",
+        "actionId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3",
+        "messageId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3"
+      },
+      "duplicateDispatch": {
+        "kind": "duplicate",
+        "actionId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3",
+        "messageId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3",
+        "state": "accepted",
+        "reason": "ALREADY_ACCEPTED"
+      },
+      "durable": {
+        "spliceInserts": 1,
+        "userMessages": [
+          8
+        ]
+      },
+      "ledger": {
+        "actionState": "accepted",
+        "messageId": "act_e696975f-9776-4b4d-a5a2-f3b3223039c3",
+        "outboxState": "accepted"
+      }
+    },
+    "crashDelivered": {
+      "actionId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+      "kill": {
+        "accepted": true,
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "preKillHead": 19,
+      "restart": {
+        "storageOk": true,
+        "scopeId": "boop-45183de202c33715",
+        "schemaVersion": 1
+      },
+      "bootUnknown": [
+        "act_ef0755c7-07f8-49e6-b362-50e3b875a907"
+      ],
+      "reconcile": {
+        "actionId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+        "verdict": "accepted",
+        "reason": "durable-evidence",
+        "messageId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+        "from": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "to": {
+          "actionState": "accepted",
+          "outboxState": "accepted"
+        },
+        "changed": true,
+        "evidence": {
+          "kind": "durable-inbox-splice",
+          "seq": 17,
+          "messageId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+          "sourceKind": null,
+          "headSeq": 21,
+          "truncated": false,
+          "detail": "durable inbox splice (next-turn) inserted the exact message id",
+          "headTimeMs": 1792297165859,
+          "sinceMs": 1792297132479,
+          "candidates": 8
+        }
+      },
+      "repeated": {
+        "verdict": "accepted",
+        "changed": false,
+        "idempotent": true
+      },
+      "crossProcessDuplicate": {
+        "kind": "duplicate",
+        "actionId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+        "messageId": "act_ef0755c7-07f8-49e6-b362-50e3b875a907",
+        "state": "accepted",
+        "reason": "ALREADY_ACCEPTED"
+      },
+      "durable": {
+        "spliceInserts": 1,
+        "userMessages": [],
+        "headAfterRestart": 21
+      },
+      "audit": [
+        "DURABLE_EVIDENCE durable-inbox-splice seq=17 messageId=act_ef0755c7-07f8-49e6-b362-50e3b875a907; state outcome_unknown -> accepted"
+      ]
+    },
+    "lostSend": {
+      "actionId": "act_569c8d32-b475-421f-afc1-a06f7966b22c",
+      "determined": {
+        "actionId": "act_569c8d32-b475-421f-afc1-a06f7966b22c",
+        "verdict": "not-delivered",
+        "reason": "no-durable-trace-after-clean-restart",
+        "messageId": null,
+        "from": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "to": {
+          "actionState": "planned",
+          "outboxState": "blocked"
+        },
+        "changed": true,
+        "evidence": {
+          "kind": "no-trace",
+          "seq": null,
+          "messageId": null,
+          "sourceKind": null,
+          "headSeq": 21,
+          "headTimeMs": 1792297165859,
+          "sinceMs": 1792297163778,
+          "candidates": 0,
+          "truncated": false,
+          "detail": "the durable log and the rebuilt inbox contain no trace of the message id"
+        }
+      },
+      "repeated": {
+        "verdict": "not-delivered",
+        "changed": false
+      },
+      "explicitRetry": {
+        "kind": "accepted",
+        "actionId": "act_569c8d32-b475-421f-afc1-a06f7966b22c",
+        "messageId": "act_569c8d32-b475-421f-afc1-a06f7966b22c"
+      },
+      "durable": {
+        "spliceInserts": 1
+      },
+      "neverAutoRetried": true
+    },
+    "triState": {
+      "unattested": {
+        "actionId": "act_d2622a53-05ce-41a8-8a2f-c0af2a831c99",
+        "verdict": "indeterminate",
+        "reason": "clean-restart-not-attested",
+        "messageId": null,
+        "from": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "to": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "changed": false,
+        "evidence": {
+          "kind": "no-trace",
+          "seq": null,
+          "messageId": null,
+          "sourceKind": null,
+          "headSeq": 24,
+          "headTimeMs": 1792297168968,
+          "sinceMs": 1792297164131,
+          "candidates": 2,
+          "truncated": false,
+          "detail": "clean-restart-not-attested"
+        }
+      },
+      "attested": {
+        "actionId": "act_d2622a53-05ce-41a8-8a2f-c0af2a831c99",
+        "verdict": "not-delivered",
+        "reason": "no-durable-trace-after-clean-restart",
+        "messageId": null,
+        "from": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "to": {
+          "actionState": "planned",
+          "outboxState": "blocked"
+        },
+        "changed": true,
+        "evidence": {
+          "kind": "no-trace",
+          "seq": null,
+          "messageId": null,
+          "sourceKind": null,
+          "headSeq": 24,
+          "headTimeMs": 1792297168968,
+          "sinceMs": 1792297164131,
+          "candidates": 2,
+          "truncated": false,
+          "detail": "the durable log and the rebuilt inbox contain no trace of the message id"
+        }
+      },
+      "missingSession": {
+        "actionId": "act_eb20cac8-3250-45ee-b48b-48a1063bdbfd",
+        "verdict": "indeterminate",
+        "reason": "trace-unavailable:session-not-readable; session-missing",
+        "messageId": null,
+        "from": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "to": {
+          "actionState": "outcome_unknown",
+          "outboxState": "unknown"
+        },
+        "changed": false,
+        "evidence": {
+          "kind": "not-observable",
+          "seq": null,
+          "messageId": null,
+          "sourceKind": null,
+          "headSeq": null,
+          "headTimeMs": null,
+          "sinceMs": 1792297164715,
+          "candidates": 0,
+          "truncated": false,
+          "detail": "trace-unavailable:session-not-readable; session-missing"
+        }
+      }
+    }
+  },
+  "knownUnknown": {
+    "hostCrossProcessDedupe": "NOT_RUN: the DSH host has no durable cross-turn dedupe by message id; BOOP dedupe is the dispatcher/ledger layer (tested here). A non-BOOP direct injection of a duplicate id is outside BOOP control.",
+    "uncleanCrashTailLoss": "NOT_RUN by design: an unclean SIGKILL can lose an unflushed durable tail (E07-01 evidence); therefore \"no trace\" is only accepted as not-delivered with an explicit clean-restart attestation.",
+    "stepRuntimeEnforcement": "NOT_RUN: agent/pre-step runtime wiring of the recovery gate is not composed; this test proves delivery/reconciliation facts, not a runtime block."
+  }
+}

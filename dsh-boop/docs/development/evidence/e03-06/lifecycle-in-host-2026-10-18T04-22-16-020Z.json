@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "task": "E03-03",
+  "capturedAt": "2026-10-18T04:22:25.704Z",
+  "host": {
+    "payload": "E:\\dsh-plugin\\dsh-boop\\.work\\test-host\\payload-0.2.1\\dsh",
+    "dshVersion": "0.2.1-rc.2",
+    "pinnedCommit": "332895e0f7c9d4dbfb29729f5eb367fa263ff986",
+    "node": "v24.18.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "sessions": [
+    {
+      "sessionId": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9",
+      "generation": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9@4:1792297343840:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ],
+      "file": "dsh-home\\sessions\\--E-dsh-plugin-dsh-boop-.work-test-runs-g06-e03-03-1792297336022-project--\\session-77916a4a-9c95-4644-9ffd-17fb623d3ef9\\session.v4.jsonl"
+    },
+    {
+      "sessionId": "session-c04fdf25-1e5e-4bdb-8786-117982a3531f",
+      "generation": "session-c04fdf25-1e5e-4bdb-8786-117982a3531f@4:1792297344010:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ],
+      "file": "dsh-home\\sessions\\--E-dsh-plugin-dsh-boop-.work-test-runs-g06-e03-03-1792297336022-project--\\session-c04fdf25-1e5e-4bdb-8786-117982a3531f\\session.v4.jsonl"
+    },
+    {
+      "sessionId": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13",
+      "generation": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13@4:1792297344094:",
+      "headSeq": 17,
+      "semanticSeqs": [
+        8
+      ],
+      "file": "dsh-home\\sessions\\--E-dsh-plugin-dsh-boop-.work-test-runs-g06-e03-03-1792297336022-project--\\session-1973cccc-bd47-4339-8f5a-f3a4222aff13\\session.v4.jsonl"
+    }
+  ],
+  "observation": {
+    "scopeId": "boop-6491a36d4889e5f4",
+    "discovered": 3,
+    "sources": [
+      {
+        "sessionId": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13",
+        "sourceGeneration": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13@4:1792297344094:",
+        "title": null,
+        "headSeq": 17,
+        "throughSeq": -1,
+        "state": "fresh"
+      },
+      {
+        "sessionId": "session-c04fdf25-1e5e-4bdb-8786-117982a3531f",
+        "sourceGeneration": "session-c04fdf25-1e5e-4bdb-8786-117982a3531f@4:1792297344010:",
+        "title": null,
+        "headSeq": 17,
+        "throughSeq": -1,
+        "state": "fresh"
+      },
+      {
+        "sessionId": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9",
+        "sourceGeneration": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9@4:1792297343840:",
+        "title": null,
+        "headSeq": 17,
+        "throughSeq": -1,
+        "state": "fresh"
+      }
+    ]
+  },
+  "learnHistory": {
+    "job": {
+      "id": "job-d26174d2-a7f8-4e4b-add5-f164c988d173",
+      "total": 3,
+      "processed": 3,
+      "failures": [
+        {
+          "objectId": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13",
+          "reason": "session artifact unreadable"
+        }
+      ]
+    },
+    "pausedJob": {
+      "id": "job-38781fb1-e431-4184-ab38-01558e655321",
+      "progress": "已整理 1/3 个会话",
+      "final": "done"
+    }
+  },
+  "fromNow": {
+    "heads": 3,
+    "watermark": [
+      {
+        "sessionId": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9",
+        "throughSeq": 17
+      },
+      {
+        "sessionId": "session-c04fdf25-1e5e-4bdb-8786-117982a3531f",
+        "throughSeq": 17
+      },
+      {
+        "sessionId": "session-1973cccc-bd47-4339-8f5a-f3a4222aff13",
+        "throughSeq": 17
+      }
+    ]
+  },
+  "import": {
+    "unsupported": {
+      "format": "powershell-script",
+      "supported": false,
+      "added": 0
+    },
+    "preview": {
+      "format": "markdown-list",
+      "added": 3,
+      "needsReview": 3,
+      "importedAuthority": "import_unverified",
+      "factRowsBefore": 0,
+      "factRowsAfterPreview": 0
+    },
+    "committed": {
+      "factIds": [
+        "import_0_21",
+        "import_1_8",
+        "import_2_8"
+      ],
+      "factRowsAfter": 3,
+      "authority": "import_unverified"
+    },
+    "executable": {
+      "path": "import\\payload.cmd",
+      "canaryConnections": 0,
+      "sentinel": false,
+      "portProbeAfterClose": "ECONNREFUSED",
+      "tasksBefore": 0,
+      "approvalsBefore": 0,
+      "sessionsBefore": 2,
+      "sessionsAfter": 2
+    }
+  },
+  "correction": {
+    "target": "fact-lifecycle-correction-target",
+    "sourceSeq": 8,
+    "before": "旧结论：本阶段不部署生产",
+    "after": "更正：本阶段允许灰度部署",
+    "factKind": "decision",
+    "correctionVersionKind": "correction",
+    "authority": "user_confirmed",
+    "version": 2,
+    "factVersionRows": 2,
+    "evidenceRows": 2,
+    "affected": {
+      "scopeId": "boop-6491a36d4889e5f4",
+      "ownerType": "session",
+      "ownerId": "session-77916a4a-9c95-4644-9ffd-17fb623d3ef9",
+      "factIds": [
+        "fact-lifecycle-correction-target"
+      ]
+    },
+    "userMessage": "正在更新 1 条记录。已执行的任务不会被追回；新的判断会使用这条更正。"
+  },
+  "forget": {
+    "ruleId": "rule-fcc78549-9c93-4949-b788-5dc0172dc35f",
+    "mode": "forget_fact",
+    "selector": [
+      "fact-lifecycle-correction-target"
+    ],
+    "sessionHashBefore": "0fb06b1364ce15a756685a02d478ef74c64115eb359e12cf598591f0a5d47ff1",
+    "sessionHashAfter": "0fb06b1364ce15a756685a02d478ef74c64115eb359e12cf598591f0a5d47ff1",
+    "eventsBefore": 18,
+    "eventsAfter": 18,
+    "factRowRetained": true
+  }
+}
