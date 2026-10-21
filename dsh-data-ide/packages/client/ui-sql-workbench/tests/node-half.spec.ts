@@ -1,11 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { apply, inject, injectOptional } from '../src/index.ts'
 import type { NodeHostContext } from '../src/host/contract.ts'
+import { AGENT_ROUTES } from '../src/host/agent-routes.ts'
 import { ROUTES } from '../src/host/web-routes.ts'
 
+/** Panel routes plus the agent delivery routes, in registration order. */
+/** Panel + agent routes as a set: registration order is not part of the contract. */
+const ALL_ROUTES = [...Object.values(ROUTES), ...Object.values(AGENT_ROUTES)].sort()
+// One path can be registered twice (GET + POST), so compare unique paths.
+const sorted = (routes: readonly string[]): string[] => [...new Set(routes)].sort()
+
 /** Minimal host double: records what the node half asked for. */
-function fakeCtx(options: { readonly webServer?: boolean; readonly connection?: () => number | undefined } = {}) {
+function fakeCtx(options: { readonly webServer?: boolean; readonly connection?: () => number | undefined; readonly home?: boolean } = {}) {
   const opened: string[] = []
   const closed: string[] = []
   const provided: string[] = []
@@ -48,7 +58,7 @@ function fakeCtx(options: { readonly webServer?: boolean; readonly connection?: 
       deleteRecord: async () => {},
       listRecords: async () => [],
     },
-    dshHomePath: () => 'C:/tmp/dsh-data-ide-node-half-test',
+    ...(options.home === false ? {} : { dshHomePath: () => 'C:/tmp/dsh-data-ide-node-half-test' }),
     reflect: {
       provide: (key: string) => {
         provided.push(key)
@@ -113,7 +123,7 @@ describe('node half', () => {
     apply(host.ctx)
     await host.settled()
 
-    expect(host.routes).toEqual(Object.values(ROUTES))
+    expect(sorted(host.routes)).toEqual(ALL_ROUTES)
   })
 
   it('refuses a caller the connection fence rejected', async () => {
@@ -163,7 +173,7 @@ describe('node half', () => {
     apply(ctx)
     await Promise.all(pending)
 
-    expect(registered).toEqual(Object.values(ROUTES))
+    expect(sorted(registered)).toEqual(ALL_ROUTES)
   })
 
   it('says why the panel cannot work when there is no webserver', async () => {
@@ -176,6 +186,24 @@ describe('node half', () => {
     expect(host.routes).toEqual([])
     expect(logged.mock.calls[0]?.[0]).toContain('webServer')
     logged.mockRestore()
+  })
+
+  it('mounts panel routes but disables agent delivery without a home resolver', async () => {
+    const previous = process.env.DSH_HOME
+    const fallbackHome = await mkdtemp(join(tmpdir(), 'dsh-data-ide-no-resolver-'))
+    process.env.DSH_HOME = fallbackHome
+    const host = fakeCtx({ webServer: true, home: false })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    apply(host.ctx)
+    await host.settled()
+
+    expect(sorted(host.routes)).toEqual(Object.values(ROUTES).sort())
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('dshHomePath'))
+    logged.mockRestore()
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(fallbackHome, { recursive: true, force: true })
   })
 
   it('tears the domain down when the plugin unloads', async () => {

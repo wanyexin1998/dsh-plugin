@@ -24,7 +24,7 @@ dsh plugin add <ui-sql-workbench pkg>
 
 无需任何手工编目；工具增减经 `tools/change` 事件通知。cordis.yml 片段见 06 §7。
 
-## 3. 工具清单（12 个）
+## 3. 工具清单（9 个已实现；脚本/git 6 个未实现，见 §3.3/§3.4）
 
 命名规则：`snake_case`；破坏性变更策略：新增工具自由，修改入参/语义 = minor 版本 + 迁移说明，移除 = major。
 
@@ -51,6 +51,21 @@ dsh plugin add <ui-sql-workbench pkg>
 - 行为：首页 `LIMIT pageSize+1` + 独立 COUNT（02 §6.2）；多语句仅执行第一条（与 PRD R2 一致）
 - `columns.typeName` 是驱动报的线协议类型名（`LONG` / `VAR_STRING` / `DATETIME` …），网格按它决定格式化与对齐（03 §6.5）
 - `statementId` 回显给调用方，`cancel_statement` 用它定位**正在执行**的语句；人侧面板自己铸 id（`ui-<n>`），因此尚未拿到响应也能取消
+
+**`get_schema`** — ✅ 已实现（09 B1）：返回连接可见的表/视图与列，让 agent 不必先盲跑 `SELECT * … LIMIT 1` 猜列。
+- 入参：`{ connId: string, table?: string, refresh?: boolean }`——`table` 支持 `表名` 或 `库.表名`，用来把上下文收窄到一张表
+- 输出：`{ ok, source, truncated, fetchedAt, tables: [{ schema?, kind?, name, columns: [{ name, type }] }], note? }`
+- 与面板共用 `createSchemaReader`（同一解析路径、5 分钟缓存）；失败统一 `SCHEMA_UNAVAILABLE`
+
+**`list_tables`** — ✅ 已实现（09 B1）：只给名字、类型与列数，适合先摸清一个库里有什么。
+- 入参：`{ connId: string, refresh?: boolean }`
+- 输出：`{ ok, source, truncated, tables: [{ schema?, kind?, name, columns: number }] }`
+
+**`execute_script`** — ✅ 已实现（R2）：按 `;` 拆分顺序执行，**遇错即停**，每条语句一个结果。
+- 入参：`{ connId, sql, pageSize?, maxStatements?, label?, consoleId? }`——`maxStatements` 由服务端**硬 clamp** 到 20
+- 输出：`{ ok, statements: [{ index, sql, ok, response? | error? }], durationMs, stopped? }`
+- 回给 agent 的行数按 **500 行总预算**裁剪（被裁的语句带 `rowsTruncated`），避免一次投递撑爆上下文
+- 带 `label` 时把这一批投递到面板的 `ai_<label>` 控制台（见 `10-AGENT-CONSOLE-SPEC`）
 
 **`fetch_page`** — 翻页/跳页
 - 入参：`{ connId: string, sql: string, offset: number≥0, pageSize?: number, statementId?: string }`

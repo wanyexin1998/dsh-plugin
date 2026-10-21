@@ -219,6 +219,9 @@
 .editor {
   display: flex;
   flex: 1 1 auto;
+  /* Without this the toolbar's intrinsic width stretches the pane and the
+     editor inside it (measured 468px inside a 396px panel). */
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
   background: var(--dsw-alias-bg-layer-1);
@@ -229,13 +232,20 @@
   flex: 0 0 auto;
   gap: 8px;
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
   padding: 4px 8px;
+}
+
+.editorBar > button {
+  flex: 0 0 auto;
 }
 
 /* CodeMirror paints its own surface; this element only bounds it. The old
    textarea + <pre> overlay pair (`.sqlInput` / `.highlight`) is gone. */
 .editorHost {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -485,13 +495,19 @@
 }
 
 .schemaToggle {
-  width: 16px;
+  width: 18px;
   padding: 0;
   color: var(--dsw-alias-label-tertiary);
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-size: 10px;
+  /* Bigger than the old 10px: at 10px the triangle was a speck you had to aim for. */
+  font-size: 13px;
+  line-height: 1;
+}
+
+.schemaToggle:hover {
+  color: var(--dsw-alias-label-primary);
 }
 
 .schemaName {
@@ -583,17 +599,6 @@
   font-size: var(--dsw-font-s-11);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.schemaKindBadge {
-  flex: 0 0 auto;
-  padding: 0 3px;
-  color: var(--dsw-alias-label-tertiary);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 3px;
-  font-family: var(--ds-font-family-code);
-  font-size: 9px;
-  line-height: 12px;
 }
 
 /* Each nesting level indents by one step; the column rows sit one step deeper. */
@@ -912,12 +917,15 @@
 }
 
 .documentTabButton {
+  max-width: 180px;
   padding: 2px 4px;
+  overflow: hidden;
   color: var(--dsw-alias-label-secondary);
   background: transparent;
   border: 0;
   cursor: pointer;
   font-size: var(--dsw-font-s-12);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1235,23 +1243,37 @@
   background: var(--dsw-alias-state-business-primary);
 }
 
-/* Collapsed object browser: a thin rail that reopens it. */
-.treeRail {
+/* The tablist wrapper carries no box of its own: its children stay flex items of
+   `.documentTabs`, so the toggle / `+` / history can live outside the tablist. */
+.documentTabsList {
+  display: contents;
+}
+
+/* Object-browser toggle. It lives in the console strip instead of a collapsed
+   rail, so collapsing costs zero width — the editor gets the whole panel. */
+.documentTreeToggle {
+  flex: 0 0 auto;
+  align-self: center;
+  /* The strip scrolls horizontally once consoles overflow; a toggle that scrolls
+     away is useless, so it sticks to the leading edge. */
+  position: sticky;
+  left: 0;
+  z-index: 1;
   width: 22px;
-  /* The rail sits on the recessed backdrop too. */
-  border: 1px solid var(--dsw-alias-border-l1);
-  padding: 8px 0;
+  height: 20px;
+  margin-right: 2px;
+  padding: 0;
   color: var(--dsw-alias-label-tertiary);
   background: var(--dsw-alias-bg-layer-1);
   border: 0;
-  border-radius: var(--sql-radius);
+  border-radius: 6px;
   cursor: pointer;
   font-size: var(--dsw-font-s-11);
-  letter-spacing: 0.08em;
-  writing-mode: vertical-rl;
+  line-height: 1;
 }
 
-.treeRail:hover {
+.documentTreeToggle:hover,
+.documentTreeToggle[aria-expanded='true']:hover {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -1268,4 +1290,199 @@
   .aggregateSelect {
     display: none;
   }
+}
+
+/* 窄编辑区里的查找面板：CodeMirror 的搜索面板自带「替换」一整套控件，
+   在 300px 宽的面板里会折成三行、把编辑区挤掉一半。窄容器下只留查找本身，
+   替换仍可通过加宽面板使用（容器查询按 .wbPanelBody 的宽度）。 */
+@container (max-width: 460px) {
+  .cm-search br,
+  .cm-search input[name='replace'],
+  .cm-search button[name='replace'],
+  .cm-search button[name='replaceAll'] {
+    display: none;
+  }
+}
+
+/* 无列信息的对象（Doris 的 COLUMNS 不返回视图列）。 */
+.schemaEmpty {
+  padding: 2px 8px 2px 52px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+  font-style: italic;
+}
+
+/* ── 查询工具栏（2026-10-20：从「两个裸按钮 + 一行提示」做成正式工具条） ── */
+
+.editorBarDivider {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--dsw-alias-border-l1);
+}
+
+.editorBarMeta {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  white-space: nowrap;
+}
+
+.hintIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: help;
+  font-size: var(--dsw-font-s-12);
+}
+
+.hintIcon:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 右下角提示（DDL 被拒等）：不遮挡、不阻塞 ───────────────── */
+
+.notice {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-left: 3px solid var(--dsw-alias-state-error-primary);
+  border-radius: var(--sql-radius);
+  box-shadow: 0 12px 28px -12px var(--dsw-alias-border-l2);
+  font-size: var(--dsw-font-s-12);
+  line-height: 1.5;
+}
+
+.notice[data-sql-notice='warn'] {
+  border-left-color: var(--dsw-alias-state-warn-primary);
+}
+
+.noticeText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.noticeClose {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-14);
+  line-height: 1;
+}
+
+.noticeClose:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 字段筛选编辑器（服务端 WHERE，作用于整个语句） ─────────── */
+
+.filterEditor {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.filterEditorColumn {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterOp {
+  padding: 1px 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+  font-size: var(--dsw-font-s-11);
+}
+
+.filterRow th {
+  padding: 0;
+}
+
+/* AI 历史（docs/10 §14）：被回收的 agent 控制台可以重新打开 */
+.agentHistory {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.agentHistoryButton {
+  padding: 2px 6px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  white-space: nowrap;
+}
+
+.agentHistoryButton:hover,
+.agentHistoryButton[aria-expanded='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.agentHistoryMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--sql-radius);
+  box-shadow: 0 12px 28px -12px var(--dsw-alias-border-l2);
+}
+
+.agentHistoryItem {
+  padding: 4px 8px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: var(--dsw-font-s-12);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentHistoryItem:hover {
+  background: var(--dsw-alias-bg-base);
 }

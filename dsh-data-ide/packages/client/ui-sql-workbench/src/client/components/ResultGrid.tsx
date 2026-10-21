@@ -2,13 +2,12 @@ import * as React from 'react'
 
 import type { ReactElement } from 'react'
 
-import type { ExecuteResponse, QueryField, SortSpec } from '../../execute/core.ts'
+import type { ExecuteResponse, FilterOp, FilterSpec, QueryField, SortSpec } from '../../execute/core.ts'
 import { copyText } from '../clipboard.ts'
 import { columnKind, formatCell, fullValue } from '../format.ts'
 import {
   type GridCell,
   type GridSelection,
-  filterIndexes,
   formatRows,
   inSelection,
   normalizeSelection,
@@ -26,6 +25,18 @@ export interface ResultGridProps {
   readonly error: { readonly code: string; readonly message: string } | null
   readonly running: boolean
   readonly onSort: (column: string) => void
+  /** Server-side column filters, already applied to the current page. */
+  readonly filters?: readonly FilterSpec[]
+  /** Add / replace / remove one column's condition; the panel re-runs the query. */
+  readonly onFilter?: (column: string, filter: FilterSpec | null) => void
+  readonly onClearFilters?: () => void
+  /**
+   * Show the column-filter funnel.
+   *
+   * Script results turn it off: a multi-statement run keeps one result per
+   * statement, so a filter would belong to a statement rather than a console.
+   */
+  readonly filterEnabled?: boolean
   /** Re-run whatever produced this page (DataGrip's refresh in the grid toolbar). */
   readonly onRefresh?: () => void
 }
@@ -35,6 +46,20 @@ function ariaSort(sort: SortSpec | null, column: string): 'ascending' | 'descend
   if (sort === null || sort.column !== column) return 'none'
   return sort.direction === 'ASC' ? 'ascending' : 'descending'
 }
+
+/** Column-filter operators, in the order the menu shows them. */
+const FILTER_OPS: readonly { readonly op: FilterOp; readonly label: string }[] = [
+  { op: 'contains', label: '包含' },
+  { op: 'notContains', label: '不包含' },
+  { op: 'eq', label: '等于' },
+  { op: 'ne', label: '不等于' },
+  { op: 'gt', label: '大于' },
+  { op: 'ge', label: '大于等于' },
+  { op: 'lt', label: '小于' },
+  { op: 'le', label: '小于等于' },
+  { op: 'isNull', label: '为空' },
+  { op: 'notNull', label: '非空' },
+]
 
 const MIN_WIDTH = 60
 const DEFAULT_WIDTH = 160
@@ -57,19 +82,33 @@ function download(name: string, content: string | Uint8Array, type: string): voi
 }
 
 /**
- * Result grid: sticky header, server-side sort, per-column page filter, column
- * resizing, rectangle selection with TSV copy, and CSV export.
+ * Result grid: sticky header, server-side sort and column filters, column
+ * resizing, rectangle selection with TSV copy, CSV/TSV/XLSX export.
  *
- * Filtering covers the loaded page, not the whole table: a server-side filter
- * would need a WHERE wrapper and could silently disagree with paging, so the
- * toolbar says 本页 and the boundary stays visible.
+ * Column filters are **server-side** (2026-10-20): they go into the WHERE of the
+ * paging wrapper, so they act on the whole statement rather than the loaded
+ * page — which is what DataGrip's column filter does, and the only reading of
+ * "find this row" that makes sense when a page is 100–5000 rows.
  */
 type ExportFormat = 'tsv' | 'csv' | 'xlsx'
 
-export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: ResultGridProps): ReactElement {
+export function ResultGrid({
+  result,
+  sort,
+  error,
+  running,
+  onSort,
+  onRefresh,
+  filters = [],
+  onFilter,
+  onClearFilters,
+  filterEnabled = true,
+}: ResultGridProps): ReactElement {
   const [format, setFormat] = React.useState<ExportFormat>('csv')
-  const [filters, setFilters] = React.useState<Record<string, string>>({})
   const [openFilter, setOpenFilter] = React.useState<string | null>(null)
+  /** Draft of the condition being edited; committed by 应用. */
+  const [draftOp, setDraftOp] = React.useState<FilterOp>('contains')
+  const [draftValue, setDraftValue] = React.useState('')
   const [widths, setWidths] = React.useState<Record<string, number>>({})
   const [selection, setSelection] = React.useState<GridSelection | null>(null)
   /** Status-bar aggregator, `SUM` like DataGrip's default. */
@@ -81,7 +120,7 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
   const scrollRef = React.useRef<HTMLDivElement | null>(null)
 
   // A filter reshuffles the rows, so a rectangle would point at different cells.
-  const filterKey = Object.values(filters).join('\u0000')
+  const filterKey = filters.map(filter => `${filter.column}:${filter.op}:${filter.value ?? ''}`).join('\u0000')
   const lastFilter = React.useRef(filterKey)
   if (lastFilter.current !== filterKey) {
     lastFilter.current = filterKey
@@ -94,7 +133,8 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
     () => (result === null ? [] : formatRows(result.rows, columns)),
     [result, columns],
   )
-  const visibleIndexes = React.useMemo(() => filterIndexes(cells, columns, filters), [cells, columns, filters])
+  // The server already applied the filters; every row of the page is visible.
+  const visibleIndexes = React.useMemo(() => cells.map((_row, index) => index), [cells])
 
   // Status-bar scope: the selection when there is one, otherwise the whole page
   // (after the page filter), which is what DataGrip's aggregator reports.
@@ -130,7 +170,6 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
   const lastKey = React.useRef(resultKey)
   if (lastKey.current !== resultKey) {
     lastKey.current = resultKey
-    if (Object.keys(filters).length > 0) setFilters({})
     if (selection !== null) setSelection(null)
     // The dialog points at a row of the old page; drop it with the page.
     if (viewer !== null) setViewer(null)
@@ -155,7 +194,9 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
     )
   }
 
-  if (result.rows.length === 0) {
+  // Zero rows with a filter must still render the toolbar: otherwise "no match"
+  // is a dead end with no way to clear the condition that caused it.
+  if (result.rows.length === 0 && filters.length === 0) {
     return (
       <div className={styles.grid} data-grid-state="empty">
         <div className={styles.gridPlaceholder}>查询成功，没有返回行</div>
@@ -163,7 +204,19 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
     )
   }
 
-  const filtering = Object.values(filters).some(value => value.trim() !== '')
+  const filtering = filters.length > 0
+
+  /** Commit the draft condition for the column whose header opened the editor. */
+  const apply = (column: QueryField): void => {
+    const needsValue = draftOp !== 'isNull' && draftOp !== 'notNull'
+    onFilter?.(column.name, {
+      column: column.name,
+      op: draftOp,
+      ...(needsValue ? { value: draftValue } : {}),
+      ...(columnKind(column.typeName) === 'number' ? { numeric: true } : {}),
+    })
+    setOpenFilter(null)
+  }
 
   /** Start a column resize drag. */
   const startResize = (name: string, event: React.MouseEvent<HTMLSpanElement>): void => {
@@ -216,12 +269,12 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
           {running
             ? '执行中…'
             : filtering
-              ? `筛选 ${String(visibleIndexes.length)}/${String(result.rows.length)} 行`
+              ? `${String(result.rows.length)} 行（已筛选）`
               : `${String(result.rows.length)} 行`}
         </span>
-        {filtering ? (
-          <button type="button" className={styles.button} onClick={() => { setFilters({}) }} aria-label="清除筛选">
-            清除筛选
+        {filtering && onClearFilters !== undefined ? (
+          <button type="button" className={styles.button} onClick={onClearFilters} aria-label="清除筛选">
+            清除筛选（{filters.length}）
           </button>
         ) : null}
         <button
@@ -318,22 +371,33 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
             <tr>
               {columns.map(column => {
                 const direction = ariaSort(sort, column.name)
-                const active = (filters[column.name] ?? '').trim() !== ''
+                const active = filters.some(filter => filter.column === column.name)
                 return (
                   <th key={column.name} aria-sort={direction}>
                     <button type="button" className={styles.sortHeader} onClick={() => { onSort(column.name) }}>
                       {column.name}
                       {direction === 'none' ? '' : direction === 'ascending' ? ' ▲' : ' ▼'}
                     </button>
+                    {filterEnabled ? (
                     <button
                       type="button"
                       className={active ? styles.filterButtonActive : styles.filterButton}
                       aria-label={`筛选 ${column.name}`}
                       aria-pressed={active}
-                      onClick={() => { setOpenFilter(openFilter === column.name ? null : column.name) }}
+                      onClick={() => {
+                        if (openFilter === column.name) {
+                          setOpenFilter(null)
+                          return
+                        }
+                        const existing = filters.find(filter => filter.column === column.name)
+                        setDraftOp(existing?.op ?? 'contains')
+                        setDraftValue(existing?.value ?? '')
+                        setOpenFilter(column.name)
+                      }}
                     >
                       ▽
                     </button>
+                    ) : null}
                     <span
                       className={styles.resizeHandle}
                       role="separator"
@@ -346,26 +410,66 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
             </tr>
             {openFilter === null ? null : (
               <tr className={styles.filterRow}>
-                {columns.map(column => (
-                  <th key={column.name}>
-                    {openFilter === column.name ? (
-                      <input
-                        className={styles.filterInput}
-                        autoFocus
-                        value={filters[column.name] ?? ''}
-                        placeholder="包含…"
-                        aria-label={`筛选输入 ${column.name}`}
-                        onChange={event => {
-                          const value = event.target.value
-                          setFilters(current => ({ ...current, [column.name]: value }))
-                        }}
-                        onKeyDown={event => {
-                          if (event.key === 'Escape' || event.key === 'Enter') setOpenFilter(null)
-                        }}
-                      />
-                    ) : null}
-                  </th>
-                ))}
+                <th colSpan={columns.length}>
+                  {(() => {
+                    const column = columns.find(entry => entry.name === openFilter)
+                    /* v8 ignore next -- the popover only opens from a header cell */
+                    if (column === undefined) return null
+                    const existing = filters.find(filter => filter.column === column.name)
+                    const needsValue = draftOp !== 'isNull' && draftOp !== 'notNull'
+                    return (
+                      <div className={styles.filterEditor} data-sql-filter-editor="">
+                        <span className={styles.filterEditorColumn}>{column.name}</span>
+                        <select
+                          className={styles.filterOp}
+                          aria-label="筛选条件"
+                          value={draftOp}
+                          onChange={event => {
+                            setDraftOp(event.target.value as FilterOp)
+                          }}
+                        >
+                          {FILTER_OPS.map(option => (
+                            <option key={option.op} value={option.op}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        {needsValue ? (
+                          <input
+                            className={styles.filterInput}
+                            autoFocus
+                            value={draftValue}
+                            placeholder="值"
+                            aria-label={`筛选值 ${column.name}`}
+                            onChange={event => {
+                              setDraftValue(event.target.value)
+                            }}
+                            onKeyDown={event => {
+                              if (event.key === 'Escape') setOpenFilter(null)
+                              if (event.key === 'Enter') apply(column)
+                            }}
+                          />
+                        ) : null}
+                        <button type="button" className={styles.primaryButton} onClick={() => { apply(column) }} aria-label="应用筛选">
+                          应用
+                        </button>
+                        {existing === undefined ? null : (
+                          <button
+                            type="button"
+                            className={styles.button}
+                            aria-label="移除该列筛选"
+                            onClick={() => {
+                              onFilter?.(column.name, null)
+                              setOpenFilter(null)
+                            }}
+                          >
+                            移除
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </th>
               </tr>
             )}
           </thead>
@@ -373,7 +477,7 @@ export function ResultGrid({ result, sort, error, running, onSort, onRefresh }: 
             {visibleIndexes.length === 0 ? (
               <tr>
                 <td className={styles.gridPlaceholder} colSpan={columns.length}>
-                  本页没有匹配的行
+                  没有匹配的行
                 </td>
               </tr>
             ) : null}

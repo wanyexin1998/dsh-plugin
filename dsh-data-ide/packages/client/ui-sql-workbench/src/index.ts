@@ -8,7 +8,13 @@
  * the runtime spec file, the storage unit and the routes.
  */
 
+import type { IncomingMessage } from 'node:http'
+import { join } from 'node:path'
+
+import { registerAgentRoutes } from './host/agent-routes.ts'
+import { type AgentRelay, startAgentRelay } from './host/agent-relay.ts'
 import { startHostServices } from './host/binding.ts'
+import { consoleRegistryPath } from './host/console-registry.ts'
 import type { ConnectionService, NodeHostContext, WebServerService } from './host/contract.ts'
 import { registerPanelRoutes } from './host/web-routes.ts'
 
@@ -40,21 +46,37 @@ export function apply(ctx: NodeHostContext): void {
 
     const webServer = lookup<WebServerService>(ctx, 'webServer') ?? ctx.webServer
     let unmount: (() => void) | undefined
+    let unmountAgent: (() => void) | undefined
+    let relay: AgentRelay | undefined
     if (webServer === undefined) {
       // Fail closed and loudly: without routes the panel can show connections but
       // can neither read nor execute, and that must not be silent.
       console.error('dsh-data-ide: 宿主未提供 webServer，面板无法与后端通信（该 composition 不支持外部路由）')
     } else {
       const connection = lookup<ConnectionService>(ctx, 'connection')
-      unmount = registerPanelRoutes(
-        webServer,
-        started.api,
-        connection === undefined ? undefined : req => connection.requestRejection(req),
-      )
+      const fence =
+        connection === undefined
+          ? undefined
+          : (req: IncomingMessage): number | undefined => connection.requestRejection(req)
+      unmount = registerPanelRoutes(webServer, started.api, fence)
+
+      // Agent deliveries ride a spool beside the runtime specs the MCP server
+      // already reads; without a home path there is nowhere to put it.
+      const runtimeDir = ctx.dshHomePath?.('data-ide-runtime')
+      if (runtimeDir === undefined) {
+        console.error('dsh-data-ide: 宿主未提供 dshHomePath，agent 结果投递通道未启用')
+      } else {
+        relay = await startAgentRelay({ dir: join(runtimeDir, 'agent-outbox') })
+        unmountAgent = registerAgentRoutes(webServer, relay, fence, {
+          registryPath: consoleRegistryPath(runtimeDir),
+        })
+      }
     }
 
     return async () => {
+      unmountAgent?.()
       unmount?.()
+      await relay?.dispose()
       await started.dispose()
     }
   }, 'dsh-data-ide: host services')

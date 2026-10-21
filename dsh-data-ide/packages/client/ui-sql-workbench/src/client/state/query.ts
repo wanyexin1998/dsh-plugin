@@ -6,7 +6,8 @@
  * docs/03 §5 — empty / running / error / result — is unit-testable without a DOM.
  */
 
-import type { ExecuteRequest, ExecuteResponse, SortSpec } from '../../execute/core.ts'
+import type { ExecuteRequest, ExecuteResponse, FilterSpec, SortSpec } from '../../execute/core.ts'
+import { readableDbError } from '../db-error.ts'
 import type { WorkbenchApi } from '../api.ts'
 
 /** Page sizes the pager offers (docs/03 §6.4). */
@@ -23,6 +24,8 @@ export interface QueryState {
   readonly error: { readonly code: string; readonly message: string } | null
   readonly pageSize: number
   readonly sort: SortSpec | null
+  /** Server-side column filters (ANDed); applied to the wrapped statement. */
+  readonly filters: readonly FilterSpec[]
   /** Known total from the first page; `null` means "总数未知" (docs/05 §7). */
   readonly total: number | null
   /** Id of the statement in flight, so cancel can reach it. */
@@ -36,6 +39,7 @@ export const INITIAL_QUERY: QueryState = {
   error: null,
   pageSize: DEFAULT_PAGE_SIZE,
   sort: null,
+  filters: [],
   total: null,
   statementId: null,
 }
@@ -50,6 +54,11 @@ export function nextStatementId(): string {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Replace the column filters; the caller re-runs the statement afterwards. */
+export function setFilters(state: QueryState, filters: readonly FilterSpec[]): QueryState {
+  return { ...state, filters }
 }
 
 /** Update the statement text without touching the last result. */
@@ -70,6 +79,7 @@ function request(state: QueryState, connId: string, statementId: string, offset?
     pageSize: state.pageSize,
     statementId,
     ...(state.sort === null ? {} : { sort: state.sort }),
+    ...(state.filters.length === 0 ? {} : { filters: state.filters }),
     ...(offset === undefined ? {} : { offset }),
   }
 }
@@ -89,11 +99,16 @@ export async function run(
   try {
     const outcome = await api.execute(request(state, connId, statementId))
     // Nothing is in flight once the answer arrives, so cancel has no target.
-    if (!outcome.ok) return { ...running, status: 'error', error: outcome.error, result: null, total: null, statementId: null }
+    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error), result: null, total: null, statementId: null }
     return { ...running, status: 'done', result: outcome, total: outcome.total, statementId: null }
   } catch (error) {
-    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: describe(error) }, result: null, total: null, statementId: null }
+    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: readableDbError({ message: describe(error) }) }, result: null, total: null, statementId: null }
   }
+}
+
+/** A refusal, in words the reader can act on. */
+function failure(error: { readonly code: string; readonly message: string }): { readonly code: string; readonly message: string } {
+  return { code: error.code, message: readableDbError(error) }
 }
 
 /** Jump to another page of the same statement; the cached total survives. */
@@ -110,10 +125,10 @@ export async function goPage(
   onStart?.(running)
   try {
     const outcome = await api.fetchPage(request(state, connId, statementId, offset))
-    if (!outcome.ok) return { ...running, status: 'error', error: outcome.error, statementId: null }
+    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error), statementId: null }
     return { ...running, status: 'done', result: outcome, statementId: null }
   } catch (error) {
-    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: describe(error) }, statementId: null }
+    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: readableDbError({ message: describe(error) }) }, statementId: null }
   }
 }
 

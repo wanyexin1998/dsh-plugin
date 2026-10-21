@@ -76,7 +76,6 @@ function render(options: {
   note?: string
   loading?: boolean
   connectionName?: string
-  ddl?: () => Promise<string>
 } = {}): Rendered {
   const inserted: string[] = []
   const opened: string[] = []
@@ -96,9 +95,10 @@ function render(options: {
         onOpenData={sql => {
           opened.push(sql)
         }}
-        loadDdl={async target => {
+        onShowDdl={target => {
+          // The tree no longer shows DDL itself: it hands the target to the
+          // panel, which opens it in a console tab.
           ddlRequests.push(target)
-          return options.ddl === undefined ? 'CREATE TABLE `dwd`.`dwd_order` (id BIGINT)' : options.ddl()
         }}
         onCopy={text => {
           copied.push(text)
@@ -245,7 +245,62 @@ describe('schema tree: inserting and filtering', () => {
   })
 })
 
+describe('schema tree: objects without columns', () => {
+  it('shows a placeholder for a view whose columns the catalogue does not report', () => {
+    render({
+      tables: [
+        { schema: 'dwd', kind: 'view', name: 'dwd_trade_order_all_v', columns: [] },
+      ],
+    })
+
+    // The object itself is listed…
+    expect(container.querySelector('[data-sql-schema-object="dwd_trade_order_all_v"]')).not.toBeNull()
+    // …and expanding it explains why there is nothing under it.
+    const toggle = [...container.querySelectorAll('button')]
+      .find(node => node.getAttribute('aria-label') === '展开 dwd_trade_order_all_v')
+    act(() => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-sql-empty-object]')?.textContent).toContain('无列信息（视图）')
+  })
+
+  it('says 无列信息 for a table that reports no columns either', () => {
+    render({ tables: [{ schema: 'dwd', kind: 'table', name: 'dwd_empty', columns: [] }] })
+
+    const toggle = [...container.querySelectorAll('button')]
+      .find(node => node.getAttribute('aria-label') === '展开 dwd_empty')
+    act(() => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const empty = container.querySelector('[data-sql-empty-object]')
+    expect(empty?.textContent).toBe('无列信息')
+  })
+})
+
 describe('schema tree: context menu', () => {
+  it('runs the item when the click goes through pointerdown first (a real click)', () => {
+    const view = render({ tables: flat })
+    rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
+    const item = menuItem('open') ?? menuItem('data')
+    expect(item).toBeTruthy()
+
+    // A real click is pointerdown → pointerup → click. The menu used to unmount
+    // on the pointerdown (outside-click handler), so the click never landed —
+    // every item looked dead.
+    act(() => {
+      // jsdom has no PointerEvent; the handler only needs `target` and `type`.
+      item?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-sql-schema-menu]')).not.toBeNull()
+    act(() => {
+      item?.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      item?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(view.opened.length + view.inserted.length).toBeGreaterThan(0)
+    expect(container.querySelector('[data-sql-schema-menu]')).toBeNull()
+  })
+
   it('offers DataGrip’s object actions and runs 打开数据 / 插入 / 复制 / 刷新', () => {
     const view = render({ tables: flat })
 
@@ -347,63 +402,29 @@ describe('schema tree: context menu', () => {
   })
 })
 
-describe('schema tree: DDL viewer', () => {
-  it('fetches the DDL, shows it, copies it, and closes', async () => {
+describe('schema tree: DDL handoff', () => {
+  it('hands the table to the panel instead of opening a dialog', () => {
     const view = render()
     rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
 
-    await act(async () => {
+    act(() => {
       menuItem('ddl')?.click()
-      await Promise.resolve()
-      await Promise.resolve()
     })
 
     expect(view.ddlRequests).toEqual([{ schema: 'ads', table: 'dwd_order', kind: 'table' }])
-    const card = container.querySelector('[data-sql-ddl]')
-    expect(card).not.toBeNull()
-    expect(card?.textContent).toContain('CREATE TABLE')
-
-    act(() => {
-      buttonByLabel(view, '复制 DDL')?.click()
-    })
-    expect(view.copied.at(-1)).toContain('CREATE TABLE')
-
-    act(() => {
-      buttonByLabel(view, '关闭 DDL')?.click()
-    })
+    // No dialog over the tree any more — the panel opens a console tab.
     expect(container.querySelector('[data-sql-ddl]')).toBeNull()
   })
 
-  it('shows the reason when the database refuses the DDL', async () => {
-    const view = render({
-      ddl: async () => {
-        throw new Error('没有权限')
-      },
-    })
-    rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
-
-    await act(async () => {
-      menuItem('ddl')?.click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(container.textContent).toContain('没有权限')
-    expect(buttonByLabel(view, '复制 DDL')?.disabled).toBe(true)
-  })
-
-  it('asks a view for a view DDL', async () => {
+  it('asks a view for a view DDL', () => {
     const view = render()
-    // Views live in the second folder of the open schema.
     act(() => {
       buttonByLabel(view, '展开视图')?.click()
     })
     rightClick(container.querySelector('[data-sql-schema-object="v_order_daily"]'))
 
-    await act(async () => {
+    act(() => {
       menuItem('ddl')?.click()
-      await Promise.resolve()
-      await Promise.resolve()
     })
 
     expect(view.ddlRequests).toEqual([{ schema: 'ads', table: 'v_order_daily', kind: 'view' }])
@@ -424,32 +445,12 @@ describe('schema tree: folders that are absent', () => {
 })
 
 describe('schema tree: DDL edge cases', () => {
-  it('shows a non-Error rejection as text', async () => {
-    const view = render({
-      ddl: async () => {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
-        throw 'shout: nope'
-      },
-    })
-    rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
-
-    await act(async () => {
-      menuItem('ddl')?.click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('[data-sql-ddl]')?.textContent).toContain('shout: nope')
-  })
-
-  it('asks for a nameless, kind-less object without inventing fields', async () => {
+  it('asks for a nameless, kind-less object without inventing fields', () => {
     const view = render({ tables: flat })
     rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
 
-    await act(async () => {
+    act(() => {
       menuItem('ddl')?.click()
-      await Promise.resolve()
-      await Promise.resolve()
     })
 
     expect(view.ddlRequests).toEqual([{ schema: '', table: 'dwd_order' }])
@@ -463,30 +464,36 @@ describe('schema tree: DDL edge cases', () => {
   })
 })
 
-describe('schema tree: DDL while loading', () => {
-  it('says it is reading before the DDL arrives', async () => {
-    let settle: (text: string) => void = () => undefined
-    const view = render({
-      ddl: () => new Promise<string>(resolve => {
-        settle = resolve
-      }),
+describe('schema tree: folders that are absent', () => {
+  it('renders only the Tables folder when a schema has no views', () => {
+    const view = render()
+    act(() => {
+      buttonByLabel(view, '展开 dwd')?.click()
     })
+
+    expect(container.querySelector('[data-sql-schema-object="dwd_order"]')).not.toBeNull()
+    // ads owns the only view, and it is not part of dwd.
+    expect(container.querySelectorAll('[data-sql-schema-object="v_order_daily"]')).toHaveLength(0)
+  })
+})
+
+describe('schema tree: DDL edge cases', () => {
+  it('asks for a nameless, kind-less object without inventing fields', () => {
+    const view = render({ tables: flat })
     rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
 
-    await act(async () => {
+    act(() => {
       menuItem('ddl')?.click()
-      await Promise.resolve()
     })
-    expect(container.querySelector('[data-sql-ddl]')?.textContent).toContain('读取中')
-    // Copying is pointless until there is text.
-    expect(buttonByLabel(view, '复制 DDL')?.disabled).toBe(true)
 
-    await act(async () => {
-      settle('CREATE TABLE `dwd_order` (id BIGINT)')
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(container.querySelector('[data-sql-ddl]')?.textContent).toContain('CREATE TABLE')
+    expect(view.ddlRequests).toEqual([{ schema: '', table: 'dwd_order' }])
+  })
+
+  it('renders a flat snapshot that only has views', () => {
+    render({ tables: [{ kind: 'view', name: 'v_only', columns: [{ name: 'day', type: 'DATE' }] }] })
+
+    expect(container.textContent).toContain('v_only')
+    expect(container.textContent).toContain('视图')
   })
 })
 

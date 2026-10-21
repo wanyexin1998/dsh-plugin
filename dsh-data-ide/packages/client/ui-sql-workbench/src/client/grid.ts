@@ -67,34 +67,6 @@ export function formatRows(
   }))
 }
 
-/**
- * Indexes of the rows that pass the per-column "contains" filters.
- *
- * Filtering is client-side on the current page: the server would need a WHERE
- * wrapper, and a half-working server filter is worse than an honest page filter
- * (the toolbar says 本页).
- *
- * @param cells - Output of {@link formatRows}.
- * @param columns - Column metadata.
- * @param filters - Column name → case-insensitive needle; empty means no filter.
- */
-export function filterIndexes(
-  cells: readonly (readonly GridCell[])[],
-  columns: readonly QueryField[],
-  filters: Readonly<Record<string, string>>,
-): readonly number[] {
-  const active = columns
-    .map((column, index) => ({ index, needle: filters[column.name]?.trim().toLowerCase() ?? '' }))
-    .filter(entry => entry.needle !== '')
-  if (active.length === 0) return cells.map((_row, index) => index)
-
-  const indexes: number[] = []
-  cells.forEach((row, index) => {
-    if (active.every(entry => (row[entry.index]?.lower ?? '').includes(entry.needle))) indexes.push(index)
-  })
-  return indexes
-}
-
 /** TSV of the selected rectangle, for the clipboard. */
 export function selectionToTsv(
   rows: readonly (readonly unknown[])[],

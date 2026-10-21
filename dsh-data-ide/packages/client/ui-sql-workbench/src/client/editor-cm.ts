@@ -18,7 +18,14 @@
  *    `completion.ts` engine is no longer wired to the editor.
  */
 
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
+import {
+  type CompletionSource,
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+  snippetCompletion,
+} from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap, indentWithTab, toggleComment } from '@codemirror/commands'
 import { MySQL, sql } from '@codemirror/lang-sql'
 import {
@@ -43,6 +50,7 @@ import {
 import { tags } from '@lezer/highlight'
 
 import type { SchemaIndex } from './completion.ts'
+import { keywordBoost, matchingTemplates } from './completion-rank.ts'
 
 /** Namespace shape `@codemirror/lang-sql` accepts: `{ schema: { table: [cols] } }`. */
 export type SqlNamespace = Readonly<Record<string, Readonly<Record<string, readonly string[]>> | readonly string[]>>
@@ -71,6 +79,32 @@ export function toSqlNamespace(schema: SchemaIndex | undefined): SqlNamespace | 
   const namespace: Record<string, Record<string, string[]> | string[]> = { ...flat }
   for (const [schemaName, tables] of named) namespace[schemaName] = tables
   return namespace
+}
+
+/**
+ * Chinese labels for CodeMirror's own UI (search panel, mostly).
+ *
+ * The library ships English phrases; the rest of the panel is Chinese, and a
+ * mixed-language search box reads like a bug.
+ */
+export const PHRASES: Readonly<Record<string, string>> = {
+  Find: '查找',
+  Replace: '替换',
+  next: '下一个',
+  previous: '上一个',
+  all: '全部',
+  'match case': '区分大小写',
+  regexp: '正则',
+  'by word': '整词',
+  replace: '替换',
+  'replace all': '全部替换',
+  close: '关闭',
+  'current match': '当前匹配',
+  'on line': '第几行',
+  'replaced $ matches': '已替换 $ 处',
+  'replaced match on line $': '已替换第 $ 行的匹配',
+  'Go to line': '跳到行',
+  go: '跳转',
 }
 
 /** Token colours, all from the shell's palette. */
@@ -153,18 +187,46 @@ export const sqlEditorTheme = EditorView.theme({
     borderBottom: '1px solid var(--dsw-alias-border-l1)',
   },
   '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--dsw-alias-border-l1)' },
+  // The search panel ships as a two-row block of large controls; in a 300px
+  // result column it ate the editor. Compact it, keep it on one line if it fits.
+  '.cm-search': {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '4px 6px',
+    padding: '4px 6px',
+    fontSize: 'var(--dsw-font-s-12)',
+  },
+  '.cm-search label': {
+    color: 'var(--dsw-alias-label-tertiary)',
+    fontSize: 'var(--dsw-font-s-11)',
+  },
   '.cm-textfield': {
+    height: '22px',
+    padding: '0 6px',
     color: 'var(--dsw-alias-label-primary)',
     backgroundColor: 'var(--dsw-alias-bg-base)',
     border: '1px solid var(--dsw-alias-border-l1)',
     borderRadius: '4px',
+    fontSize: 'var(--dsw-font-s-12)',
   },
   '.cm-button': {
+    height: '22px',
+    padding: '0 6px',
     color: 'var(--dsw-alias-label-secondary)',
     backgroundColor: 'var(--dsw-alias-bg-base)',
     backgroundImage: 'none',
     border: '1px solid var(--dsw-alias-border-l1)',
     borderRadius: '4px',
+    fontSize: 'var(--dsw-font-s-11)',
+  },
+  '.cm-search button[name=close]': {
+    position: 'static',
+    order: 99,
+    marginLeft: 'auto',
+    padding: '0 4px',
+    color: 'var(--dsw-alias-label-tertiary)',
+    fontSize: 'var(--dsw-font-s-12)',
   },
   '.cm-searchMatch': { backgroundColor: 'var(--dsw-alias-state-warn-primary)' },
   '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'var(--dsw-alias-state-business-primary)' },
@@ -181,7 +243,43 @@ export interface EditorCallbacks {
 /** The SQL dialect (and therefore the completion source) for one schema snapshot. */
 export function sqlExtension(schema: SchemaIndex | undefined): Extension {
   const namespace = toSqlNamespace(schema)
-  return sql({ dialect: MySQL, upperCaseKeywords: true, ...(namespace === undefined ? {} : { schema: namespace }) })
+  return sql({
+    dialect: MySQL,
+    upperCaseKeywords: true,
+    /**
+     * Ordering, not filtering: CodeMirror's keyword list is alphabetical, so `S`
+     * offered `SAVEPOINT`/`SCHEMA`/`SCROLL` and pushed `SELECT` below the fold.
+     * `boost` is added to the match score, so everyday words now lead.
+     */
+    keywordCompletion: (label, type) => ({ label: label.toUpperCase(), type, boost: keywordBoost(label) }),
+    ...(namespace === undefined ? {} : { schema: namespace }),
+  })
+}
+
+/**
+ * Live templates (`sel`, `selw`, `ins`, …), the way DataGrip users start a query.
+ *
+ * A second source rather than part of the keyword list: these are **words the
+ * user types**, not SQL keywords, and a boost high enough to beat every keyword
+ * keeps them on top when the prefix matches.
+ */
+export const templateCompletion: CompletionSource = context => {
+  const word = context.matchBefore(/\w*/)
+  if (word === null) return null
+  const templates = matchingTemplates(word.text)
+  if (templates.length === 0) return null
+  return {
+    from: word.from,
+    options: templates.map(template =>
+      snippetCompletion(template.snippet, {
+        label: template.label,
+        detail: template.detail,
+        type: 'text',
+        boost: 30,
+      }),
+    ),
+    validFor: /^\w*$/,
+  }
 }
 
 /** Editable vs read-only, as one swappable unit. */
@@ -243,8 +341,10 @@ export function buildExtensions(options: BuildExtensionsOptions): Extension[] {
     search({ top: true }),
     highlightSelectionMatches(),
     options.language.of(sqlExtension(options.schema)),
+    EditorState.languageData.of(() => [{ autocomplete: templateCompletion }]),
     syntaxHighlighting(sqlHighlightStyle),
     sqlEditorTheme,
+    EditorState.phrases.of(PHRASES),
     placeholder(options.placeholderText ?? "SELECT * FROM dwd_order WHERE dt = '2026-10-01'"),
     EditorView.updateListener.of(update => {
       if (update.docChanged) options.onChange(update.state.doc.toString())

@@ -339,6 +339,20 @@ describe('binding adapters', () => {
     expect(service.specPath.replace(/\\/g, '/')).toContain('/data-ide-runtime/conn-specs.json')
     await dispose()
   })
+
+  it('persists layout through the service exposed to the route layer', async () => {
+    const host = fakeHost()
+    const { dispose } = await startHostServices(host.ctx)
+    const service = host.provided[0]?.value as {
+      readLayout: () => Promise<unknown>
+      saveLayout: (layout: unknown) => Promise<void>
+    }
+
+    await expect(service.readLayout()).resolves.toBeNull()
+    await service.saveLayout({ treeOpen: false, treeWidth: 312 })
+    await expect(service.readLayout()).resolves.toEqual({ treeOpen: false, treeWidth: 312 })
+    await dispose()
+  })
 })
 
 describe('panel execution path', () => {

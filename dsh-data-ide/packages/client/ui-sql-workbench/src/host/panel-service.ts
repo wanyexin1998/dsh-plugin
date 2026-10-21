@@ -26,6 +26,10 @@ import type { ConnectionSpec } from './runtime-specs.ts'
 import type { DataSourceStore } from '../datasource/store.ts'
 import type { SchemaReader, SchemaSnapshot } from './metadata.ts'
 import type { CredentialStore } from './credentials.ts'
+import type { KvStore } from './kv.ts'
+
+/** Document key holding the panel layout (docs/09 B3). */
+export const LAYOUT_KEY = 'layout'
 
 /** Three-state probe result as the panel consumes it. */
 export interface PanelTestResult {
@@ -57,6 +61,14 @@ export interface PanelApi {
   schema(connId: string, options?: { readonly refresh?: boolean }): Promise<SchemaSnapshot>
   /** Run a whole script; one result per statement (docs/03 §4.3). */
   executeScript(request: ScriptRequest): Promise<ScriptResponse | { readonly refusal: { readonly code: string; readonly message: string } }>
+  /**
+   * Last saved layout (`treeOpen` / `treeWidth` / `editorHeight`), or `null`.
+   *
+   * Returned unvalidated on purpose: the browser clamps it against the live
+   * workspace, because only the browser knows how wide the panel is right now.
+   */
+  readLayout?(): Promise<unknown>
+  saveLayout?(layout: unknown): Promise<void>
 }
 
 /** A refusal the route layer turns into a 4xx with a readable code. */
@@ -80,6 +92,8 @@ export interface PanelApiDeps {
   readonly schemaReader?: SchemaReader
   /** Optional: without it the script route refuses instead of half-working. */
   readonly scriptDeps?: ExecutionDeps
+  /** Optional: without it layout reads return `null` and saves are no-ops. */
+  readonly kv?: KvStore
   readonly now?: () => number
   readonly newId?: () => string
   readonly isoNow?: () => string
@@ -188,6 +202,17 @@ export function createPanelApi(deps: PanelApiDeps): PanelApi {
     schema: (connId, options) => deps.schemaReader === undefined
       ? Promise.reject(new PanelError('SCHEMA_UNAVAILABLE', '宿主未提供表结构读取'))
       : deps.schemaReader.schema(connId, options),
+
+    // Layout is a single global document, not per-session: the panel's size is a
+    // property of the workbench, not of the conversation (09 B3).
+    readLayout: async () => (deps.kv === undefined ? null : (await deps.kv.get(LAYOUT_KEY)) ?? null),
+    saveLayout: async layout => {
+      if (deps.kv === undefined) return
+      if (typeof layout !== 'object' || layout === null || Array.isArray(layout)) {
+        throw new PanelError('BAD_LAYOUT', 'layout 必须是 JSON 对象')
+      }
+      await deps.kv.put(LAYOUT_KEY, layout)
+    },
   }
 }
 

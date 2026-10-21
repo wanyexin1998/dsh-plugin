@@ -6,6 +6,7 @@ import { SqlWorkbenchTitle } from './components/SqlWorkbenchTitle.tsx'
 import { TAB_BODY_SLOT, TAB_ID, TAB_KIND, TAB_NS, TAB_TITLE_SLOT } from './contract/constants.ts'
 import type { ClientContext } from './contract/host.ts'
 import { sidebarRightSupported, UNSUPPORTED_REASON } from './guard.ts'
+import { bindOpenShortcut } from './entry.ts'
 import { installDiagnostics, reportFailure } from './diagnostics.ts'
 import { en, zh } from './locales.ts'
 
@@ -122,4 +123,19 @@ function register(ctx: ClientContext): void {
       ),
     'dsh-data-ide: sidebar tab title',
   )
+
+  /**
+   * Keyboard entry (docs/09 B2).
+   *
+   * The tab can be closed, and the right sidebar can be collapsed — neither
+   * leaves anything to click. `openTab` handles both cases because the page type
+   * is `multiple: false`: it opens when closed and focuses when already open.
+   */
+  ctx.effect(() => {
+    // The capability guard above proved this controller exists.
+    const controller = ctx.sidebarRight!
+    return bindOpenShortcut(() => {
+      controller.openTab(TAB_KIND)
+    })
+  }, 'dsh-data-ide: open shortcut')
 }

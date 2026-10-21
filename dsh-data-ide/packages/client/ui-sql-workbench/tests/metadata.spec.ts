@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  attachKinds,
+  withObjects,
   createSchemaReader,
   foldSchema,
   kindsQuery,
   schemaQuery,
   toKind,
-  toSchemaIndex,
 } from '../src/host/metadata.ts'
 import type { QueryExecutor } from '../src/execute/core.ts'
 import { createDataSource } from '../src/datasource/model.ts'
@@ -130,12 +129,6 @@ describe('createSchemaReader', () => {
     const reader = createSchemaReader({ resolve, executor })
 
     await expect(reader.schema('nope')).rejects.toThrow(/连接不存在或没有可用密码/)
-  })
-
-  it('exposes the completion view of a snapshot', () => {
-    expect(toSchemaIndex({ tables: [{ name: 't', columns: [] }], fetchedAt: '', truncated: false, source: 'information_schema' as const })).toEqual({
-      tables: [{ name: 't', columns: [] }],
-    })
   })
 })
 
@@ -301,20 +294,41 @@ describe('object kinds', () => {
     expect(toKind(null)).toBe('table')
   })
 
-  it('attaches kinds per schema and leaves unknowns alone', () => {
+  it('adds objects that have no column rows (views) and their kinds', () => {
     const folded = foldSchema([
       ['dwd', 'dwd_order', 'order_id', 'BIGINT'],
       ['dwd', 'v_daily', 'day', 'DATE'],
     ], 100)
-    const table = attachKinds(folded.tables, [
+    const table = withObjects(folded.tables, [
       ['dwd', 'dwd_order', 'BASE TABLE'],
       ['dwd', 'v_daily', 'VIEW'],
+      // Doris reports no columns for a view, so this object exists only here.
+      ['dwd', 'dwd_trade_order_all_v', 'VIEW'],
+      ['ods_db', 'ods_hr_emp_ai_v', 'VIEW'],
       [null, 'ghost', 'VIEW'],
     ])
 
-    expect(table.map(entry => entry.kind)).toEqual(['table', 'view'])
-    // A row without a usable name is ignored rather than throwing.
-    expect(table).toHaveLength(2)
+    expect(table.map(entry => `${entry.schema ?? ''}.${entry.name}:${entry.kind ?? ''}`)).toEqual([
+      'dwd.dwd_order:table',
+      'dwd.dwd_trade_order_all_v:view',
+      'dwd.v_daily:view',
+      'ods_db.ods_hr_emp_ai_v:view',
+      // An unnamed schema sorts last, after the real databases.
+      '.ghost:view',
+    ])
+    // The view keeps its place with no columns; the tree shows it as empty.
+    expect(table.find(entry => entry.name === 'dwd_trade_order_all_v')?.columns).toEqual([])
+  })
+
+  it('ignores a TABLES row that carries no usable name or type', () => {
+    const folded = foldSchema([['dwd', 't', 'c', 'INT']], 10)
+    const merged = withObjects(folded.tables, [
+      ['dwd', 42, 'VIEW'],
+      ['dwd', '', 'VIEW'],
+      // A mis-shaped answer must not invent objects (the third cell is the type).
+      ['dwd', 'looks_like_a_table', 'BIGINT'],
+    ])
+    expect(merged.map(entry => entry.name)).toEqual(['t'])
   })
 
   it('reads kinds through the reader so the tree can split tables from views', async () => {
@@ -356,9 +370,9 @@ describe('object kinds', () => {
 
 describe('object kinds: sparse rows', () => {
   it('skips an unnamed kind row and an unnamed SHOW FULL row', async () => {
-    // attachKinds tolerates a row whose name is not a string.
+    // `withObjects` tolerates a row whose name is not a string.
     const folded = foldSchema([['dwd', 't', 'c', 'INT']], 10)
-    expect(attachKinds(folded.tables, [['dwd', 42, 'VIEW']])).toEqual(folded.tables)
+    expect(withObjects(folded.tables, [['dwd', 42, 'VIEW']]).map(entry => entry.name)).toEqual(['t'])
 
     // And so does the SHOW FULL TABLES reader.
     const executor: QueryExecutor = {

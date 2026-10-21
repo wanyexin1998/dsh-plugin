@@ -142,58 +142,110 @@ M5-* 依赖全部
 
 已知缺口（未做）：编辑器折叠（需真正的编辑模型）、服务端筛选（现仅当前页）、DataGrip 的「定位到行」、脚本执行的取消（statementId 未回传）。
 
+### 修复（2026-10-20）：对象树视图缺失 / 右键菜单失效 / 徽标与箭头
+
+用户现场反馈四条，全部真机复现并修复：
+
+1. **视图缺失**（功能 bug，最严重）：对象清单原先只从 `information_schema.COLUMNS` 折出，而 Doris 的 COLUMNS 不返回视图列 → dwd 的 5 个视图、以及只含视图的 `ods_db` 整库都不显示。改为 TABLES 定对象、COLUMNS 补列（`withObjects`），并校验第三列必须是 TABLE_TYPE。实测 3 库/15 对象/1 视图 → **4 库/21 对象/7 视图**。
+2. **右键菜单点了没用**（功能 bug）：关闭监听挂 `window pointerdown` 且无差别关闭，真实点击序列在 pointerdown 阶段就把菜单卸载了，click 到不了按钮。改为菜单内部忽略、外部才关；用例按 pointerdown→pointerup→click 回归。
+3. **去掉 T/V 徽标**（视觉）：表/视图已有分组，前缀字母重复。
+4. **箭头放大**（视觉）：10px → 13px，hover 提亮。
+
+### 批次 7（2026-10-20）：编辑器内核、对象树正确性、DDL 落点、服务端筛选
+
+用户逐条反馈驱动，六个提交，全部真机验证：
+
+| 提交 | 内容 | 关键点 |
+|---|---|---|
+| `cd0a244` | 编辑器换 **CodeMirror 6** | 删掉 900 行自研（highlight/editor/caret/补全引擎）；主题走 `EditorView.theme` + `--dsw-*`（不产 CSS 文件）；schema/只读用 Compartment 热切换；`Ctrl-Enter` 三绑定（`Mod-` 在非 Mac 是 Ctrl） |
+| `3c857a9` | 对象树两个真 bug | ① 视图缺失：COLUMNS 不返回视图列 → 改 TABLES 定对象；② 右键菜单点击无效：`window pointerdown` 在 click 之前卸载了菜单 → 菜单内忽略 |
+| `ea14476` | 视图 DDL 被拒的人话提示 | 拒有两形态：`ok:false` 与 HTTP 5xx 抛异常，两处都要翻 |
+| `eda95d0` | DDL 进编辑区 + 错误右下角 + 查询工具栏 | 新开 `ddl_<表名>` 标签；`lastRunSql` 设为 DDL 本身以免带 `*` |
+| `624ba75` | 剪贴板三级策略 | `void writeText` 等于放弃错误处理；被拒回退 `execCommand`，再失败给提示 |
+| `5296ce3` | 字段筛选改**服务端 WHERE** | 10 个操作符 + 进 COUNT；筛到 0 行仍渲染工具条（否则没出口） |
+
 ### 批次 6（2026-10-19）：编辑区/查询区/对象树面板化
 
 参考用户既有插件 `dsh-split`（Dockview + `theme.gap`）的做法：统一圆角、透明 sash、靠间距分隔。对象树移到左栏并默认展开，编辑区/结果区在右上下分屏，三块都可用 8px 缝隙拖拽（并支持方向键微调 / 双击复位 / 收起成 rail）。详见 03 §1 布局与 testing S40–S45。
 
 5 批全部完成。批次 5 的两处**有意偏离** DataGrip：① 它靠小页分页（`Limit page size to`）而不虚拟滚动，我们页大小可到 5000，所以加了窗口化；② 它的状态栏显示连接字符集，我们只能显示面板渲染编码（字符串已被驱动解码），不冒充连接 charset。
 
-## 8. 未完成清单（2026-10-19 盘点）
+### 批次 8（2026-10-21）：agent 结果接入 console（R1–R9 + 对抗性审查）
 
-按「用户能感觉到的影响」排序，全部有代码/文档证据（不是猜测）。
+**做了什么**：agent（就是 dsh 自身）执行的 SQL，结果现在落到它自己的 `ai_<label>` 控制台——与用户的 console 隔离，不抢焦点、不覆盖正在看的结果；多语句一次投递出 N 个结果 tab。完整规格与决策溯源见 **`10-AGENT-CONSOLE-SPEC`**（§2 决策总表、§13 契约、§14 实现状态、§15 审查）。
 
-### 8.1 功能缺口（DataGrip 有、我们没有）
+| 项 | 内容 | 关键点 |
+|---|---|---|
+| **R1** 结果回推 | MCP → 文件出箱 → 宿主扫描 → SSE / 轮询 → 面板 | MCP 是 stdio 子进程、**无 ctx**、argv 静态（拿不到宿主端口），所以只能走文件；中继是**至少一次**语义（先广播后删），重复由面板幂等吸收 |
+| **R2** 多语句 | 新增 MCP 工具 `execute_script` | 复用 `src/execute/script.ts`；`MAX_SCRIPT_STATEMENTS=20` 且**硬 clamp**；回给 agent 的行数按 500 行总预算裁剪并标 `rowsTruncated`，**投递仍保留完整首页** |
+| **R3** 契约 | `execute_sql` / `execute_script` 增加 `label?` / `consoleId?` | **有 label 才投递**（agent 纯取数不污染界面）；同名 + 同 SQL 就地更新，异 SQL 开 `ai_<label>#2`；新增**归属注册表**（面板 → 宿主 `consoles.json` → MCP 执行前校验），指向用户 console 时返回 `CONSOLE_NOT_AGENT` 且不执行 |
+| **R6** 结果 tab 状态 | `ScriptTab` 自带 `sort / filters / pageSize / total` | 修掉三个真实缺陷：同一列表头点两次**永远 ASC**、每次 refetch **丢排序**、页大小是**全局**的；顺带解锁脚本 tab 的服务端筛选 |
+| **R8 / R9** 标题与输出 | 标题 = `首列名:类型`（重名 ` (2)`）；新增「输出」tab | 错误**两处都显示**：失败 tab 即时可见、输出 tab 带错误码可追溯（只移进输出会让失败语句显示「执行查询以查看结果」，更误导） |
+| 生命周期 | `ai_` 池软上限 4 + **「AI 历史」抽屉** | 只归档**已读且非激活**的 console；未读的永不隐藏（宁可超上限也不藏没看过的结果） |
+| 焦点 | 不抢焦点；未读角标点 + 轻 toast | 恢复历史是用户点击，允许聚焦 |
 
-| # | 功能 | 现状 | 影响 | 粗略成本 |
-|---|---|---|---|---|
-| G1 | **编辑器不是真正的代码编辑器** | `SqlEditor` 是透明 textarea 叠着色层（`SqlEditor`+`highlight`+`completion`+`editor`+`caret` 共 ~900 行自研）：没有查找替换、注释切换（Ctrl+/）、Tab/Shift+Tab 缩进、多光标、代码折叠、跳转到行 | 写复杂 SQL 时手感明显弱于 DataGrip | 大（换编辑器内核） |
-| G2 | **代码折叠** | 未做（依赖 G1 的编辑模型） | 长脚本难读 | 中（随 G1 一起做） |
-| G3 | **服务端筛选** | 只有当前页客户端筛选（工具栏明说「本页」） | 大表里"找一行"必须先回数据库改 SQL | 中（WHERE 包裹 + 与分页/排序共存） |
-| G4 | **查询历史** | 未做（`M2-6`）；宿主表名早就预留了 `history` 文档 | 昨天跑过的 SQL 找不回来 | 小～中（环形存储 + 面板下拉） |
-| G5 | **脚本保存 / 控制台内容持久化** | 未做：刷新页面后 console 里的 SQL 全丢（客户端无 localStorage，宿主也没有 documents 持久化） | 误刷新就丢工作 | 小（把 documents 落到 KvStore） |
-| G6 | **审计日志** | 未做（`M2-7` 的后半）：只读门禁/DDL 黑名单有了，但没有"谁在什么时候跑了什么" | agent 侧安全追溯缺一环（R6 的缓解项） | 小～中 |
-| G7 | **「打开 SQL 工作台」命令入口** | 未做（`M2-8`）：契约里有 `openTab`，没有命令/DOM 入口调用它 | 右栏 tab 被关或布局异常时没有兜底入口（R10） | 小 |
-| G8 | **复制连接** | 未做（`M1-4` 尾项） | 建同类连接要重填一遍 | 小 |
-| G9 | **导出 INSERT / 转置 / 列显隐** | 未做；导出只有 CSV/TSV/XLSX | 拿结果去造测试数据不方便 | 小～中 |
-| G10 | **执行计划 / EXPLAIN 视图** | 未做 | 慢查询只能自己跑 EXPLAIN 看网格 | 中 |
-| G11 | **事务 / 自动提交开关、会话管理** | 未做（连接一律自动提交） | 需要显式事务的场景做不了 | 中～大 |
-| G12 | **多结果集**（存储过程 `CALL` 返回多个结果集） | 未做（`mysql2` 只取第一个结果集） | 调存储过程时看不到后续结果 | 中 |
-| G13 | **单元格编辑回写**（N1） | 明确不做（P1） | 分析场景够用；要改数据得回 DataGrip | 大 |
-| G14 | **SSH/SSL 隧道**（N3） | 明确不做（P1）：现有数据源都内网直连 | 换到需要跳板的环境就用不了 | 中 |
-| G15 | **Oracle / Java 桥**（N7） | 明确不做（P1，2026-10-17 决定） | 基本不用 Oracle | 很大 |
-| G16 | **对象树的键/索引/触发器节点、结构比对、拖拽生成 JOIN** | 未做（PRD N2 已注明"仍不做"） | 设计表/查约束时要切回 DataGrip | 中～大 |
+**对抗性审查 15 条全闭合**（详见 `10` §15.6）：A1 换连接不再复用旧 console；A2/A4 改为至少一次（宁可重复不丢）；A3 抽屉落地；A5 上限不可被调用方调大；A6 补 `Last-Event-ID` 续传；A7 改按 **UTF-8 字节**（`TextEncoder`，共享模块不能用 `Buffer`）；A8 信封结构校验；A9 行预算；A10 复用换 label 同步标题；A11 spool 24h 清理；A12–A15 无障碍、文案与测试稳定性。
 
-**G1 的两条路线（尚未决策，需要 spike）**
+**验证**：745 测试通过（54 文件；基线 712）、`tsc --noEmit` 干净、`build.mjs` 三产物成功。
 
-| 方案 | 体积/集成 | 收益 | 代价 |
-|---|---|---|---|
-| **CodeMirror 6**（优先） | 按需拼装，通常 150–300KB 打进 bundle；样式走 JS 注入（`EditorView.theme`），不额外产 CSS 文件；无 worker | `@codemirror/lang-sql` 自带 MySQL 方言 + schema 补全/别名解析，可直接吃掉我们现在的 `completion`/`highlight`/`editor`/`caret`；折叠、查找、多光标、Tab 缩进、注释开箱即用 | 要重写 `SqlEditor` 适配层；IME（中文输入）、大文本粘贴、撤销栈与受控状态同步要逐项真机验证 |
-| Monaco | 2–5MB，需要 worker + 独立 CSS，`__ModuleLoader__` 工厂内加载 worker 很别扭 | IDE 级（诊断、跳转定义、多文件） | 对"跑一条 SQL 看结果"过重，包体与加载成本不划算 |
+**留下的尾巴**：无未闭合项。刻意不做：一键把 agent SQL 发到自己的 console（promote）、流式投递、多 agent 并发、连接级写权限细分。
 
-我们的约束不影响打包：`build.mjs` 只把 `react`/`react-dom` 当壳模块，第三方依赖由 esbuild 打进 `client.js`（产物门禁只拦 `require("@deepseek-ai/…")` 与 `require("react/…")`）。spike 的验收线建议定为：bundle 增量 ≤150KB、5000 行脚本输入不卡、中文 IME 与 Ctrl+Enter/Ctrl+Space/Esc 全部行为保持、per-file 100% 只算我们自己的适配层。
+### 补齐（2026-10-21）：对象树收起不占位 + 布局持久化
 
-**在此之前可以先做不换内核的低成本补齐**：Tab/Shift+Tab 缩进、Ctrl+/ 注释、跳转行、以及「格式化 SQL」（可复用 SQL 分词器，不必引入库）。
+**「收起后被挤压」的真因**：不是 rail 太宽，而是收起时内联 `gridTemplateColumns` 变成 `undefined`，而 `.workspace` 没有默认模板 → Grid 按 `grid-auto-flow: row` 把 rail 与面板列**排成上下两行**。改为两态都显式写模板（收起 = 单列 `minmax(0, 1fr)`，并补 `gridTemplateRows: minmax(0, 1fr)` 让单行吃满高度），列与 sash 一起消失。
+
+**按钮位置**：从「树面板头 `«` + 收起后 22px 竖排 rail」改为**单一常驻开关**，放在 console 标签条最左端（`«` / `»`，`aria-expanded` 表状态）；标签条横向滚动时 `position: sticky` 吸左，不会被滚走；展开时按当前工作区重新 clamp 宽度。顺带把 `+`、AI 历史、开关移出 `role="tablist"`（内层 `display: contents` 保持一行 flex）。
+
+**布局持久化（09 B3，已完成并从待办移除）**：新增宿主 `layout` 文档（`documents` 表 key `layout`，内容 `{treeOpen, treeWidth, editorHeight}`），面板经 `GET / POST /dsh-data-ide/layout` 读写。恢复时**按当前工作区 clamp**（只有浏览器知道面板现在多宽），`0` / 负数 / 非有限值回落默认（不是 clamp 到最小值）；写入 400ms 去抖，且必须等恢复完成才允许写，避免把默认值覆盖存档。职责划分：宿主只存不校验，浏览器负责解释。
+
+**验证**：758 测试（55 文件）、`tsc --noEmit` 干净、`build.mjs` 成功。
+
+### 补齐（2026-10-21）：MCP schema 工具、工作台入口、补全排序
+
+**B1 · MCP `get_schema` / `list_tables`**：agent 之前看不到任何表结构，只能 `SELECT * … LIMIT 1` 猜列。两个工具复用**面板同一个** `createSchemaReader`（同一解析路径、5 分钟缓存），所以树和 agent 不可能对「有什么表」产生分歧。`get_schema` 支持 `table` 收窄（`表名` 或 `库.表名`）；`list_tables` 只给名字/类型/列数，先摸底用。工具面 7 → **9 个**。
+
+**B2 · 「打开 SQL 工作台」入口**：tab 被关掉、或右栏收起时没有任何可点入口。加 `Ctrl/⌘+Shift+L` 快捷键（`entry.ts`，判定是纯函数），调用 `sidebarRight.openTab(kind)`——页类型是 `multiple: false`，宿主据此「已开则聚焦、未开则打开、右栏收起则展开」。绑定函数在非 DOM 环境自动降级（`client.spec` 跑在 node 环境，直接摸 `window` 会把整个入口打挂）。
+
+**补全排序（用户反馈：打 `S` 不出 `select`）**：实测确认**弹窗有开、候选也有**，问题是 `lang-sql` 的关键字表按**字母序**排：`S` 的前 40 条是 `SAVEPOINT/SCHEDULE/SCHEMA/SCHEMA_NAME/SCHEMAS/SCROLL/SEARCH/SECOND`，`SELECT` 在折叠线以下；空前缀时 559 条从 `ABSOLUTE` 开始。修法：`completion-rank.ts` 提供约 45 个高频词的 `boost`（参与匹配打分，只改顺序）+ 12 个 live templates（`sel`/`selw`/`ins`/…，两字符起、展开为带光标占位的骨架，boost 高于关键字）。
+
+**验证**：773 测试（58 文件）、`tsc --noEmit` 干净、`build.mjs` 成功（client 538KB）。
+
+### 收尾（2026-10-21）：死代码清理、文档定稿
+
+| 项 | 内容 |
+|---|---|
+| **清理** | 删除 5 处确认无人引用的导出：`entry.ts: OPEN_SHORTCUT_HINT`（文案已在 locales）、`contract/host.ts: SidebarRightTabActions`、`PanelBoundary.tsx: PanelBoundaryElement`、`grid.ts: filterIndexes`（早已被服务端筛选取代，docs/02 有注）、`metadata.ts: toSchemaIndex`（`{tables}` 的薄包装） |
+| **接活** | `documents.ts: isAgentPoolFull` 此前只有测试在用，现接入投递提示：「ai_X 已出结果（AI 控制台已达 4 个，可关闭不用的）」——补上软上限缺的那个信号 |
+| **测试** | 随死代码删掉 7 条失效用例（filterIndexes 5 条 + toSchemaIndex 1 条 + 收尾合并 1 条），净 **782 → 775**；没有为凑数保留死代码 |
+| **文档** | `00` 索引补 10 号文档；`09` P0 段改为「已清空」并指回本节；`08` 新增批次 8 复盘 **R22（同路径只注册一次）/ R23（先 text 后 json）/ R24（void 必须接 catch）**；`10` 新增 §16「上线后修复」；`03` 补全策略与布局持久化说明；`05` 工具清单 9 个 |
+| **验证** | 775 测试（60 文件）、`tsc --noEmit` 干净、`build.mjs` 三产物成功（client 539KB） |
+
+**收尾时仍明确不做**：补全的语法位置感知（`FROM` 后只给表、别名解析）、关键字大小写跟随、promote（一键把 agent SQL 发到自己的 console）、流式投递、多 agent 并发。
+
+## 8. 未完成清单
+
+**已迁移**：唯一待办清单改为 `09-BACKLOG.md`（2026-10-20）。本文件只记录「做过什么」与「做过之后留下的尾巴」，避免两份清单打架。
+
+历史沿革：本节的 G1（编辑内核）、G2（折叠）、G3（服务端筛选）三项已于 2026-10-20 完成，其余 G4–G16 已并入 09 的 B1–B17。
+
+### 8.1.1 编辑器迁移留下的尾巴
+
+| 项 | 说明 |
+|---|---|
+| bundle 体积 | client 半 176KB → **539KB**（2026-10-21 收尾；gzip 约 175KB），已开 `minify`；拆解：核心 view 277KB / 语言+折叠 +9KB / lang-sql +61KB / search+autocomplete +58KB / agent 流+注册表+补全排序 +26KB。若要更小见 09 B12 |
+| 测试耗时 | 全量套件从 ~17s → ~2m15s：每个 jsdom 测试文件都要初始化 CodeMirror。已加 `Range.getClientRects` 补丁（否则会报未处理异常） |
+| 补全的类型标签 | CodeMirror 自带的 `keyword/table/column` 文案仍是英文，未本地化 |
+| 窄面板替换 | <460px 宽时隐藏「替换」控件（只能查找），加宽面板后恢复 |
 
 ### 8.2 已做但还差一口气
 
 | # | 项 | 差什么 |
 |---|---|---|
-| P1 | 布局尺寸 | 拖动后的左栏宽度/编辑区高度**不持久化**，重开回到 244/224；`dsh-split` 是落盘的 |
 | P2 | 脚本执行的取消 | 多语句执行没有回传 `statementId`，脚本跑到一半无法取消（单语句可取消） |
 | P3 | 值查看器 | 只读；DataGrip 的 Value Editor 可编辑 |
 | P4 | 补全 | 表/列启发式已够用；但跨库同名表不区分前缀、不支持函数/关键字的上下文排序 |
 | P5 | 状态栏聚合 | 只对"当前列"聚合；DataGrip 的 Aggregate View 能对多列同时给摘要 |
-| P6 | MCP 工具面 | 只有 6 个（ping/list_datasources/test_connection/execute_sql/fetch_page/cancel_statement）；**agent 读不到表结构**（面板有 `schema` 路由，MCP 没有对应工具） |
+| P6 | MCP 工具面 | 9 个（ping / list_datasources / test_connection / **get_schema / list_tables** / execute_sql / execute_script / fetch_page / cancel_statement），agent 已能读表结构；仍缺脚本目录与 git 的 6 个工具（M3） |
 | P7 | 分发 | 只在 `dev-sql-021` profile 里跑；装进 `web` profile（桌面端实际用的那个）需要用户明确批准（R13），`pack-plugin` 打包校验也没做过完整一轮 |
 
 ### 8.3 明确不做（维持原判）

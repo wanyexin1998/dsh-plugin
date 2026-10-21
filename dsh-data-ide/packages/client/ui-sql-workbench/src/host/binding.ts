@@ -16,7 +16,7 @@ import { type ExecutionResult, cancelStatement, runExecuteSql, runFetchPage } fr
 import { createMysqlExecutor } from '../execute/mysql.ts'
 import { probeMysql } from '../../mcp/probe-mysql.ts'
 import type { ConnectionProbe } from '../../mcp/probe.ts'
-import { type PanelApi, createExecution, createPanelApi } from './panel-service.ts'
+import { type PanelApi, LAYOUT_KEY, createExecution, createPanelApi } from './panel-service.ts'
 import { createSchemaReader } from './metadata.ts'
 import { type KvStore } from './kv.ts'
 import { type CredentialStore, createCredentialStore } from './credentials.ts'
@@ -168,6 +168,9 @@ export interface SqlWorkbenchService {
   fetchPage(request: ExecuteRequest): Promise<ExecutionResult>
   /** Abort a statement by the id the panel minted. */
   cancel(statementId: string): Promise<{ readonly cancelled: boolean }>
+  /** Last saved layout document (docs/09 B3), unvalidated. */
+  readLayout(): Promise<unknown>
+  saveLayout(layout: unknown): Promise<void>
 }
 
 /** Resolve the harness home the same way the bundle patch does. */
@@ -189,7 +192,9 @@ export async function startHostServices(
 ): Promise<{ readonly service: SqlWorkbenchService; readonly api: PanelApi; readonly dispose: () => Promise<void> }> {
   const domain = await ctx.storageDomain.open(DOMAIN_SPEC)
   const credentials = createCredentialStore(createCredentialsPort(ctx.credentials))
-  const inner = createDataSourceStore(createKvStore(domain))
+  /** One handle per table: connections and layout share the documents table. */
+  const kv = createKvStore(domain)
+  const inner = createDataSourceStore(kv)
   const specPath = runtimeSpecPath(resolveHome(ctx))
 
   const publish = async (): Promise<void> => {
@@ -214,11 +219,16 @@ export async function startHostServices(
     execute: request => runExecuteSql(execution, request),
     fetchPage: request => runFetchPage(execution, request),
     cancel: statementId => cancelStatement(execution, statementId),
+    readLayout: async () => (await kv.get(LAYOUT_KEY)) ?? null,
+    saveLayout: async layout => {
+      await kv.put(LAYOUT_KEY, layout)
+    },
   }
 
   const api = createPanelApi({
     dataSources,
     credentials,
+    kv,
     execution: createExecution(execution),
     probe: options.probe ?? probeMysql,
     scriptDeps: execution,

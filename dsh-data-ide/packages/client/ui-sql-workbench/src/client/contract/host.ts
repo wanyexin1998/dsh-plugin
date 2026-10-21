@@ -93,13 +93,6 @@ export interface SidebarRightController {
   openResource(address: string, options?: SidebarRightPlacement): void
 }
 
-/** Actions handed to a mounted tab body. */
-export interface SidebarRightTabActions {
-  readonly openTab: (kind: string, options?: SidebarRightPlacement) => void
-  readonly openResource: (address: string, options?: SidebarRightPlacement) => void
-  readonly close: () => void
-}
-
 /** Root client context of the browser half. */
 export interface ClientContext {
   /** Run a registration for the plugin's lifetime; returns whatever the callback returns. */

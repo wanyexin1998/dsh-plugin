@@ -20,7 +20,10 @@
 | R9 | 工程效率 | per-file 100% coverage 门禁拖累迭代 | 高 | 低 | 先写测试再写实现（TASP）；豁免仅限不可达分支并附 reason；UI 测试聚焦渲染状态矩阵 | 迭代速度下降 | 06 §9 |
 | R10 | UI 正确性 | ~~分屏 capacity 生命周期~~ → **已关闭**：0.1.7 右栏不需要 `requestCapacity`，改为页面类型注册 + `rightbar.session` 按会话实例化 | 低 | 低 | 保留「打开 SQL 工作台」入口（`sidebarRight.openTab(kind)`），不依赖任何容量协商 | 右栏里找不到 tab 入口 | 06 §12.7.3 |
 | R11 | 范围 | 编辑回写/introspection/SSH 请求回流（N1-N3） | 中 | 中 | PRD 非目标清单 + P1 候选登记；变更走 RFC 与 G0 复审 | 迭代中范围争议 | 01 §5 |
-| R13 | 安装 | 桌面端跑的是 **`web` profile**（`dsh-desktop` 传 `--profile web`），而任务书原假设用独立 dev profile；把插件装进 `web` 会改动用户活动环境 | 中 | 中 | M0 全程只在 `dev-sql` 验证；装入 `web` 前必须取得用户明确批准；装后立即用 `dsh --profile web --dump-config` 复核 bundles | 用户在 web profile 里看到未授权变更 | 06 §12.1 |
+| R13 | 安装 | **2026-10-20 更正**：桌面应用（`DeepSeek Harness.exe`）用的是 **`desktop` profile**，不是 `web`；且 `desktop` 由 Electron 独占，CLI 连 `--dump-config` 都会被拒 → 装完**无法用 CLI 端到端验证**，只能由人点快捷方式肉眼确认。`web` 是另一套手工环境 | 中 | 中 | 装前备份 profile 配置（本次：`/tmp/desktop-profile-backup-20261020-132115`、`/tmp/web-profile-backup-20261020-130142`）；`plugin add` 后看 `package.json` 的 `dsh.profile.bundles` 是否多出 `dsh-data-ide`；`dev-sql-021` 同步 link 同一份源码，用它做自动化验证；启动失败时看 `~/.dsh/logs/startup-*.log`（**只在失败时写**，没有新日志即启动成功） | 桌面端启动异常 / 右栏找不到 tab | 06 §12.1 |
+| R17 | 工程效率 | **测试套件变慢**（CodeMirror 迁移后 ~17s → ~2m15s）：每个 jsdom 文件都要初始化 EditorView，测量回调还需 `Range.getClientRects` 补丁 | 高 | 低 | 已加 `tests/setup/jsdom-cm.ts`；进一步优化见 09 B11 | 每次 precommit 等两分钟，久而久之绕过门禁 | 07 §8.1.1 |
+| R18 | 性能 | **client bundle 变大**（176KB → 513KB / gzip 167KB）：CodeMirror 自带 view 引擎 277KB + 方言 61KB + 查找补全 58KB | 中 | 低 | 已对 client 目标开 `minify`；体积基线写进 06；进一步裁剪见 09 B12 | 首屏变慢 / 产物膨胀 | 06 §3、07 §8.1.1 |
+| R19 | 数据正确性 | **Doris 的 `information_schema.COLUMNS` 不返回视图列**：以 COLUMNS 为对象清单会整类丢视图（真实库 21 对象丢到 15）。已改为 TABLES 定对象（2026-10-20） | 中 | 中 | `withObjects()` 合并 + 第三列 TABLE_TYPE 校验；无列对象在树里保留并显示「无列信息（视图）」 | 用户以为库是空的 / 找不到视图 | 07 批次 7 |
 | R12 | 合规 | 商标与命名：不得使用 JetBrains/DataGrip 名称/Logo；Oracle 驱动 OTN 许可；mysql2 MIT（无 GPL 传染，记录为选型收益） | 低 | 高 | 品牌三层命名（00 §7）；驱动许可声明随包；法务评审发布物 | 发布物含商标元素 | 00 §8 |
 
 ## 2. 高风险项的验证实验（spike）排期
@@ -32,6 +35,24 @@
 | S3 Java 桥最小闭环 | R4 | M4 D1-D3 | `java -jar` 桥经 stdio 完成 Oracle `SELECT 1`；冷启动/保活/崩溃恢复策略验证 |
 | S4 git 目录隔离与凭据 | R5 | M3 D1 | 临时 repo 完成 status/diff/commit/pull/push；token 不经 env 不经日志 |
 | S5 MCP 权限默认策略 | R6 | M2 D2 | 默认拒绝写；writeEnabled 放行；审计日志可见 |
+
+## 2.3 批次 8 复盘（2026-10-21）
+
+| 风险 | 状态 | 说明 |
+|---|---|---|
+| R22 同路径重复注册 | **已处置** | `ROUTES.layout` 同时被 `carrier.register`（GET）与 `post()`（POST）注册，宿主路由表是**一个路径一个 handler**，后者顶掉前者 → GET 打到 POST handler，宿主直接回 **405 且响应体为空**。规则：**一条路径只注册一次**，多方法在 handler 内按 `req.method` 分派；用例断言「路由表无重复路径」 |
+| R23 `response.json()` 当成安全操作 | **已处置** | 空 body（404/405/204/连接中断）会让 `json()` 抛 `SyntaxError: Unexpected end of JSON input`，把真实原因（路由/方法不对）伪装成 JSON 语法错误。规则：**先 `text()` 再解析**，空 body 报 `EMPTY_RESPONSE` 并带上路由与状态码 |
+| R24 后台调用未接错误 | **已处置** | 执行链路全是 `void xxx()`，一旦拒绝就变成 unhandled rejection；现在 `withConnection` 统一 try/catch + 3 处链式调用补 catch，错误进右下角提示 |
+
+## 2.2 批次 7 复盘（2026-10-20）
+
+| 风险 | 状态 | 说明 |
+|---|---|---|
+| R17 测试耗时 | **开放** | CodeMirror 每文件初始化是硬成本；已把 jsdom 补丁固化，剩余优化见 09 B11 |
+| R18 体积 | **缓解中** | minify 已开；基线写入 06 §3，若继续涨就裁扩展或改按需加载 |
+| R19 视图缺失 | **已处置** | 对象清单改以 TABLES 为准；同一根因也解释了「ods_db 整库不见」 |
+| R20 事件型 bug 逃过测试 | **已处置** | 右键菜单失效是因为测试直接 `.click()`、跳过 pointerdown。规则：菜单/浮层类用例必须按真实事件序列（pointerdown→pointerup→click）写 |
+| R21 错误路径只覆盖一半 | **已处置** | 数据库拒绝有「返回 ok:false」与「HTTP 5xx 抛异常」两形态，之前只翻了前者。规则：凡"对结果做后处理"的逻辑，返回值与异常两条路都要有用例 |
 
 ## 2.1 M0 复盘（2026-10-17）
 

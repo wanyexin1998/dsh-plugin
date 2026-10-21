@@ -74,7 +74,7 @@
 | N1 | 单元格编辑回写（INSERT/UPDATE/DELETE 生成） | DataGrip 该能力=MutationsStorage+DML 生成器（评估 #11，中难度）；MVP 聚焦只读分析场景；P1 候选 |
 | N2 | schema 树/introspection | 评估 #12 中难度；2026-10-19 落地窄版（表 → 列，可筛选、点击插入），同日**升级为层级化对象树**：数据源 → 库 → 表/视图 分组 → 对象 → 列，表右键可 打开数据 / 复制引用 / 查看 DDL（`SHOW CREATE` 走 `raw` 执行模式）/ 刷新，跨库浏览已支持；**仍不做**：键/索引/触发器节点、结构比对、拖拽生成 JOIN |
 | N3 | SSH/SSL 隧道 | SPEC §5 有完整设计，但当前数据源均内网直连（doris.shcell.com/172.26.200.92 无需隧道）；P1 |
-| N4 | SQL 智能补全/解析器 | 评估 #14 很高难度（JetBrains PSI 级十年积累）；**2026-10-19 落地「可用的一半」**：关键字 + 表/列补全（`src/client/completion.ts` 的 token/关键字启发式 + `src/host/metadata.ts` 的 information_schema introspection，按连接 5 分钟缓存）。**仍然不做**：PSI 级解析、作用域/CTE 推导、语义校验、语法高亮 |
+| N4 | SQL 智能补全/解析器 | 评估 #14 很高难度（JetBrains PSI 级十年积累）；**2026-10-19 落地「可用的一半」，2026-10-20 换内核**：补全与高亮改由 CodeMirror 6 的 `@codemirror/lang-sql`（MySQL 方言 + schema 命名空间）承担，表/列/别名补全与语法高亮都开箱可用，`src/host/metadata.ts` 的 introspection（按连接 5 分钟缓存）为其供数据。**仍然不做**：PSI 级作用域/CTE 推导、语义校验、跨库同名表的智能前缀 |
 | N5 | 多结果集对比/图表 | 超出"轻量"定位；网格插件（grid-plugin）已有图表能力，不重复 |
 | N6 | 远程执行（WSL/Docker/Eel 类似物） | 评估 P2；dsh 自身远程能力就绪后再评估 |
 | N7 | **Oracle 连接与 Java 桥**（原 M4） | 2026-10-17 用户决定：基本不用 Oracle，整块降级 P1；不做桥即不必分发 ojdbc11，也就没有 OTN 许可负担 |

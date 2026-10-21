@@ -67,7 +67,17 @@ packages/client/ui-sql-workbench/
 规则：
 - `peerDependencies` 每个 `@deepseek-ai/dsh[-*]` 必须 semver 满足运行时 dsh（origin/master 0.1.7-rc.1 起强制，不满足则 profile 启动拒绝插件，除非精确豁免）——peer 范围随 harness 发版管理；
 - `dsh.client` 必须有 `./client` 导出（扫描抛错）；`inject` 是信息性边；`external` 是模块表边（同步 require，必须已被供给）；
-- 第三方依赖最小化：前端零新依赖（全用 ui-primitives + clsx）；MCP server 侧 `@modelcontextprotocol/sdk` + `mysql2` 进 `dependencies`。
+- 第三方依赖最小化：**2026-10-20 起前端新增 CodeMirror 6 一组依赖**（`@codemirror/{state,view,language,commands,search,autocomplete,lang-sql}` + `@lezer/highlight`，均为 MIT，由 esbuild 打进 `client.js`，不占宿主模块表；产物门禁只拦 `require("@deepseek-ai/…")` 与 `require("react/…")`）。MCP server 侧 `@modelcontextprotocol/sdk` + `mysql2` 进 `dependencies`。
+
+### 3.1 产物体积基线（2026-10-20）
+
+| 目标 | 体积 | 说明 |
+|---|---|---|
+| `lib/client.js` | **513KB**（gzip 167KB） | CodeMirror 前为 176KB；已对该目标开 `minify`。拆解：核心 view 277KB / 语言+折叠 +9KB / lang-sql +61KB / search+autocomplete +58KB |
+| `lib/index.js` | 786KB | node 半（含 storage/凭据/路由） |
+| `lib/mcp/server.js` | 759KB | MCP server |
+
+体积再涨的处理顺序：裁扩展（09 B12）→ 按需加载 → 才考虑拆包。
 
 ## 4. 纯度规则（构建期门禁）
 

@@ -18,6 +18,8 @@ interface Harness {
   readonly definitions: SidebarRightTabDefinition[]
   readonly registrations: Registration[]
   readonly injected: string[]
+  /** Kinds passed to `sidebarRight.openTab`, in order. */
+  readonly opened: string[]
 }
 
 function harness(options: { readonly supported?: boolean; readonly api?: unknown } = {}): Harness {
@@ -25,6 +27,7 @@ function harness(options: { readonly supported?: boolean; readonly api?: unknown
   const definitions: SidebarRightTabDefinition[] = []
   const registrations: Registration[] = []
   const injected: string[] = []
+  const opened: string[] = []
   const supported = options.supported ?? true
 
   const ctx = {
@@ -49,7 +52,10 @@ function harness(options: { readonly supported?: boolean; readonly api?: unknown
     ...(options.api === undefined ? {} : { sqlWorkbench: options.api }),
     ...(supported
       ? {
-          sidebarRight: { openTab: () => {}, openResource: () => {} },
+          sidebarRight: {
+            openTab: (kind: string) => { opened.push(kind) },
+            openResource: () => {},
+          },
           sidebarRightTabs: {
             register(definition: SidebarRightTabDefinition): () => void {
               definitions.push(definition)
@@ -60,7 +66,7 @@ function harness(options: { readonly supported?: boolean; readonly api?: unknown
       : {}),
   } as unknown as ClientContext
 
-  return { ctx, effects, definitions, registrations, injected }
+  return { ctx, effects, definitions, registrations, injected, opened }
 }
 
 describe('client half', () => {
@@ -91,6 +97,7 @@ describe('client half', () => {
       'dsh-data-ide: sidebar tab type',
       'dsh-data-ide: sidebar tab body',
       'dsh-data-ide: sidebar tab title',
+      'dsh-data-ide: open shortcut',
     ])
     expect(h.definitions).toHaveLength(1)
     const definition = h.definitions[0]!

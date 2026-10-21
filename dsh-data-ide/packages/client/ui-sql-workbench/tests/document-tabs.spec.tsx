@@ -33,14 +33,18 @@ afterEach(() => {
   container.remove()
 })
 
-function render(tabs: DocumentTab[], activeId: string, canCreate = true) {
-  const calls = { select: [] as string[], close: [] as string[], create: [] as number[] }
+function render(tabs: DocumentTab[], activeId: string, canCreate = true, archived: DocumentTab[] = [], objectsOpen = true) {
+  const calls = { select: [] as string[], close: [] as string[], create: [] as number[], restore: [] as string[], toggle: [] as number[] }
   act(() => {
     root.render(
       <DocumentTabs
         tabs={tabs}
         activeId={activeId}
         connectionNames={{ c1: 'doris', c2: 'zanmal_read' }}
+        archived={archived}
+        onRestore={id => calls.restore.push(id)}
+        objectsOpen={objectsOpen}
+        onToggleObjects={() => calls.toggle.push(1)}
         onSelect={id => calls.select.push(id)}
         onClose={id => calls.close.push(id)}
         onCreate={() => calls.create.push(Date.now())}
@@ -120,5 +124,89 @@ describe('document tabs: unknown connection', () => {
     render([tab('a', 'console_1', 'deleted-conn')], 'a')
 
     expect(container.querySelector('[title^="未连接"]')).not.toBeNull()
+  })
+})
+
+describe('document tabs: AI history', () => {
+  it('hides the history entry until a console has been archived', () => {
+    render([tab('a', 'console_1', 'c1')], 'a')
+
+    expect(container.querySelector('[data-sql-agent-history]')).toBeNull()
+  })
+
+  it('lists archived consoles and restores the one clicked', () => {
+    const view = render(
+      [tab('a', 'console_1', 'c1')],
+      'a',
+      true,
+      [tab('x', 'ai_月报', 'c1'), tab('y', 'ai_订单排查', 'c1')],
+    )
+
+    const entry = container.querySelector('[data-sql-agent-history]') as HTMLButtonElement
+    expect(entry.textContent).toContain('AI 历史 2')
+
+    act(() => {
+      entry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const items = [...container.querySelectorAll('[data-sql-agent-history-menu] [role="menuitem"]')]
+    expect(items.map(node => node.textContent)).toEqual(['ai_月报', 'ai_订单排查'])
+
+    act(() => {
+      items[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(view.calls.restore).toEqual(['y'])
+    expect(container.querySelector('[data-sql-agent-history-menu]')).toBeNull()
+  })
+
+  it('marks an unread agent console with a new-result dot', () => {
+    render([{ ...tab('agent', 'ai_月报', 'c1'), owner: 'agent', unread: true }], 'agent')
+
+    expect(container.querySelector('[aria-label="有新结果"]')).not.toBeNull()
+  })
+
+  it('works without the optional history and object-browser callbacks', () => {
+    act(() => {
+      root.render(
+        <DocumentTabs
+          tabs={[tab('a', 'console_1', 'c1')]}
+          activeId="a"
+          connectionNames={{ c1: 'doris' }}
+          onSelect={() => undefined}
+          onClose={() => undefined}
+          onCreate={() => undefined}
+          canCreate
+        />,
+      )
+    })
+
+    expect(container.querySelector('[data-sql-tree-toggle]')).toBeNull()
+    expect(container.querySelector('[data-sql-agent-history]')).toBeNull()
+  })
+})
+
+describe('document tabs: object browser toggle', () => {
+  it('sits outside the tablist so collapsing never costs a column', () => {
+    render([tab('a', 'console_1', 'c1')], 'a', true, [], false)
+
+    const toggle = container.querySelector('[data-sql-tree-toggle]') as HTMLButtonElement
+    expect(toggle).not.toBeNull()
+    expect(toggle.closest('[role="tablist"]')).toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toBe('»')
+    expect(toggle.getAttribute('aria-label')).toBe('展开对象树')
+  })
+
+  it('reflects the open state and reports the click', () => {
+    const view = render([tab('a', 'console_1', 'c1')], 'a', true, [], true)
+
+    const toggle = container.querySelector('[data-sql-tree-toggle]') as HTMLButtonElement
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toBe('«')
+
+    act(() => {
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(view.calls.toggle).toHaveLength(1)
   })
 })

@@ -1,6 +1,6 @@
 import * as React from 'react'
 
-import type { ErrorInfo, ReactElement, ReactNode } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
 
 import { classes as styles } from '../styles.ts'
 
@@ -45,6 +45,3 @@ export class PanelBoundary extends React.Component<PanelBoundaryProps, PanelBoun
     )
   }
 }
-
-/** Convenience alias so registrations can name the error surface directly. */
-export type PanelBoundaryElement = ReactElement<PanelBoundaryProps>

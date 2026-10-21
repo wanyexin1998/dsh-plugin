@@ -98,12 +98,13 @@ describe('panel: multi-statement run', () => {
     })
 
     expect(executeScript).toHaveBeenCalledWith({ connId, sql: 'SELECT 1; SELECT 2', pageSize: 500 })
-    const tabs = [...container.querySelectorAll('[data-sql-script] [role="tab"]')]
+    // Result tabs only: the strip also carries 输出.
+    const tabs = [...container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])')]
     expect(tabs).toHaveLength(2)
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
 
     click(tabs[0])
-    expect(container.querySelectorAll('[data-sql-script] [role="tab"]')[0]?.getAttribute('aria-selected')).toBe('true')
+    expect(container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])')[0]?.getAttribute('aria-selected')).toBe('true')
   })
 
   it('refetches the active statement for the next page and for a sort', async () => {
@@ -127,7 +128,9 @@ describe('panel: multi-statement run', () => {
     })
     expect(api.fetchPage).toHaveBeenCalledWith(expect.objectContaining({ sql: 'SELECT 1', offset: 500 }))
 
-    click(byText('button', 'v'))
+    // Target the column header explicitly: tab titles now carry the column name
+    // (`v:int`), so a text match would hit the tab instead.
+    click(container.querySelector('th button') as HTMLElement)
     await act(async () => {
       await Promise.resolve()
     })
@@ -367,3 +370,110 @@ describe('panel: refresh', () => {
   })
 })
 
+
+describe('panel: per-tab result state (R6)', () => {
+  const settle = async (): Promise<void> => {
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+
+  /** Result tabs only: the strip also carries 输出. */
+  const resultTabs = (): Element[] => [
+    ...container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])'),
+  ]
+  /** Change the pager's page size; it is a `<select>`, not a row of buttons. */
+  const setPageSize = (size: string): void => {
+    const select = container.querySelector('[aria-label="页大小"]') as HTMLSelectElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(select, size)
+    act(() => {
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  async function mountTwoStatements(fetchPage: WorkbenchApi['fetchPage']): Promise<void> {
+    const api = apiDouble({
+      executeScript: vi.fn(async () => ({
+        durationMs: 5,
+        statements: [
+          { index: 0, sql: 'SELECT 1', ok: true as const, response: { ...page([[1]], 1000), hasNextPage: true } },
+          { index: 1, sql: 'SELECT 2', ok: true as const, response: { ...page([[2]], 1000), hasNextPage: true } },
+        ],
+      })),
+      fetchPage,
+    })
+    await mountWithScript(api, 'SELECT 1; SELECT 2')
+    click(container.querySelector('[aria-label="执行"]'))
+    await settle()
+  }
+
+  it('toggles the ordering within one statement tab', async () => {
+    const fetchPage = vi.fn(async () => ({ ok: true as const, ...page([[9]], 1000) }))
+    await mountTwoStatements(fetchPage)
+
+    click(container.querySelector('th button'))
+    await settle()
+    click(container.querySelector('th button'))
+    await settle()
+
+    // A second click on the same header must flip to DESC. The old code derived
+    // the baseline from the console-wide `query.sort`, which script sorting never
+    // updated, so it stayed ASC forever.
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: { column: 'v', direction: 'DESC' } }),
+    )
+  })
+
+  it('keeps one ordering per statement tab', async () => {
+    const fetchPage = vi.fn(async () => ({ ok: true as const, ...page([[9]], 1000) }))
+    await mountTwoStatements(fetchPage)
+
+    // A run activates its last tab, so these clicks belong to statement 2.
+    click(container.querySelector('th button'))
+    await settle()
+    click(container.querySelector('th button'))
+    await settle()
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: { column: 'v', direction: 'DESC' } }),
+    )
+
+    // Statement 1 has its own baseline: one click is ASC.
+    click(resultTabs()[0])
+    await settle()
+    click(container.querySelector('th button'))
+    await settle()
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sql: 'SELECT 1', sort: { column: 'v', direction: 'ASC' } }),
+    )
+
+    // Back on statement 2, its DESC must still be the baseline: the next click
+    // clears the ordering (none) instead of restarting at ASC.
+    click(resultTabs()[1])
+    await settle()
+    click(container.querySelector('th button'))
+    await settle()
+    const last = fetchPage.mock.calls.at(-1) as unknown as [{ readonly sort?: unknown }] | undefined
+    expect(last?.[0].sort).toBeUndefined()
+  })
+
+  it('remembers the page size per tab', async () => {
+    const fetchPage = vi.fn(async () => ({ ok: true as const, ...page([[9]], 1000) }))
+    await mountTwoStatements(fetchPage)
+
+    // The active tab after a run is the last one; resize that one.
+    setPageSize('1000')
+    click(byText('button', '下一页'))
+    await settle()
+    expect(fetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ pageSize: 1000 }))
+
+    // The first statement keeps the default: page size used to be console-wide.
+    click(resultTabs()[0])
+    await settle()
+    click(byText('button', '下一页'))
+    await settle()
+    expect(fetchPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sql: 'SELECT 1', pageSize: 500 }),
+    )
+  })
+})

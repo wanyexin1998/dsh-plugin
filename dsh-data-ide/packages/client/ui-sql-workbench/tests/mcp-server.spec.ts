@@ -32,7 +32,10 @@ describe('MCP server', () => {
       'ping',
       'list_datasources',
       'test_connection',
+      'get_schema',
+      'list_tables',
       'execute_sql',
+      'execute_script',
       'fetch_page',
       'cancel_statement',
     ])
