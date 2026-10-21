@@ -38,12 +38,43 @@ export interface SortSpec {
   readonly direction: 'ASC' | 'DESC'
 }
 
+/** Comparison a column filter applies. */
+export type FilterOp =
+  | 'contains'
+  | 'notContains'
+  | 'eq'
+  | 'ne'
+  | 'gt'
+  | 'ge'
+  | 'lt'
+  | 'le'
+  | 'isNull'
+  | 'notNull'
+
+/**
+ * One column filter, applied by the server to the wrapped statement.
+ *
+ * Filtering happens in SQL rather than in the grid because a page is only 100–
+ * 5000 rows: "find this order" has to reach the whole table, the way DataGrip's
+ * column filter does.
+ */
+export interface FilterSpec {
+  readonly column: string
+  readonly op: FilterOp
+  /** Ignored by `isNull` / `notNull`. */
+  readonly value?: string
+  /** Quote-free literal, decided from the driver's type name by the caller. */
+  readonly numeric?: boolean
+}
+
 export interface ExecuteRequest {
   readonly connId: string
   readonly sql: string
   readonly pageSize?: number
   readonly offset?: number
   readonly sort?: SortSpec
+  /** ANDed together in the paging wrapper; ignored by `raw` runs. */
+  readonly filters?: readonly FilterSpec[]
   /**
    * Caller-chosen statement id. The panel mints one so it can cancel a query it
    * started before the response arrives; when omitted the registry assigns one.
@@ -146,14 +177,61 @@ function quoteIdentifier(name: string): string {
  * Mirrors DataGrip's `WrapInSelect` shape: the user's SQL becomes a derived
  * table, so LIMIT/OFFSET/ORDER BY apply to the result rather than the original.
  */
-export function buildPagedQuery(sql: string, options: { readonly limit: number; readonly offset: number; readonly sort?: SortSpec }): string {
+export function buildPagedQuery(
+  sql: string,
+  options: {
+    readonly limit: number
+    readonly offset: number
+    readonly sort?: SortSpec
+    readonly filters?: readonly FilterSpec[]
+  },
+): string {
   const order = options.sort === undefined ? '' : ` ORDER BY ${quoteIdentifier(options.sort.column)} ${options.sort.direction}`
-  return `SELECT * FROM (\n${sql}\n) AS t${order} LIMIT ${options.limit} OFFSET ${options.offset}`
+  return `SELECT * FROM (\n${sql}\n) AS t${filterClause(options.filters)}${order} LIMIT ${options.limit} OFFSET ${options.offset}`
 }
 
 /** Independent count over the same statement; failure yields `null`, not an error. */
-export function buildCountQuery(sql: string): string {
-  return `SELECT COUNT(*) AS c FROM (\n${sql}\n) AS t`
+export function buildCountQuery(sql: string, filters?: readonly FilterSpec[]): string {
+  return `SELECT COUNT(*) AS c FROM (\n${sql}\n) AS t${filterClause(filters)}`
+}
+
+/** Longest value a filter may carry; longer input is a paste accident, not a filter. */
+const MAX_FILTER_VALUE = 200
+
+/** Escape a value into a SQL string literal. */
+function stringLiteral(value: string): string {
+  return `'${value.slice(0, MAX_FILTER_VALUE).replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
+}
+
+/** Numeric columns compare without quotes; anything unparsable falls back to a string. */
+function literalFor(filter: FilterSpec): string {
+  const value = filter.value ?? ''
+  if (filter.numeric === true && /^-?\d+(\.\d+)?$/.test(value.trim())) return value.trim()
+  return stringLiteral(value)
+}
+
+/** One condition; the column goes through the same identifier gate as ORDER BY. */
+function conditionSql(filter: FilterSpec): string {
+  const column = quoteIdentifier(filter.column)
+  const value = filter.value ?? ''
+  switch (filter.op) {
+    case 'contains': return `${column} LIKE ${stringLiteral(`%${value}%`)}`
+    case 'notContains': return `${column} NOT LIKE ${stringLiteral(`%${value}%`)}`
+    case 'eq': return `${column} = ${literalFor(filter)}`
+    case 'ne': return `${column} <> ${literalFor(filter)}`
+    case 'gt': return `${column} > ${literalFor(filter)}`
+    case 'ge': return `${column} >= ${literalFor(filter)}`
+    case 'lt': return `${column} < ${literalFor(filter)}`
+    case 'le': return `${column} <= ${literalFor(filter)}`
+    case 'isNull': return `${column} IS NULL`
+    case 'notNull': return `${column} IS NOT NULL`
+  }
+}
+
+/** ` WHERE a AND b`, or an empty string when there is nothing to filter. */
+export function filterClause(filters: readonly FilterSpec[] | undefined): string {
+  if (filters === undefined || filters.length === 0) return ''
+  return ` WHERE ${filters.map(conditionSql).join(' AND ')}`
 }
 
 /** Everything before the first semicolon, which is the statement we run. */
@@ -280,12 +358,17 @@ export async function executeSql(deps: ExecutionDeps, request: ExecuteRequest): 
 
   // The count runs alongside the page but must not hold it hostage.
   const counted = deps.executor
-    .query(resolved.spec, buildCountQuery(sql), `${statementId}-count`)
+    .query(resolved.spec, buildCountQuery(sql, request.filters), `${statementId}-count`)
     .then(result => Number((result.rows[0]?.[0] as number | undefined) ?? 0))
     .catch(() => null)
   const page = await deps.executor.query(
     resolved.spec,
-    buildPagedQuery(sql, { limit: pageSize + PROBE_ROWS, offset, ...(request.sort === undefined ? {} : { sort: request.sort }) }),
+    buildPagedQuery(sql, {
+      limit: pageSize + PROBE_ROWS,
+      offset,
+      ...(request.sort === undefined ? {} : { sort: request.sort }),
+      ...(request.filters === undefined ? {} : { filters: request.filters }),
+    }),
     statementId,
   )
   deps.registry.forget(statementId)
@@ -311,7 +394,12 @@ export async function fetchPage(deps: ExecutionDeps, request: ExecuteRequest): P
   const statementId = request.statementId ?? deps.registry.next()
   const page = await deps.executor.query(
     resolved.spec,
-    buildPagedQuery(sql, { limit: pageSize + PROBE_ROWS, offset, ...(request.sort === undefined ? {} : { sort: request.sort }) }),
+    buildPagedQuery(sql, {
+      limit: pageSize + PROBE_ROWS,
+      offset,
+      ...(request.sort === undefined ? {} : { sort: request.sort }),
+      ...(request.filters === undefined ? {} : { filters: request.filters }),
+    }),
     statementId,
   )
   deps.registry.forget(statementId)

@@ -5,6 +5,7 @@ import type { ReactElement, Ref } from 'react'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
+import { copyText } from '../clipboard.ts'
 import type { SchemaIndex } from '../completion.ts'
 import { buildExtensions, readOnlyExtension, sqlExtension } from '../editor-cm.ts'
 import { classes as styles } from '../styles.ts'
@@ -94,6 +95,9 @@ function SqlEditorImpl(
     const parent = host.current
     /* v8 ignore next -- the host div is rendered as part of this component */
     if (parent === null) return
+    // No schema at mount: it arrives asynchronously and the effect below swaps
+    // the dialect in. Passing it here (always undefined on first paint) would be
+    // a branch nobody can reach.
     const instance = new EditorView({
       parent,
       state: EditorState.create({
@@ -102,16 +106,15 @@ function SqlEditorImpl(
         // object-tree insert where the text stops, not before it.
         selection: { anchor: sql.length },
         extensions: buildExtensions({
-        readOnly: false,
-        language: slots.language,
-        readOnlySlot: slots.readOnlySlot,
-        ...(callbacks.current.schema === undefined ? {} : { schema: callbacks.current.schema }),
-        onChange: doc => {
-          callbacks.current.onChange(doc)
-        },
-        onRun: () => {
-          callbacks.current.onRun()
-        },
+          readOnly: false,
+          language: slots.language,
+          readOnlySlot: slots.readOnlySlot,
+          onChange: doc => {
+            callbacks.current.onChange(doc)
+          },
+          onRun: () => {
+            callbacks.current.onRun()
+          },
           onCancel: () => {
             callbacks.current.onCancel()
           },
@@ -157,9 +160,14 @@ function SqlEditorImpl(
     instance.dispatch({ effects: slots.readOnlySlot.reconfigure(readOnlyExtension(disabled)) })
   }, [disabled, slots])
 
+  const lines = sql === '' ? 0 : sql.split('\n').length
+
   return (
     <div className={styles.editor}>
-      <div className={styles.editorBar}>
+      {/* The query toolbar. DataGrip puts run/stop and the console actions on a
+          strip above the editor; the shortcuts live in the ⓘ hint so they stop
+          eating a line of code in a 200px pane. */}
+      <div className={styles.editorBar} role="toolbar" aria-label="查询工具栏" data-sql-editor-bar="">
         <button
           type="button"
           className={styles.primaryButton}
@@ -168,14 +176,43 @@ function SqlEditorImpl(
             onRun()
           }}
           aria-label="执行"
+          title="执行（Ctrl/Cmd+Enter；有选中则只跑选段）"
         >
           执行
         </button>
-        <button type="button" className={styles.button} disabled={!running} onClick={onCancel} aria-label="取消">
+        <button type="button" className={styles.button} disabled={!running} onClick={onCancel} aria-label="取消" title="取消正在执行的语句（Esc）">
           取消
         </button>
-        <span className={styles.hint}>
-          Ctrl/Cmd+Enter 执行（有选中则只跑选段） · Ctrl+Space 补全 · Ctrl+F 查找 · Ctrl+/ 注释 · Esc 取消
+        <span className={styles.editorBarDivider} aria-hidden="true" />
+        <button
+          type="button"
+          className={styles.button}
+          disabled={disabled || sql === ''}
+          onClick={() => {
+            copyText(sql)
+          }}
+          aria-label="复制全部"
+          title="复制整段 SQL"
+        >
+          复制
+        </button>
+        <button
+          type="button"
+          className={styles.button}
+          disabled={disabled || sql === ''}
+          onClick={() => {
+            onChange('')
+          }}
+          aria-label="清空"
+          title="清空当前 console"
+        >
+          清空
+        </button>
+        <span className={styles.editorBarMeta} data-sql-editor-meta="">
+          {lines} 行
+        </span>
+        <span className={styles.hintIcon} title="Ctrl/Cmd+Enter 执行（有选中则只跑选段） · Ctrl+Space 补全 · Ctrl+F 查找 · Ctrl+/ 注释 · Esc 取消" aria-label="快捷键说明">
+          ⓘ
         </span>
       </div>
       <div

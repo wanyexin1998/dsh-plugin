@@ -137,6 +137,37 @@ describe('sql editor (CodeMirror)', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  it('has a query toolbar: 执行 / 取消 / 复制 / 清空 / 行数 / 快捷键说明', () => {
+    render({ sql: 'SELECT 1\nFROM t' })
+
+    const bar = container.querySelector('[data-sql-editor-bar]')
+    expect(bar?.getAttribute('role')).toBe('toolbar')
+    const labels = [...(bar?.querySelectorAll('button') ?? [])].map(node => node.getAttribute('aria-label'))
+    expect(labels).toEqual(['执行', '取消', '复制全部', '清空'])
+    // Line count replaces the old always-visible shortcut paragraph.
+    expect(container.querySelector('[data-sql-editor-meta]')?.textContent).toBe('2 行')
+    expect(container.querySelector('[aria-label="快捷键说明"]')?.getAttribute('title')).toContain('Ctrl/Cmd+Enter')
+  })
+
+  it('copies the whole statement and clears the console', () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const onChange = vi.fn()
+    render({ sql: 'SELECT 42', onChange })
+
+    const copy = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '复制全部')
+    act(() => {
+      copy?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(writeText).toHaveBeenCalledWith('SELECT 42')
+
+    const clear = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '清空')
+    act(() => {
+      clear?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onChange).toHaveBeenCalledWith('')
+  })
+
   it('disables the run button and marks the editor read-only without a connection', () => {
     render({ disabled: true, sql: 'SELECT 1' })
 

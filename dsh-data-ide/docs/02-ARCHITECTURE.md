@@ -50,6 +50,20 @@
 - **浏览器半**（`src/client/index.ts`）：`ctx.sidebarRightTabs.register({id:'dsh-data-ide.sql-workbench', kind, title, guide})` + `slots.inject('sidebar.right.pane.tab' / '…tab.title')`（两者 `key` = 定义 `id`）；UI 只经注入 props（`sessionId` / `actions`）与宿主服务面协作；
 - **MCP server**（`mcp/server.ts`，同包 `./mcp` 导出）：无状态执行器——连接规格（host/port/db/user）由宿主每次调用经 stdio 传入，**不读凭据库**（对照 DataGrip 后端同样只收 driver+url+props，SPEC §3.4）。
 
+## 2.1 浏览器半的现代码结构（2026-10-20）
+
+| 模块 | 职责 | 备注 |
+|---|---|---|
+| `client/index.ts` + `guard.ts` | 右栏 tab 注册与能力守卫 | fail-closed，缺能力时打印可读原因 |
+| `client/components/SqlWorkbenchPanel.tsx` | 面板装配：三块布局、console tabs、执行/取消/翻页、DDL 落点 | 只做编排，不含编辑器内部逻辑 |
+| `client/editor-cm.ts` | **CodeMirror 6 装配**：扩展、主题、键位、schema→namespace | 编辑器内核的唯一入口；主题走 `EditorView.theme` + `--dsw-*` token，不产 CSS 文件 |
+| `client/components/SqlEditor.tsx` | 挂载 `EditorView`，保留 `SqlEditorHandle(insert/getSelection)` 契约 | schema/只读经 Compartment 热切换，避免重建视图丢撤销栈 |
+| `client/components/SchemaTree.tsx` + `schema-tree.ts` | 对象树：分组、展开、右键菜单、DDL 目标 | 菜单关闭要忽略自身 pointerdown（否则 click 到不了按钮） |
+| `client/components/ResultGrid.tsx` + `grid.ts` / `stats.ts` | 结果网格：格式化、排序、列宽、选区、导出、聚合、列筛选编辑器 | 筛选为服务端；`filterIndexes`（本地页过滤）已不再使用 |
+| `client/state/documents.ts` / `query.ts` | console 标签与查询状态机（纯函数） | `QueryState` 含 `sort` / `pageSize` / `filters` |
+| `client/db-error.ts` | 驱动错误 → 人话 | 剥 `errCode/detailMessage` 外壳，按模式翻译；两条到达形态都要翻 |
+| `client/clipboard.ts` | 剪贴板三级策略 | `writeText` → `execCommand` → 统一失败提示 |
+
 ## 3. 逻辑归属表（每类逻辑唯一归属）
 
 | 逻辑 | 归属 | 理由 |
@@ -98,7 +112,7 @@
 
 | 调用方 | 通道 | 入口 |
 |---|---|---|
-| 人（右栏面板） | **同源 HTTP**（`src/host/web-routes.ts` 的 8 条 exact 路由，挂在 composition 的 `webServer` 上；浏览器 `fetch` 调用，见 `src/client/http-api.ts`） | `/dsh-data-ide/{connections,save,remove,activate,test,execute,fetch-page,cancel}` |
+| 人（右栏面板） | **同源 HTTP**（`src/host/web-routes.ts` 的 exact 路由，挂在 composition 的 `webServer` 上；浏览器 `fetch` 调用，见 `src/client/http-api.ts`） | `/dsh-data-ide/{connections,save,remove,activate,test,execute,execute-script,fetch-page,cancel,schema,client-error}` |
 | agent | **MCP stdio**（`mcp/server.ts`，serverName `sql`） | `mcp__sql__*` |
 
 两者都走 `src/execute/`（分页/权限/截断）与 `src/host/panel-service.ts`（连接与测试），所以界面与 agent 的结果口径、拒绝码、截断行为一致。

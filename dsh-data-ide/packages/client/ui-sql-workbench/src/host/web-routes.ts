@@ -33,6 +33,8 @@ export const ROUTES = {
   fetchPage: `${ROUTE_PREFIX}/fetch-page`,
   schema: `${ROUTE_PREFIX}/schema`,
   cancel: `${ROUTE_PREFIX}/cancel`,
+  /** Layout document: split sizes and object-browser state (docs/09 B3). */
+  layout: `${ROUTE_PREFIX}/layout`,
   /** The browser half reports its own activation failures here. */
   clientError: `${ROUTE_PREFIX}/client-error`,
 } as const
@@ -141,8 +143,47 @@ export function registerPanelRoutes(carrier: RouteCarrier, api: PanelApi, fence?
       },
     }),
 
-    post(ROUTES.save, async (body, res) => {
-      const draft = body['draft'] as ConnectionDraft | undefined
+    /**
+     * Layout document (09 B3) — **one** registration for both methods.
+     *
+     * Registering the path twice (GET through `carrier.register`, POST through
+     * `post()`) made the host answer `405` with an **empty body**: its route table
+     * holds one handler per path, so the later registration shadowed the earlier
+     * one and a GET landed on a POST-only handler (reported 2026-10-21).
+     */
+    carrier.register({
+      kind: 'exact',
+      path: ROUTES.layout,
+      handler: async (req, res) => {
+        const refused = fence?.(req)
+        if (refused !== undefined) {
+          sendJson(res, refused, { ok: false, error: { code: 'UNTRUSTED', message: '调用方未通过连接信任校验' } })
+          return
+        }
+        if (req.method === 'GET') {
+          const layout = api.readLayout === undefined ? null : await api.readLayout()
+          sendJson(res, 200, { ok: true, layout })
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: '仅支持 GET / POST' } })
+          return
+        }
+        try {
+          const body = await readJsonBody(req)
+          if (api.saveLayout !== undefined) await api.saveLayout(body['layout'])
+          sendJson(res, 200, { ok: true })
+        } catch (error) {
+          const refusal = error instanceof PanelError ? error : new PanelError('INTERNAL', (error as Error).message)
+          sendJson(res, statusFor(refusal), {
+            ok: false,
+            error: { code: refusal.code, message: refusal.message, field: refusal.field },
+          })
+        }
+      },
+    }),
+
+    post(ROUTES.save, async (body, res) => {      const draft = body['draft'] as ConnectionDraft | undefined
       if (draft === undefined) throw new PanelError('BAD_BODY', '缺少字段 draft')
       sendJson(res, 200, { ok: true, connection: await api.save(draft) })
     }),

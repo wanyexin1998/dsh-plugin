@@ -44,14 +44,16 @@ function render(tabs: ScriptTab[], active = 0) {
         running={false}
         pageSize={500}
         onActive={index => calls.active.push(index)}
-        onSort={column => calls.sort.push(column)}
-        onPage={offset => calls.page.push(offset)}
-        onPageSize={size => calls.pageSize.push(size)}
+        onSort={(_index, column) => calls.sort.push(column)}
+        onPage={(_index, offset) => calls.page.push(offset)}
+        onPageSize={(_index, size) => calls.pageSize.push(size)}
       />,
     )
   })
   const buttons = (): HTMLButtonElement[] => [...container.querySelectorAll('button')] as HTMLButtonElement[]
-  return { calls, buttons }
+  /** Result tabs only: the strip also carries 输出. */
+  const resultTabs = (): Element[] => [...container.querySelectorAll('[role="tab"]:not([data-sql-output-tab])')]
+  return { calls, buttons, resultTabs }
 }
 
 const tabs: ScriptTab[] = [
@@ -60,35 +62,65 @@ const tabs: ScriptTab[] = [
 ]
 
 describe('script result tabs', () => {
-  it('lists one tab per statement with rows and duration', () => {
-    render(tabs)
+  it('names each tab after its first column and type, with rows and duration', () => {
+    const view = render(tabs)
 
-    const labels = [...container.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)
-    expect(labels).toEqual(['语句 11 行 · 5ms', '语句 22 行 · 7ms'])
+    const labels = view.resultTabs().map(tab => tab.textContent)
+    expect(labels).toEqual(['v:int1 行 · 5ms', 'v:int (2)2 行 · 7ms'])
+  })
+
+  it('suffixes repeated column/type titles so two tabs never look identical', () => {
+    const view = render([...tabs, { sql: 'SELECT 3', result: page([[3]], 3, 9) }])
+
+    const labels = view.resultTabs().map(tab => tab.textContent)
+    expect(labels[0]).toContain('v:int')
+    expect(labels[2]).toContain('v:int (3)')
   })
 
   it('marks the active tab and switches on click', () => {
     const view = render(tabs, 1)
 
-    expect(container.querySelectorAll('[role="tab"]')[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(view.resultTabs()[1]?.getAttribute('aria-selected')).toBe('true')
 
     act(() => {
-      container.querySelectorAll('[role="tab"]')[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(view.calls.active).toEqual([0])
   })
 
-  it('shows the error of a failed statement instead of a grid', () => {
+  it('mirrors a failed statement into the output tab', () => {
     render([{ sql: 'DELETE FROM t', result: null, error: { code: 'WRITE_DISABLED', message: '写操作未开启' } }])
 
+    // Immediate: the failing tab still explains itself.
     expect(container.textContent).toContain('写操作未开启')
+
+    act(() => {
+      container.querySelector('[data-sql-output-tab]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // Traceable: 输出 carries the whole run's errors with their codes.
+    expect(container.textContent).toContain('WRITE_DISABLED')
+  })
+
+  it('badges the output tab with the number of errors', () => {
+    render([
+      { sql: 'SELECT 1', result: page([[1]], 1) },
+      { sql: 'DELETE FROM t', result: null, error: { code: 'WRITE_DISABLED', message: '写操作未开启' } },
+    ])
+
+    expect(container.querySelector('[data-sql-output-tab]')?.textContent).toContain('1 个错误')
   })
 
   it('labels a statement that has not run yet', () => {
-    render([{ sql: 'SELECT 1', result: null }])
+    const view = render([{ sql: 'SELECT 1', result: null }])
 
-    expect(container.querySelector('[role="tab"]')?.textContent).toContain('—')
+    expect(view.resultTabs()[0]?.textContent).toContain('—')
+  })
+
+  it('names a result without columns after its statement number', () => {
+    const view = render([{ sql: 'DO 1', result: { ...page([], 0), columns: [] } }])
+    expect(view.resultTabs()[0]?.textContent).toContain('语句 1')
   })
 
   it('forwards sort, paging and page-size from the grid and pager', () => {
@@ -109,21 +141,31 @@ describe('script result tabs', () => {
 
 describe('script result tabs: edges', () => {
   it('falls back to the row count when the total is unknown', () => {
-    render([{ sql: 'SELECT 1', result: { ...page([[1], [2]], 0), total: null } }])
+    const view = render([{ sql: 'SELECT 1', result: { ...page([[1], [2]], 0), total: null } }])
 
-    expect(container.querySelector('[role="tab"]')?.textContent).toContain('2 行')
+    expect(view.resultTabs()[0]?.textContent).toContain('2 行')
   })
 
   it('falls back to the first tab when the active index is stale', () => {
     render(tabs, 9)
 
-    expect(container.textContent).toContain('语句 1')
+    expect(container.textContent).toContain('v:int')
   })
 
-  it('renders nothing but the tab strip when there are no statements', () => {
+  it('renders only the output tab when there are no statements', () => {
     render([])
 
     expect(container.querySelector('[data-sql-script]')).not.toBeNull()
-    expect(container.querySelector('[role="tab"]')).toBeNull()
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1)
+    expect(container.querySelector('[data-sql-output-tab]')).not.toBeNull()
+  })
+
+  it('explains that a successful run has no output lines', () => {
+    render(tabs)
+    act(() => {
+      container.querySelector('[data-sql-output-tab]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('没有输出。')
   })
 })

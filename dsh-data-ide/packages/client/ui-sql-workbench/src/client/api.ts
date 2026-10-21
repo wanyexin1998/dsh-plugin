@@ -46,6 +46,10 @@ export interface WorkbenchApi {
   schema(connId: string, options?: { readonly refresh?: boolean }): Promise<SchemaSnapshot>
   /** Run a script; one result per statement. */
   executeScript(request: ScriptRequest): Promise<ScriptResponse | { readonly refusal: { readonly code: string; readonly message: string } }>
+  /** Last saved layout document, unvalidated (the panel clamps it). */
+  layout?(): Promise<unknown>
+  /** Persist the layout; absent on hosts that do not store it. */
+  saveLayout?(layout: unknown): Promise<void>
 }
 
 /** Service name published by the node half (only reachable in-process). */

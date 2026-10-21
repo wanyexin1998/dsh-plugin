@@ -23,6 +23,7 @@ import {
   goPage,
   run as executeQuery,
   nextSort,
+  setFilters,
   setPageSize,
   setSql,
   sortBy,
@@ -30,7 +31,8 @@ import {
 import { ConnectionBar } from './ConnectionBar.tsx'
 import { WorkbenchPanel, Sash } from './WorkbenchPanel.tsx'
 import { ConnectionDialog } from './ConnectionDialog.tsx'
-import { copyText } from '../clipboard.ts'
+import { copyText, setCopyFailureHandler } from '../clipboard.ts'
+import { readableDbError } from '../db-error.ts'
 import { type DdlTarget, ddlFromRow, ddlSql, describeSchema } from '../schema-tree.ts'
 import {
   EDITOR_HEIGHT_DEFAULT,
@@ -50,17 +52,26 @@ import { SchemaTree } from './SchemaTree.tsx'
 import { ScriptResults } from './ScriptResults.tsx'
 import type { ScriptTab } from './ScriptResults.tsx'
 import { splitStatements } from '../../execute/split.ts'
+import type { FilterSpec, SortSpec } from '../../execute/core.ts'
 import {
   type DocumentTab,
   type ScriptRun,
   MAX_TABS,
   activeTab,
+  MAX_AGENT_TABS,
+  applyAgentDelivery,
+  archiveOverflow,
   closeTab,
   createTab,
+  isAgentPoolFull,
+  markAgentRead,
   patchTab,
+  pushArchive,
+  takeArchived,
 } from '../state/documents.ts'
+import { parseLayout } from '../state/layout.ts'
+import { subscribeAgentDeliveries, publishConsoles } from '../agent-stream.ts'
 import type { SqlEditorHandle } from './SqlEditor.tsx'
-import { Pager } from './Pager.tsx'
 import { ResultGrid } from './ResultGrid.tsx'
 import { SqlEditor } from './SqlEditor.tsx'
 import { classes as styles, ensureStyles } from '../styles.ts'
@@ -92,9 +103,23 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   // Documents: one console per tab, each remembering its own SQL and results.
   const [documents, setDocuments] = useState<readonly DocumentTab[]>(() => [createTab([], null)])
   const [activeDocId, setActiveDocId] = useState(() => (documents[0] as DocumentTab).id)
+  /** Closed agent consoles, reopenable from the strip (docs/10 §14). */
+  const [agentHistory, setAgentHistory] = useState<readonly DocumentTab[]>([])
   const document = activeTab(documents, activeDocId)
   const query = document.query
   const script = document.script
+  /**
+   * A single-statement console renders through the same tab strip as a script
+   * (docs/10 §14 R6): the result area is always a set of tabs. Its sort, filters
+   * and total stay in `QueryState` and are passed down, so paging and sorting
+   * behave exactly as before.
+   */
+  const singleTab: ScriptTab = {
+    sql: query.sql,
+    result: query.result,
+    ...(query.error === null ? {} : { error: query.error }),
+  }
+  const hasSingleResult = query.result !== null || query.error !== null || query.status === 'running'
   /**
    * Data source this console runs on. The tab's own binding wins over the global
    * id: switching tabs only *asks* the host to switch, so for a moment the two
@@ -106,6 +131,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   // whichever console the user switched to meanwhile (reported 2026-10-19).
   const writeDoc = useCallback((docId: string, patch: Parameters<typeof patchTab>[2]) => {
     setDocuments(current => patchTab(current, docId, patch))
+  }, [])
+  /**
+   * Surface a rejected background call.
+   *
+   * Every execution path is fired with `void` from a click handler; without a
+   * catch a refused request became an "unhandled rejection" toast that named a
+   * JSON parse error instead of the actual problem (2026-10-21).
+   */
+  const reportFailureToUser = useCallback((error: unknown) => {
+    setNotice({ text: error instanceof Error ? error.message : String(error), kind: 'error' })
   }, [])
   const setQueryAt = useCallback((docId: string, next: QueryState | ((current: QueryState) => QueryState)) => {
     writeDoc(docId, tab => ({ query: typeof next === 'function' ? next(tab.query) : next }))
@@ -120,6 +155,87 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     setScriptAt(activeDocId, next)
   }, [setScriptAt, activeDocId])
   const [saveError, setSaveError] = useState<SaveError | undefined>(undefined)
+  /**
+   * Corner notice (bottom-right), for things the user asked for that did not
+   * work out — a refused DDL, a full tab strip. Not a modal: the tree stays
+   * usable and nothing blocks.
+   */
+  const [notice, setNotice] = useState<{ readonly text: string; readonly kind: 'error' | 'warn' } | null>(null)
+
+  /**
+   * Agent deliveries arrive asynchronously (docs/10 §13.1). The effect reads the
+   * active id through a ref so the subscription never re-registers, and applying
+   * a delivery never switches the active console (Q14).
+   */
+  const activeDocIdRef = useRef(activeDocId)
+  const documentsRef = useRef(documents)
+  useEffect(() => {
+    activeDocIdRef.current = activeDocId
+  }, [activeDocId])
+  useEffect(() => {
+    documentsRef.current = documents
+  }, [documents])
+  useEffect(
+    () =>
+      subscribeAgentDeliveries(delivery => {
+        // The snapshot only phrases the toast; the state change stays a
+        // functional update so a concurrent edit is never clobbered.
+        const existed = documentsRef.current.some(
+          tab => tab.owner === 'agent' && tab.label === delivery.label && tab.connId === delivery.connId,
+        )
+        const crowded = isAgentPoolFull(documentsRef.current)
+        setDocuments(current => applyAgentDelivery(current, activeDocIdRef.current, delivery).tabs)
+        setNotice({
+          text:
+            `${existed ? `ai_${delivery.label} 已更新` : `ai_${delivery.label} 已出结果`}` +
+            (crowded ? `（AI 控制台已达 ${String(MAX_AGENT_TABS)} 个，可关闭不用的）` : ''),
+          kind: 'warn',
+        })
+      }),
+    [],
+  )
+
+  // Overflow consoles move into the history rather than being destroyed (§15 A3).
+  // An effect, not a render-phase updater: React may invoke those twice.
+  useEffect(() => {
+    const overflow = archiveOverflow(documents, activeDocId)
+    const archived = overflow.archived
+    if (archived === null) return
+    setDocuments(overflow.tabs)
+    setAgentHistory(previous => pushArchive(previous, archived))
+  }, [documents, activeDocId])
+
+  /**
+   * Publish console ownership so the agent can refuse writing into a user
+   * console (docs/10 §13.3). Debounced: the editor changes `documents` on every
+   * keystroke, and only ids/owners/titles matter to the registry.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void publishConsoles(
+        documents.map(tab => ({
+          id: tab.id,
+          owner: tab.owner === 'agent' ? 'agent' : 'user',
+          title: tab.title,
+          ...(tab.label === undefined ? {} : { label: tab.label }),
+        })),
+      )
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [documents])
+
+  // Clipboard failures have no call-site context (grid, dialog, tree all copy),
+  // so the one notifier lives here and every copy path reports through it.
+  useEffect(() => {
+    setCopyFailureHandler(text => {
+      setNotice({ text, kind: 'warn' })
+    })
+    return () => {
+      setCopyFailureHandler(undefined)
+    }
+  }, [])
   const [busy, setBusy] = useState(false)
   const [schema, setSchema] = useState<SchemaSnapshot | undefined>(undefined)
   const [schemaError, setSchemaError] = useState<string | undefined>(undefined)
@@ -128,6 +244,8 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   const [treeOpen, setTreeOpen] = useState(true)
   const [treeWidth, setTreeWidth] = useState(TREE_WIDTH_DEFAULT)
   const [editorHeight, setEditorHeight] = useState(EDITOR_HEIGHT_DEFAULT)
+  /** Set once the stored layout has been applied, so a save never races the load. */
+  const layoutReady = useRef(false)
   const editorRef = useRef<SqlEditorHandle | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
   /** The three panels live in here; the sashes measure it at drag start. */
@@ -229,6 +347,53 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     max: maxEditorHeight(workspaceSize().height),
   })
 
+  /**
+   * Restore the saved layout once (docs/09 B3).
+   *
+   * Clamping happens here, not on the host: only the browser knows the current
+   * panel width, and a layout saved in a wider window must not squeeze this one.
+   */
+  useEffect(() => {
+    const read = api?.layout
+    if (read === undefined) {
+      layoutReady.current = true
+      return
+    }
+    let cancelled = false
+    void read
+      .call(api)
+      .then(stored => {
+        if (cancelled) return
+        const size = workspaceSize()
+        const restored = parseLayout(stored, {
+          maxTreeWidth: maxTreeWidth(size.width),
+          maxEditorHeight: maxEditorHeight(size.height),
+        })
+        setTreeOpen(restored.treeOpen)
+        setTreeWidth(restored.treeWidth)
+        setEditorHeight(restored.editorHeight)
+        layoutReady.current = true
+      })
+      .catch(() => {
+        if (!cancelled) layoutReady.current = true
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
+
+  // Persist after the restore, debounced: a drag fires on every pointer move.
+  useEffect(() => {
+    const save = api?.saveLayout
+    if (save === undefined || !layoutReady.current) return
+    const timer = setTimeout(() => {
+      void save.call(api, { treeOpen, treeWidth, editorHeight })
+    }, 400)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [api, treeOpen, treeWidth, editorHeight])
+
   /** Run a multi-statement script and keep one tab per statement. */
   const runScript = async (sql: string): Promise<void> => {
     const connId = tabConnId
@@ -238,7 +403,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     const docId = activeDocId
     const statements = splitStatements(sql)
     setScriptAt(docId, {
-      tabs: statements.map(statement => ({ sql: statement.text, result: null })),
+      tabs: statements.map(statement => ({ sql: statement.text, result: null, pageSize: query.pageSize })),
       active: 0,
       running: true,
     })
@@ -253,9 +418,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
         })
         return
       }
-      const tabs = outcome.statements.map(statement => statement.ok
-        ? { sql: statement.sql, result: statement.response }
-        : { sql: statement.sql, result: null, error: statement.error })
+      const tabs: ScriptTab[] = outcome.statements.map(statement =>
+        statement.ok
+          ? {
+              sql: statement.sql,
+              result: statement.response,
+              pageSize: query.pageSize,
+              total: statement.response.total,
+            }
+          : { sql: statement.sql, result: null, error: statement.error, pageSize: query.pageSize },
+      )
       setScriptAt(docId, { tabs, active: Math.max(0, tabs.length - 1), running: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -268,42 +440,101 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   }
 
   /** Re-run one statement of the script for its next page / sort. */
-  const refetchScript = async (target: { readonly offset?: number; readonly sort?: { readonly column: string; readonly direction: 'ASC' | 'DESC' } | null }): Promise<void> => {
+  /** Replace one statement tab, leaving the rest of the run untouched. */
+  const replaceScriptTab = (tabs: readonly ScriptTab[], index: number, next: ScriptTab): ScriptTab[] => {
+    const copy = [...tabs]
+    copy[index] = next
+    return copy
+  }
+
+  /**
+   * Refetch one statement tab (docs/10 §14 R6).
+   *
+   * The intent — ordering, filters, page size — is written onto **that tab**
+   * before the request and kept afterwards, so two tabs can hold different
+   * orderings and switching between them loses neither.
+   */
+  const refetchScript = async (
+    index: number,
+    patch: {
+      readonly offset?: number
+      readonly sort?: SortSpec | null
+      readonly filters?: readonly FilterSpec[]
+      readonly pageSize?: number
+    },
+  ): Promise<void> => {
     const connId = tabConnId
     if (api === undefined || connId === null || script === null) return
-    const current = script.tabs[script.active]
+    const current = script.tabs[index]
     if (current === undefined) return
     const docId = activeDocId
-    setScriptAt(docId, { ...script, running: true })
+    const intent: ScriptTab = {
+      ...current,
+      sort: patch.sort === undefined ? current.sort ?? null : patch.sort,
+      filters: patch.filters === undefined ? current.filters ?? [] : patch.filters,
+      ...(patch.pageSize === undefined && current.pageSize === undefined
+        ? {}
+        : { pageSize: patch.pageSize ?? current.pageSize }),
+    }
+    setScriptAt(docId, { ...script, tabs: replaceScriptTab(script.tabs, index, intent), running: true })
     try {
       const result = await api.fetchPage({
         connId,
-        sql: current.sql,
-        pageSize: query.pageSize,
-        ...(target.offset === undefined ? {} : { offset: target.offset }),
-        ...(target.sort === undefined || target.sort === null ? {} : { sort: target.sort }),
+        sql: intent.sql,
+        pageSize: intent.pageSize ?? query.pageSize,
+        ...(patch.offset === undefined ? {} : { offset: patch.offset }),
+        ...(intent.sort === null || intent.sort === undefined ? {} : { sort: intent.sort }),
+        ...(intent.filters === undefined || intent.filters.length === 0 ? {} : { filters: intent.filters }),
       })
-      if (!result.ok) {
-        const tabs = [...script.tabs]
-        tabs[script.active] = { ...current, error: result.error }
-        setScriptAt(docId, { tabs, active: script.active, running: false })
-        return
+      const nextTab: ScriptTab = {
+        sql: intent.sql,
+        result: result.ok ? result : intent.result,
+        sort: intent.sort ?? null,
+        filters: intent.filters ?? [],
+        total: result.ok ? result.total : intent.total ?? null,
+        ...(intent.pageSize === undefined ? {} : { pageSize: intent.pageSize }),
+        ...(result.ok ? {} : { error: result.error }),
       }
-      const tabs = [...script.tabs]
-      tabs[script.active] = { sql: current.sql, result }
-      setScriptAt(docId, { tabs, active: script.active, running: false })
+      setScriptAt(docId, { ...script, tabs: replaceScriptTab(script.tabs, index, nextTab), running: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      const tabs = [...script.tabs]
-      tabs[script.active] = { ...current, error: { code: 'PAGE_FAILED', message } }
-      setScriptAt(docId, { tabs, active: script.active, running: false })
+      setScriptAt(docId, {
+        ...script,
+        tabs: replaceScriptTab(script.tabs, index, { ...intent, error: { code: 'PAGE_FAILED', message } }),
+        running: false,
+      })
     }
   }
 
-  const sortScript = (column: string): Promise<void> =>
-    refetchScript({ offset: 0, sort: nextSort(query.sort, column) })
+  const sortScript = (index: number, column: string): Promise<void> => {
+    const tab = script?.tabs[index]
+    return refetchScript(index, { offset: 0, sort: nextSort(tab?.sort ?? null, column) })
+  }
 
-  const pageScript = (offset: number): Promise<void> => refetchScript({ offset })
+  const pageScript = (index: number, offset: number): Promise<void> => refetchScript(index, { offset })
+
+  /** Remember the page size on the tab; the next page fetch uses it. */
+  const pageSizeScript = (index: number, size: number): void => {
+    if (script === null) return
+    const tab = script.tabs[index]
+    if (tab === undefined) return
+    setScriptAt(activeDocId, {
+      ...script,
+      tabs: replaceScriptTab(script.tabs, index, { ...tab, pageSize: size }),
+    })
+  }
+
+  const filterScript = (index: number, column: string, filter: FilterSpec | null): Promise<void> => {
+    const tab = script?.tabs[index]
+    if (tab === undefined) return Promise.resolve()
+    const next = [
+      ...(tab.filters ?? []).filter(entry => entry.column !== column),
+      ...(filter === null ? [] : [filter]),
+    ]
+    return refetchScript(index, { offset: 0, filters: next })
+  }
+
+  const clearFiltersScript = (index: number): Promise<void> => refetchScript(index, { offset: 0, filters: [] })
 
   /** Tab titles show connection names; the bar already has the list. */
   const connectionNames = Object.fromEntries(state.connections.map(source => [source.id, source.name]))
@@ -320,13 +551,19 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   const followTab = (target: DocumentTab): void => {
     if (api === undefined || target.connId === null || target.connId === state.activeId) return
     switchingTab.current = true
-    void api.setActive(target.connId).then(() => load(api)).then(setState)
+    void api
+      .setActive(target.connId)
+      .then(() => load(api))
+      .then(setState)
+      .catch(reportFailureToUser)
   }
 
   /** Switch console: the tab owns its connection, so the bar follows it. */
   const selectDocument = (id: string): void => {
     const target = activeTab(documents, id)
     setActiveDocId(id)
+    // Opening an agent console clears its unread dot (Q14).
+    if (target.unread === true) setDocuments(current => markAgentRead(current, id))
     followTab(target)
   }
 
@@ -347,6 +584,23 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     followTab(activeTab(outcome.tabs, outcome.activeId))
   }
 
+  /**
+   * Reopen a console from the AI history.
+   *
+   * Unlike a delivery, this focus change is the user's own click, so selecting
+   * the console (and following its connection) is right here.
+   */
+  const restoreAgentDocument = (id: string): void => {
+    const { archive, tab } = takeArchived(agentHistory, id)
+    if (tab === null) return
+    setAgentHistory(archive)
+    setDocuments(current =>
+      current.some(entry => entry.id === tab.id) ? current : [...current, { ...tab, unread: false }],
+    )
+    setActiveDocId(tab.id)
+    followTab(tab)
+  }
+
   // The first tab binds to whichever connection became active after load.
   React.useEffect(() => {
     if (state.activeId === null || document.connId !== null) return
@@ -363,7 +617,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       setState(unavailable(API_MISSING_HINT))
       return
     }
-    void load(api).then(setState)
+    void load(api).then(setState).catch(reportFailureToUser)
   }, [api])
 
   const run = useCallback(async (work: () => Promise<PanelState>) => {
@@ -392,9 +646,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       const write = (next: QueryState): void => {
         setQueryAt(docId, next)
       }
-      write(await work(connId, write))
+      try {
+        write(await work(connId, write))
+      /* v8 ignore start -- query state helpers convert transport failures into QueryState errors */
+      } catch (error) {
+        // One catch covers every execution button: they all come through here.
+        reportFailureToUser(error)
+      }
+      /* v8 ignore stop */
     },
-    [tabConnId, activeDocId, setQueryAt],
+    [tabConnId, activeDocId, setQueryAt, reportFailureToUser],
   )
 
   if (api === undefined || state.phase === 'unavailable') {
@@ -433,14 +694,55 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   }
 
   /** `Go to DDL` (Ctrl+B): a raw statement — metadata reads cannot be paged. */
-  const loadDdl = async (target: DdlTarget): Promise<string> => {
+  /** `SHOW CREATE …` text for a target, in words the dialog/corner can show. */
+  const loadDdlText = async (target: DdlTarget): Promise<string> => {
     /* v8 ignore next -- the browser only renders once a data source exists */
     if (tabConnId === null) throw new Error('当前标签还没有绑定连接')
-    const outcome = await api.execute({ connId: tabConnId, sql: ddlSql(target), pageSize: 1, raw: true })
-    if (!outcome.ok) throw new Error(outcome.error.message)
-    const text = ddlFromRow(outcome.rows[0])
-    if (text === '') throw new Error('数据库没有返回 DDL（检查该对象的权限）')
-    return text
+    try {
+      const outcome = await api.execute({ connId: tabConnId, sql: ddlSql(target), pageSize: 1, raw: true })
+      // The driver's refusal is accurate but unreadable as-is; keep the facts,
+      // add the action (docs/03 §6.7 错误文案).
+      if (!outcome.ok) throw new Error(readableDbError(outcome.error))
+      const text = ddlFromRow(outcome.rows[0])
+      if (text === '') throw new Error('数据库没有返回 DDL（检查该对象的权限）')
+      return text
+    } catch (error) {
+      // A refused statement comes back as an HTTP error, which the transport
+      // throws rather than returning as `ok:false` — translate here too, or the
+      // dialog shows `INTERNAL: errCode = 2, detailMessage = …` verbatim.
+      throw new Error(readableDbError({ message: error instanceof Error ? error.message : String(error) }))
+    }
+  }
+
+  /**
+   * DataGrip's *Go to DDL* opens the statement in a console; so do we.
+   *
+   * A refusal is a corner notice, not a modal over the tree: the user asked for
+   * the DDL, and "you may not see it" is information, not an interruption.
+   */
+  const openDdlConsole = (target: DdlTarget): void => {
+    void (async () => {
+      try {
+        const text = await loadDdlText(target)
+        if (documents.length >= MAX_TABS) {
+          setNotice({ text: `标签已满（最多 ${String(MAX_TABS)} 个），先关一个再查看 DDL`, kind: 'warn' })
+          return
+        }
+        const created = createTab(documents, tabConnId)
+        const withDdl: DocumentTab = {
+          ...created,
+          title: `ddl_${target.table}`,
+          query: setSql(INITIAL_QUERY, text),
+          // Mark it as "already what it is": a DDL tab is not unsaved work, so
+          // it must not carry the `*` (dirty) marker.
+          lastRunSql: text,
+        }
+        setDocuments(current => [...current, withDdl])
+        setActiveDocId(withDdl.id)
+      } catch (error) {
+        setNotice({ text: error instanceof Error ? error.message : String(error), kind: 'error' })
+      }
+    })()
   }
 
   return (
@@ -477,9 +779,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
             className={styles.workspace}
             ref={workspaceRef}
             data-sql-workspace=""
-            style={treeOpen
-              ? { gridTemplateColumns: `${String(treeWidth)}px ${String(PANEL_GAP)}px minmax(0, 1fr)` }
-              : undefined}
+            data-tree={treeOpen ? 'open' : 'closed'}
+            style={{
+              /* Collapsing drops the column and the sash, so the editor gets the
+                 whole width. The old fallback had no template at all, and the grid
+                 stacked its two children into rows — the page looked squeezed. */
+              gridTemplateColumns: treeOpen
+                ? `${String(treeWidth)}px ${String(PANEL_GAP)}px minmax(0, 1fr)`
+                : 'minmax(0, 1fr)',
+              gridTemplateRows: 'minmax(0, 1fr)',
+            }}
           >
             {treeOpen ? (
               <>
@@ -492,29 +801,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                       ? (schemaError === undefined ? '未加载' : readable(schemaError))
                       : `${describeSchema(schema.tables)} · ${schema.source === 'show' ? 'SHOW' : 'information_schema'}`}
                   actions={(
-                    <>
-                      <button
-                        type="button"
-                        className={styles.panelIconButton}
-                        aria-label="刷新表结构"
-                        title="刷新表结构"
-                        disabled={schemaLoading}
-                        onClick={refreshSchema}
-                      >
-                        ↻
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.panelIconButton}
-                        aria-label="收起对象树"
-                        title="收起对象树"
-                        onClick={() => {
-                          setTreeOpen(false)
-                        }}
-                      >
-                        «
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className={styles.panelIconButton}
+                      aria-label="刷新表结构"
+                      title="刷新表结构"
+                      disabled={schemaLoading}
+                      onClick={refreshSchema}
+                    >
+                      ↻
+                    </button>
                   )}
                 >
                   <div className={styles.treeFill}>
@@ -529,7 +825,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                         editorRef.current?.insert(name)
                       }}
                       onOpenData={openData}
-                      loadDdl={loadDdl}
+                      onShowDdl={openDdlConsole}
                       onCopy={copyText}
                     />
                   </div>
@@ -547,19 +843,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                   }}
                 />
               </>
-            ) : (
-              <button
-                type="button"
-                className={styles.treeRail}
-                aria-label="展开对象树"
-                title="展开对象树"
-                onClick={() => {
-                  setTreeOpen(true)
-                }}
-              >
-                对象
-              </button>
-            )}
+            ) : null}
 
             <div
               className={styles.paneColumn}
@@ -573,6 +857,16 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                   tabs={documents}
                   activeId={activeDocId}
                   connectionNames={connectionNames}
+                  archived={agentHistory}
+                  objectsOpen={treeOpen}
+                  onToggleObjects={() => {
+                    // Re-clamp on the way out: the sidebar may have shrunk since
+                    // the width was remembered, and an over-wide tree would take
+                    // the editor to zero.
+                    setTreeWidth(current => clampSize(current, TREE_WIDTH_MIN, maxTreeWidth(workspaceSize().width)))
+                    setTreeOpen(open => !open)
+                  }}
+                  onRestore={restoreAgentDocument}
                   onSelect={selectDocument}
                   onClose={removeDocument}
                   onCreate={addDocument}
@@ -601,7 +895,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                       void runScript(source)
                     }}
                     onCancel={() => {
-                      void cancelQuery(api, query).then(setQuery)
+                      void cancelQuery(api, query).then(setQuery).catch(reportFailureToUser)
                     }}
                   />
                 </div>
@@ -622,32 +916,66 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
 
               <WorkbenchPanel id="result" title="结果">
                 {script === null ? (
-                  <>
-                    <ResultGrid
-                      result={query.result}
-                      sort={query.sort}
-                      error={query.error}
+                  hasSingleResult ? (
+                    <ScriptResults
+                      tabs={[
+                        {
+                          ...singleTab,
+                          sort: query.sort,
+                          filters: query.filters,
+                          pageSize: query.pageSize,
+                          total: query.total,
+                        },
+                      ]}
+                      active={0}
                       running={query.status === 'running'}
-                      onSort={column => {
+                      pageSize={query.pageSize}
+                      onActive={
+                        /* v8 ignore next -- a single-result strip has no alternate tab to activate */
+                        () => undefined
+                      }
+                      onSort={(_index, column) => {
                         void withConnection((connId, publish) => sortBy(api, query, connId, column, publish))
+                      }}
+                      onPage={(_index, offset) => {
+                        void withConnection((connId, publish) => goPage(api, query, connId, offset, publish))
+                      }}
+                      onPageSize={(_index, size) => {
+                        setQuery(setPageSize(query, size))
                       }}
                       onRefresh={() => {
                         void withConnection((connId, publish) => executeQuery(api, query, connId, publish))
                       }}
-                    />
-                    <Pager
-                      result={query.result}
-                      total={query.total}
-                      pageSize={query.pageSize}
-                      running={query.status === 'running'}
-                      onPage={offset => {
-                        void withConnection((connId, publish) => goPage(api, query, connId, offset, publish))
+                      onFilter={(_index, column, filter) => {
+                        // Server-side: one condition per column, ANDed; re-run so
+                        // the total and the rows agree with the condition.
+                        const next = [
+                          ...query.filters.filter(entry => entry.column !== column),
+                          ...(filter === null ? [] : [filter]),
+                        ]
+                        const withFilters = setFilters(query, next)
+                        setQuery(withFilters)
+                        void withConnection((connId, publish) => executeQuery(api, withFilters, connId, publish))
                       }}
-                      onPageSize={size => {
-                        setQuery(setPageSize(query, size))
+                      onClearFilters={() => {
+                        const cleared = setFilters(query, [])
+                        setQuery(cleared)
+                        void withConnection((connId, publish) => executeQuery(api, cleared, connId, publish))
                       }}
                     />
-                  </>
+                  ) : (
+                    <ResultGrid
+                      result={null}
+                      sort={query.sort}
+                      error={null}
+                      running={false}
+                      onSort={
+                        /* v8 ignore next -- an empty grid has no column header that can invoke sorting */
+                        () => undefined
+                      }
+                      filterEnabled={false}
+                    />
+                  )
                 ) : (
                   <ScriptResults
                     tabs={script.tabs}
@@ -657,18 +985,24 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                     onActive={index => {
                       setScript({ ...script, active: index })
                     }}
-                    onSort={column => {
-                      void sortScript(column)
+                    onSort={(index, column) => {
+                      void sortScript(index, column)
                     }}
-                    onPage={offset => {
-                      void pageScript(offset)
+                    onPage={(index, offset) => {
+                      void pageScript(index, offset)
                     }}
-                    onRefresh={() => {
-                      /* v8 ignore next -- the refresh button only renders for a loaded page */
-                      void refetchScript({ offset: script.tabs[script.active]?.result?.offset ?? 0 })
+                    onRefresh={index => {
+                      /* v8 ignore next -- refresh only renders for an existing successful result tab */
+                      void refetchScript(index, { offset: script.tabs[index]?.result?.offset ?? 0 })
                     }}
-                    onPageSize={size => {
-                      setQuery(setPageSize(query, size))
+                    onPageSize={(index, size) => {
+                      pageSizeScript(index, size)
+                    }}
+                    onFilter={(index, column, filter) => {
+                      void filterScript(index, column, filter)
+                    }}
+                    onClearFilters={index => {
+                      void clearFiltersScript(index)
                     }}
                   />
                 )}
@@ -681,6 +1015,27 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
           <span className={styles.sqlWorkbenchTitle}>还没有数据源</span>
           <span className={styles.sqlWorkbenchHint}>点「新建」配置一个 Doris 连接，保存后即可测试连通性并执行查询。</span>
           {state.phase === 'error' ? <span className={styles.sqlWorkbenchHint}>{state.message}</span> : null}
+        </div>
+      )}
+
+      {notice === null ? null : (
+        <div
+          className={styles.notice}
+          data-sql-notice={notice.kind}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={styles.noticeText}>{notice.text}</span>
+          <button
+            type="button"
+            className={styles.noticeClose}
+            aria-label="关闭提示"
+            onClick={() => {
+              setNotice(null)
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
 

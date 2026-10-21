@@ -29,16 +29,18 @@
 
 | # | 文件 | 状态 | 门禁 |
 |---|---|---|---|
-| 00 | `00-README.md`（本文） | ✅ | — |
-| 01 | `01-PRD.md` | 待写 | G0 范围冻结 |
-| 02 | `02-ARCHITECTURE.md` | 待写 | G1 架构冻结 |
-| 03 | `03-UIUX-SPEC.md` | 待写 | G3 |
-| 04 | `04-DATA-MODEL.md` | 待写 | G2 契约冻结 |
-| 05 | `05-MCP-SPEC.md` | 待写 | G2 |
-| 06 | `06-PLUGIN-ENGINEERING.md` | 待写 | G1 |
-| 07 | `07-MILESTONES.md` | 待写 | G3 实现就绪 |
-| 08 | `08-RISKS.md` | 待写 | 随里程碑复盘更新 |
-| 09 | `testing.md` | ✅ 2026-10-17 | 自动化命令 + 人工 smoke 清单（M1 起） |
+| 00 | `00-README.md`（本文） | ✅ 2026-10-20 | — |
+| 01 | `01-PRD.md` | ✅ 2026-10-20 | G0 范围冻结 |
+| 02 | `02-ARCHITECTURE.md` | ✅ 2026-10-20 | G1 架构冻结 |
+| 03 | `03-UIUX-SPEC.md` | ✅ 2026-10-20 | G3 |
+| 04 | `04-DATA-MODEL.md` | ✅ 2026-10-20 | G2 契约冻结 |
+| 05 | `05-MCP-SPEC.md` | ✅ 2026-10-20 | G2 |
+| 06 | `06-PLUGIN-ENGINEERING.md` | ✅ 2026-10-20 | G1 |
+| 07 | `07-MILESTONES.md` | ✅ 2026-10-20 | G3 实现就绪 |
+| 08 | `08-RISKS.md` | ✅ 2026-10-20 | 随里程碑复盘更新 |
+| 09 | `09-BACKLOG.md` | ✅ 2026-10-21 | **唯一待办清单**（07 §8 只做索引）；P0 已清空 |
+| 10 | `10-AGENT-CONSOLE-SPEC.md` | ✅ 2026-10-21 | agent 结果接入 console：决策总表、MCP 契约、实现状态、对抗性审查 |
+| — | `testing.md` | ✅ 2026-10-20 | 自动化命令 + 人工 smoke 清单（S1–S64、A1–A4） |
 
 ## 4. 术语表
 
@@ -124,6 +126,9 @@
 
 | 日期 | 变更 | 作者 |
 |---|---|---|
+| 2026-10-20 | **本次开发收尾**：① 编辑器换 CodeMirror 6（删 900 行自研 highlight/editor/caret/补全引擎，bundle 513KB / gzip 167KB）；② 对象树两个真 bug（视图缺失、右键菜单点击失效）+ 视觉调整；③ 视图 DDL 被拒改人话提示；④ DDL 改进编辑区、错误改右下角提示、补齐查询工具栏；⑤ 剪贴板被拒不冒未处理拒绝；⑥ 字段筛选升级为服务端 WHERE（10 个操作符，进 COUNT）。测试 51 文件 / per-file 100%。**文档整理**：新建 `09-BACKLOG.md` 作为唯一待办清单，07 §8 改为索引；修正 00 文档清单状态、AGENTS「明确不做」里已完成的两项。真实 Doris 字段核对：4 库 / 21 对象 / 7 视图 | AI + PM |
+| 2026-10-20 | **对象树对象来源修正**：原来只从 `information_schema.COLUMNS` 折对象，但 Doris 的 COLUMNS 不含视图列 → dwd 的 5 个视图与只含视图的 `ods_db` 整库消失。改为 TABLES 定对象、COLUMNS 补列（`withObjects`），并校验第三列必须是 TABLE_TYPE | AI + PM |
+| 2026-10-20 | **编辑器内核迁移（决策落地）**：spike 结论（体积：核心 view 277KB / lang-sql +61KB / search+autocomplete +58KB；jsdom 需 `Range.getClientRects` 补丁）记录于 07 §8.1.1 与 06；client 目标开 `minify` | AI + PM |
 | 2026-10-17 | 初始化文档枢纽 | PM + AI |
 | 2026-10-17 | 证据文档自包含：`../rea-datagrip/` 4 份（SPEC / SPEC-sql-execution-grid / RUNTIME-FINDINGS / COMPREHENSIVE-ASSESSMENT）归档至本仓 `docs/reference/` | AI |
 | 2026-10-17 | **开发启动**：建独立 git 仓库、写 `AGENTS.md`；开发位置由「monorepo 内」改为外部独立仓库 `E:/dsh-plugin/dsh-data-ide`（理由见 06 §1 修订），验证走本地 bundle + `dsh plugin add` 到独立 dev profile | AI |

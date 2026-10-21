@@ -102,11 +102,40 @@ env -u NODE_OPTIONS node apps/cli/lib/bin.js --profile dev-sql --port 62370
 | S41 | 拖动对象树与编辑区之间的 8px 缝隙 | 出现 2px 抓手，左栏变宽/变窄；编辑区不低于 320px |
 | S42 | 拖动编辑区与结果区之间的缝隙 | 编辑区变高/变矮；结果区保底 132px；双击缝隙回到默认 200px |
 | S43 | 聚焦缝隙后按 ←/→（或 ↑/↓） | 每次 16px 微调，`aria-valuenow` 同步变化 |
-| S44 | 点对象面板头「«」 | 左栏收成 22px 竖排 rail；点 rail 恢复；对象摘要与刷新在面板头 |
+| S44 | 点 console 标签条最左的「«」 | 左栏连同 sash 一起消失，编辑区占满整幅宽度（无 rail、无残留列）；同一按钮变「»」并 `aria-expanded=false`，点回恢复；展开宽度沿用收起前的值并按当前工作区重新 clamp |
 | S45 | 把 dsh 右栏拉窄到 ~500px | 左栏自动收窄（≈169px），编辑区不被挤没；结果区状态栏隐藏编码与函数下拉，读数仍可读 |
 | S46 | 看 console 标签条的位置 | 它在**编辑区面板内部**顶部（与 执行/取消 同一块面板），不在对象树与编辑区之间横跨整个工作台；标签多时横向滚动 |
 
 > S40–S43 可脚本化：`node tools/check-panels.mjs --url <带 token 的地址> --shot out.png`（量三面板几何、竖拖 +80 / 横拖 +60 后断言尺寸真的变了，退出码 0 表示布局与拖拽都成立）。
+| S47 | 在编辑区输入 `sel` | 弹出补全，首项 `SELECT`；Tab/Enter 接受，Esc 关闭 |
+| S48 | 输入 `SELECT a. FROM dwd_order a`，光标放到 `a.` 后 | 列出该表列名（schema 来自当前连接） |
+| S49 | 按 `Ctrl/Cmd+Enter` | 执行当前语句（有选中则只跑选段） |
+| S50 | 按 `Ctrl+F` | 顶部出现「查找」面板（中文）；面板宽度 <460px 时只显示查找、不显示替换 |
+| S51 | 按 `Ctrl+/`、`Tab`、`Ctrl+Z` | 注释切换 / 缩进 / 撤销都由 CodeMirror 处理，行为与普通编辑器一致 |
+| S52 | 长脚本里点行号左侧的折叠箭头 | 语句块可折叠/展开 |
+
+> S47–S51 可脚本化：`node tools/check-editor.mjs --url <带 token 的地址> --shot out.png`（自动开会话→右栏→SQL 面板，输入文字、Ctrl+Enter 出结果、补全弹窗、Ctrl+F 面板，并断言查找面板是中文，退出码 0 表示全过）。
+| S53 | 看对象树摘要与 dwd 展开 | 摘要包含全部库与对象（现场 4 库/21 对象/7 视图）；dwd 下「表 5」「视图 5」都在；只含视图的库也出现 |
+| S54 | 展开一个视图 | 显示「无列信息（视图）」（Doris 的 COLUMNS 不返回视图列），而不是空白 |
+| S55 | 右键一张表 → 用鼠标点「打开数据」 | 菜单项真的执行：编辑器出现 `SELECT * FROM …` 且结果区跑出数据（旧实现里菜单在 pointerdown 就被卸载，点击无效） |
+| S56 | 看对象行前缀与箭头 | 没有 T/V 字母徽标；展开箭头明显可点（13px），hover 提亮 |
+| S57 | 对无权限的视图右键「查看 DDL」 | 右下角出现中文提示（「没有查看 dwd.xxx 的权限：账号 ai_reader 缺少 SHOW VIEW…」），无弹窗，可关闭 |
+| S58 | 对有权限的表右键「查看 DDL」 | 新开 `ddl_<表名>` 标签，编辑区显示 `CREATE TABLE …`；标签不带 `*`；对象树与结果区不受影响 |
+| S59 | 看编辑区顶部 | 有正式工具栏：执行 / 取消 / 复制 / 清空 / 「N 行」/ ⓘ 快捷键说明（悬浮） |
+| S60 | 在拒绝剪贴板权限的环境点「复制」 | 右下角提示「复制失败：当前环境拒绝了剪贴板权限…」；**不出现**「未处理的 Promise 拒绝」诊断条 |
+| S61 | 打开 long 查询（如 information_schema.columns），点列头漏斗设 `>` 5 | 编辑器/结果区刷新，请求体带 `filters`；首行值 > 5；状态栏 SUM 随之变化；工具条显示「N 行（已筛选）」与「清除筛选（1）」 |
+| S62 | 再点该列漏斗 → 移除 | 条件消失并重查，请求不再带 `filters` |
+| S63 | 构造一个筛出 0 行的条件 | 仍显示工具条与「清除筛选」，不会变成死路 |
+| S64 | 多语句脚本执行后的结果标签 | **每个语句标签都有漏斗**（R6 起支持按语句筛选）：筛选只作用于该语句并重新取第 1 页，切换标签互不影响 |
+| S65 | 编辑器输入 `S` | 补全首条是 `SELECT`（不再是 `SAVEPOINT/SCHEMA` 开头）；输入 `sel` 时模板 `sel` 排第一，展开为 `SELECT * FROM ` |
+| S66 | 任意界面按 `Ctrl/⌘+Shift+L` | 打开或聚焦「SQL 工作台」；右栏收起时也会展开；按一次只开一个（`multiple:false`） |
+| S67 | 点 console 标签条最左的 `«` | 对象树连同 sash 一起消失，编辑区占满整幅宽度（无 22px 空条）；同一按钮变 `»`，点回恢复 |
+| S68 | 拖动左栏宽度/编辑区高度后关闭标签再打开（或重启应用） | 尺寸与对象树收起状态**保持**（宿主 `layout` 文档）；异常值回落默认 |
+| S69 | 让 agent 带 `label` 执行 SQL | 出现 `ai_<label>` 控制台、带未读点、**不抢焦点**；同 label + 同 SQL 就地更新，SQL 不同则开 `ai_<label>#2` |
+| S70 | agent 控制台满 4 个后再投递 | 提示里带「AI 控制台已达 4 个」；已读的最近一个进入「AI 历史」，点条目可重开；未读的不会被收走 |
+| S71 | agent 传 `consoleId` 指向**用户** console | 返回 `CONSOLE_NOT_AGENT`，不执行、不投递 |
+| S72 | 让 agent 调 `get_schema` / `list_tables` | 能拿到表、视图与列（`get_schema` 支持 `库.表名` 收窄），不再靠 `SELECT * LIMIT 1` 猜列 |
+| S65 | 装进 `web` profile 后启动桌面端 | 右栏出现「SQL 工作台」；面板三项（连接/对象树/编辑）正常；`Ctrl+Enter` 能跑；agent 侧 `mcp__sql__ping` 返回 pong |
 
 > 若 S11 出「宿主服务不可用（未注入 sqlWorkbench）」：说明 node 半没有激活。先 `pnpm build` 确认 `lib/index.js` 不是 124 字节的占位产物，再重装 dev-sql。
 
@@ -143,4 +172,6 @@ dev-sql profile 需要模型配置才能跑 agent 对话（把 `llm-pi-ai` + `ag
 | 启动页显示 `Failed to load plugins / web boot: 1 entry did not activate` | client 或 node 半的 entry 抛异常（整条 entry 失败） | 看**启动日志**里 `dsh-data-ide (dsh-data-ide): ...` 那行；`TypeError: Invalid effect` = `ctx.effect` 返回了非函数（必须是 disposer）。**不要在 client 里直接访问 ctx 上的 node 服务**（会抛），面板数据一律走 `/dsh-data-ide/*` 路由 |
 | 面板能开但列表/执行全报错 | node 半没挂上路由 | 启动日志应有 `dsh-data-ide: 宿主未提供 webServer…`；确认 composition 含 `webServer` 服务 |
 | MCP 工具调不通 | 启动日志有 `skipping profile bundle … incompatible`（peerDeps 门禁，本包应为零 peerDeps）；或 spec 文件缺失（宿主还没发布连接） |
+| 提示 `EMPTY_RESPONSE: /dsh-data-ide/xxx 返回了空响应（HTTP n）` | 该路由没挂上或方法不对：确认 `lib/index.js` 是新构建、**完全退出 dsh 后重启**；`405` 表示同路径被注册了别的方法（见 08 R22） |
+| 提示 `BAD_RESPONSE: … 不是 JSON` | 请求打到了别的服务（端口被另一个实例占用）或反代插入了 HTML 错误页 |
 | pnpm 报 `ERR_PNPM_EPERM` / vitest 报 EPERM | `NODE_OPTIONS` 未清，见 §1 |

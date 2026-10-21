@@ -160,11 +160,78 @@ describe('panel object browser', () => {
     })
 
     expect(executeMock(api).mock.calls[0]?.[0].sql).toBe('SHOW CREATE TABLE `dwd`.`dwd_order`')
-    const card = container.querySelector('[data-sql-ddl]')
-    expect(card?.textContent).toContain('CREATE TABLE `dwd_order`')
-    // The DDL run rides the execute route but must not touch the console.
-    expect(readSql(container)).toBe('')
+    // The DDL opens in its own console tab, the way DataGrip's Go to DDL does.
+    const tab = [...container.querySelectorAll('[role="tab"]')].at(-1)
+    expect(tab?.textContent).toContain('ddl_dwd_order')
+    expect(readSql(container)).toBe('CREATE TABLE `dwd_order` (order_id BIGINT)')
+    // Reading a DDL must not run it: the grid stays idle.
     expect(container.querySelector('[data-grid-state]')?.getAttribute('data-grid-state')).not.toBe('loading')
+  })
+
+  it('turns a transport-thrown refusal into a readable sentence', async () => {
+    // The HTTP transport throws on 5xx instead of returning `ok:false`; the DDL
+    // dialog must still explain a denied SHOW VIEW in words (users saw
+    // `INTERNAL: errCode = 2, detailMessage = …` before).
+    const api = apiDouble({
+      execute: vi.fn(async () => {
+        throw new Error("INTERNAL: errCode = 2, detailMessage = SHOW CREATE TABLE command denied to user 'ai_reader'@'172.26.200.108' for table 'dwd: dwd_trade_order_all_v'")
+      }),
+    })
+    await openTree(api)
+
+    await act(async () => {
+      menuItem('ddl')?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const notice = container.querySelector('[data-sql-notice]')
+    const text = notice?.textContent ?? ''
+    expect(text).toContain('没有查看 dwd.dwd_trade_order_all_v 的权限')
+    expect(text).toContain('ai_reader')
+    expect(text).not.toContain('errCode')
+  })
+
+  it('warns instead of stacking a 9th tab, and the notice can be dismissed', async () => {
+    const api = apiDouble({
+      execute: vi.fn(async () => ({
+        ok: true as const,
+        columns: [{ name: 'Table', typeName: 'VARCHAR' }, { name: 'Create Table', typeName: 'VARCHAR' }],
+        rows: [['dwd_order', 'CREATE TABLE `dwd_order` (id BIGINT)']],
+        total: 1,
+        hasNextPage: false,
+        offset: 0,
+        durationMs: 1,
+        statementId: 'ddl',
+      })),
+    })
+    await openTree(api)
+
+    // Fill the strip to MAX_TABS (8) through the UI, then ask for a DDL.
+    for (let index = 0; index < 7; index += 1) {
+      act(() => {
+        container.querySelector('[aria-label="新建查询标签"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+    }
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(8)
+    // The menu has to be re-opened: creating a tab re-renders the tree.
+    rightClick(container.querySelector('[data-sql-schema-object="dwd_order"]'))
+    expect(menuItem('ddl')).not.toBeNull()
+
+    await act(async () => {
+      menuItem('ddl')?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const notice = container.querySelector('[data-sql-notice]')
+    expect(notice?.textContent).toContain('标签已满')
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(8)
+
+    act(() => {
+      notice?.querySelector('[aria-label="关闭提示"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-sql-notice]')).toBeNull()
   })
 
   it('surfaces a refusal from the database', async () => {
@@ -179,7 +246,7 @@ describe('panel object browser', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-sql-ddl]')?.textContent).toContain('没有 SHOW 权限')
+    expect(container.querySelector('[data-sql-notice]')?.textContent).toContain('没有 SHOW 权限')
   })
 
   it('says so when the database returns an empty DDL', async () => {
@@ -204,7 +271,7 @@ describe('panel object browser', () => {
     })
 
     // `SHOW CREATE` echoed the name only: that is not a statement, so say so.
-    expect(container.querySelector('[data-sql-ddl]')?.textContent).toContain('数据库没有返回 DDL')
+    expect(container.querySelector('[data-sql-notice]')?.textContent).toContain('数据库没有返回 DDL')
   })
 
   it('drops the data-source caption when the connection behind the tab is gone', async () => {

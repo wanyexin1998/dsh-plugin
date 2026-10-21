@@ -29,6 +29,7 @@ export const HTTP_ROUTES = {
   cancel: '/dsh-data-ide/cancel',
   schema: '/dsh-data-ide/schema',
   executeScript: '/dsh-data-ide/execute-script',
+  layout: '/dsh-data-ide/layout',
 } as const
 
 /** Minimal fetch surface, injectable for tests. */
@@ -39,9 +40,31 @@ interface Envelope {
   readonly error?: { readonly code?: string; readonly message?: string; readonly field?: string }
 }
 
-/** Read the envelope and throw the host's message on failure. */
-async function unwrap<T extends Envelope>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T
+/**
+ * Read the envelope and throw the host's message on failure.
+ *
+ * A **empty** body is its own diagnosis, not a JSON parse error: it means the
+ * route is not mounted (the host is an older build, or another dsh instance owns
+ * the port) or the handler died before writing. Letting `response.json()` throw
+ * `SyntaxError: Unexpected end of JSON input` produced exactly the unreadable
+ * unhandled rejection users reported (2026-10-21).
+ */
+async function unwrap<T extends Envelope>(response: Response, route: string): Promise<T> {
+  const text = await response.text()
+  if (text.trim() === '') {
+    throw new Error(
+      `EMPTY_RESPONSE: ${route} 返回了空响应（HTTP ${String(response.status)}）——` +
+        '该路由可能只注册了别的方法，或宿主是旧版本；请完全退出 dsh 后重启',
+    )
+  }
+  let payload: T
+  try {
+    payload = JSON.parse(text) as T
+  } catch {
+    throw new Error(
+      `BAD_RESPONSE: ${route} 的响应不是 JSON（HTTP ${String(response.status)}）：${text.slice(0, 120)}`,
+    )
+  }
   if (!response.ok || payload.ok === false) {
     const code = payload.error?.code ?? `HTTP_${response.status}`
     const message = payload.error?.message ?? `请求失败（${response.status}）`
@@ -57,16 +80,20 @@ async function unwrap<T extends Envelope>(response: Response): Promise<T> {
  */
 export function createHttpApi(fetchImpl: FetchLike = (input, init) => fetch(input, init)): WorkbenchApi {
   const post = async <T extends Envelope>(path: string, body: unknown): Promise<T> =>
-    unwrap<T>(await fetchImpl(path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    }))
+    unwrap<T>(
+      await fetchImpl(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      path,
+    )
 
   return {
     async list() {
       const payload = await unwrap<Envelope & { connections?: readonly DataSource[] }>(
         await fetchImpl(HTTP_ROUTES.connections, { method: 'GET' }),
+        HTTP_ROUTES.connections,
       )
       return payload.connections ?? []
     },
@@ -74,6 +101,7 @@ export function createHttpApi(fetchImpl: FetchLike = (input, init) => fetch(inpu
     async active() {
       const payload = await unwrap<Envelope & { activeId?: string | null }>(
         await fetchImpl(HTTP_ROUTES.connections, { method: 'GET' }),
+        HTTP_ROUTES.connections,
       )
       return payload.activeId ?? null
     },
@@ -116,6 +144,23 @@ export function createHttpApi(fetchImpl: FetchLike = (input, init) => fetch(inpu
       return payload.result ?? { cancelled: false }
     },
 
+    async layout() {
+      const payload = await unwrap<Envelope & { layout?: unknown }>(
+        await fetchImpl(HTTP_ROUTES.layout, { method: 'GET' }),
+        HTTP_ROUTES.layout,
+      )
+      return payload.layout ?? null
+    },
+
+    async saveLayout(layout) {
+      // Best effort: a failed save must not surface as a query error.
+      try {
+        await post(HTTP_ROUTES.layout, { layout })
+      } catch {
+        // Layout is a convenience, not data.
+      }
+    },
+
     async executeScript(request) {
       const payload = await post<Envelope & { script?: ScriptResponse; refusal?: { code: string; message: string } }>(
         HTTP_ROUTES.executeScript,
@@ -131,6 +176,7 @@ export function createHttpApi(fetchImpl: FetchLike = (input, init) => fetch(inpu
       const query = `?connId=${encodeURIComponent(connId)}${suffix}`
       const payload = await unwrap<Envelope & { schema?: SchemaSnapshot }>(
         await fetchImpl(`${HTTP_ROUTES.schema}${query}`, { method: 'GET' }),
+        HTTP_ROUTES.schema,
       )
       if (payload.schema === undefined) throw new Error('读取表结构失败：宿主未返回结果')
       return payload.schema

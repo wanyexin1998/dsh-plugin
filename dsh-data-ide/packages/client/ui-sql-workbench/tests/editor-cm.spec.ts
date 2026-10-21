@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SchemaIndex } from '../src/client/completion.ts'
-import { buildExtensions, readOnlyExtension, sqlExtension, toSqlNamespace } from '../src/client/editor-cm.ts'
+import { buildExtensions, readOnlyExtension, sqlExtension, templateCompletion, toSqlNamespace } from '../src/client/editor-cm.ts'
 import { Compartment } from '@codemirror/state'
 
 const schema: SchemaIndex = {
@@ -66,5 +66,9 @@ describe('editor extensions', () => {
     })
 
     expect(extensions.length).toBeGreaterThan(15)
+  })
+
+  it('returns no template completion when there is no word at the cursor', () => {
+    expect(templateCompletion({ matchBefore: () => null } as never)).toBeNull()
   })
 })

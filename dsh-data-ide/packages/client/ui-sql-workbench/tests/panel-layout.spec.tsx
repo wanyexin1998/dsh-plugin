@@ -99,17 +99,22 @@ describe('panel layout: three panes', () => {
     expect(column().style.gridTemplateRows).toContain(`${String(EDITOR_HEIGHT_DEFAULT)}px`)
   })
 
-  it('opens the object tree by default and collapses it to a rail', async () => {
+  it('collapses the object tree without reserving a column', async () => {
     await mount()
     expect(container.querySelector('[data-sql-schema-tree]')).not.toBeNull()
 
     click(byLabel('收起对象树'))
     expect(panel('objects')).toBeNull()
     expect(container.querySelector('[data-sql-schema-tree]')).toBeNull()
+    // The whole point: no rail column and no sash gap left behind, so the editor
+    // gets the full width instead of a squeezed one.
+    expect(workspace().style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+    expect(workspace().getAttribute('data-tree')).toBe('closed')
 
     click(byLabel('展开对象树'))
     expect(panel('objects')).not.toBeNull()
     expect(container.querySelector('[data-sql-schema-tree]')).not.toBeNull()
+    expect(workspace().style.gridTemplateColumns).toContain(`${String(TREE_WIDTH_DEFAULT)}px`)
   })
 
   it('names each pane in its header', async () => {
@@ -288,5 +293,54 @@ describe('panel layout: narrow sidebar', () => {
     })
 
     expect(workspace().style.gridTemplateColumns).toContain(`${String(TREE_WIDTH_DEFAULT)}px`)
+  })
+})
+
+describe('panel layout: persistence (09 B3)', () => {
+  it('restores the saved collapse', async () => {
+    const layout = vi.fn(async () => ({ treeOpen: false, treeWidth: 320, editorHeight: 320 }))
+    await mount(apiDouble({ layout }))
+
+    expect(workspace().getAttribute('data-tree')).toBe('closed')
+    expect(workspace().style.gridTemplateColumns).toBe('minmax(0, 1fr)')
+  })
+
+  it('restores the saved widths', async () => {
+    const layout = vi.fn(async () => ({ treeOpen: true, treeWidth: 320, editorHeight: 300 }))
+    await mount(apiDouble({ layout }))
+
+    expect(workspace().style.gridTemplateColumns).toContain('320px')
+    expect(column().style.gridTemplateRows).toContain('300px')
+  })
+
+  it('falls back to defaults for an unreadable document', async () => {
+    const layout = vi.fn(async () => ({ treeWidth: 0, editorHeight: Number.POSITIVE_INFINITY }))
+    await mount(apiDouble({ layout }))
+
+    expect(workspace().style.gridTemplateColumns).toContain(`${String(TREE_WIDTH_DEFAULT)}px`)
+    expect(column().style.gridTemplateRows).toContain(`${String(EDITOR_HEIGHT_DEFAULT)}px`)
+  })
+
+  it('becomes ready when loading the saved layout fails', async () => {
+    const saveLayout = vi.fn(async () => undefined)
+    await mount(apiDouble({ layout: vi.fn(async () => Promise.reject(new Error('bad layout'))), saveLayout }))
+
+    click(byLabel('收起对象树'))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 450))
+    })
+    expect(saveLayout).toHaveBeenCalledWith(expect.objectContaining({ treeOpen: false }))
+  })
+
+  it('persists a collapse after the debounce', async () => {
+    const saveLayout = vi.fn(async () => undefined)
+    await mount(apiDouble({ saveLayout }))
+
+    click(byLabel('收起对象树'))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 450))
+    })
+
+    expect(saveLayout).toHaveBeenCalledWith(expect.objectContaining({ treeOpen: false }))
   })
 })

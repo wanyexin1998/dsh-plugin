@@ -19,6 +19,11 @@ export interface ScriptRequest {
   /** Whole script, or the editor selection. */
   readonly sql: string
   readonly pageSize?: number
+  /**
+   * Cap on the number of statements. The MCP tool passes one so an agent cannot
+   * queue an unbounded script; the panel leaves it undefined (unchanged).
+   */
+  readonly maxStatements?: number
 }
 
 export interface ScriptStatementOk {
@@ -64,6 +69,16 @@ export async function executeScript(
 
   if (statements.length === 0) {
     return { refusal: { code: 'EMPTY_SQL', message: '没有可执行的语句' } }
+  }
+
+  if (request.maxStatements !== undefined && statements.length > request.maxStatements) {
+    // Reject rather than silently truncate: the agent must know it lost work.
+    return {
+      refusal: {
+        code: 'TOO_MANY_STATEMENTS',
+        message: `脚本包含 ${statements.length} 条语句，超过上限 ${request.maxStatements} 条`,
+      },
+    }
   }
 
   const results: ScriptStatement[] = []

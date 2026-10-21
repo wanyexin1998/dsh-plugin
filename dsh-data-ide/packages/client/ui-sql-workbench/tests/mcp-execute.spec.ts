@@ -6,6 +6,7 @@ import {
   MAX_PAGE_SIZE,
   buildCountQuery,
   buildPagedQuery,
+  filterClause,
   checkPermission,
   createStatementRegistry,
   executeSql,
@@ -183,6 +184,32 @@ describe('execute', () => {
 
     expect(result).toMatchObject({ total: 900, hasNextPage: true })
     expect('rows' in result && result.rows).toHaveLength(500)
+  })
+
+  it('carries filters into fetchPage as well', async () => {
+    const executor = fakeExecutor({ rows: [[1]] }, [[1]])
+
+    await fetchPage(deps(executor), {
+      connId,
+      sql: 'SELECT a FROM t',
+      offset: 100,
+      filters: [{ column: 'a', op: 'eq', value: 'x' }],
+    })
+
+    expect(executor.calls[0]).toContain(" WHERE `a` = 'x'")
+  })
+
+  it('applies column filters to both the page and the count', async () => {
+    const executor = fakeExecutor({ rows: [[1]] }, [[1]])
+
+    await executeSql(deps(executor), {
+      connId,
+      sql: 'SELECT a FROM t',
+      filters: [{ column: 'a', op: 'gt', value: '10', numeric: true }],
+    })
+
+    expect(executor.calls).toHaveLength(2)
+    for (const sql of executor.calls) expect(sql).toContain(' WHERE `a` > 10')
   })
 
   it('runs the page and the count in parallel against the same statement', async () => {
@@ -392,5 +419,70 @@ describe('raw statements', () => {
 
     expect('refusal' in outcome && outcome.refusal.code).toBe('WRITE_NOT_ALLOWED')
     expect(run.calls).toEqual([])
+  })
+})
+
+describe('column filters (server-side)', () => {
+  it('builds a WHERE into the paging wrapper, before ORDER BY and LIMIT', () => {
+    const sql = buildPagedQuery('SELECT * FROM t', {
+      limit: 10,
+      offset: 20,
+      sort: { column: 'created_at', direction: 'DESC' },
+      filters: [{ column: 'customer', op: 'contains', value: 'ali' }],
+    })
+
+    expect(sql).toContain('`customer` LIKE \'%ali%\'')
+    expect(sql.indexOf('WHERE')).toBeLessThan(sql.indexOf('ORDER BY'))
+    expect(sql.indexOf('WHERE')).toBeLessThan(sql.indexOf('LIMIT'))
+    expect(sql).toContain('LIMIT 10 OFFSET 20')
+  })
+
+  it('ANDs several conditions and counts with the same WHERE', () => {
+    const filters = [
+      { column: 'customer', op: 'eq' as const, value: 'Alice' },
+      { column: 'amount', op: 'gt' as const, value: '100', numeric: true },
+    ]
+
+    expect(filterClause(filters)).toBe(" WHERE `customer` = 'Alice' AND `amount` > 100")
+    expect(buildCountQuery('SELECT * FROM t', filters)).toContain("WHERE `customer` = 'Alice' AND `amount` > 100")
+  })
+
+  it('covers every operator', () => {
+    expect(filterClause([{ column: 'c', op: 'notContains', value: 'x' }])).toBe(" WHERE `c` NOT LIKE '%x%'")
+    expect(filterClause([{ column: 'c', op: 'ne', value: 'x' }])).toBe(" WHERE `c` <> 'x'")
+    expect(filterClause([{ column: 'c', op: 'ge', value: 'x' }])).toBe(" WHERE `c` >= 'x'")
+    expect(filterClause([{ column: 'c', op: 'lt', value: 'x' }])).toBe(" WHERE `c` < 'x'")
+    expect(filterClause([{ column: 'c', op: 'le', value: 'x' }])).toBe(" WHERE `c` <= 'x'")
+    expect(filterClause([{ column: 'c', op: 'isNull' }])).toBe(' WHERE `c` IS NULL')
+    expect(filterClause([{ column: 'c', op: 'notNull' }])).toBe(' WHERE `c` IS NOT NULL')
+  })
+
+  it('escapes quotes and backslashes instead of breaking out of the literal', () => {
+    expect(filterClause([{ column: 'c', op: 'eq', value: "O'Brien" }])).toBe(" WHERE `c` = 'O''Brien'")
+    expect(filterClause([{ column: 'c', op: 'eq', value: 'a\\b' }])).toBe(" WHERE `c` = 'a\\\\b'")
+    // A long paste is truncated rather than sent as a megabyte of WHERE.
+    const long = filterClause([{ column: 'c', op: 'eq', value: 'x'.repeat(500) }])
+    expect(long.length).toBeLessThan(230)
+  })
+
+  it('leaves a numeric column unquoted only when the value really is numeric', () => {
+    expect(filterClause([{ column: 'n', op: 'gt', value: '42', numeric: true }])).toBe(' WHERE `n` > 42')
+    expect(filterClause([{ column: 'n', op: 'gt', value: 'abc', numeric: true }])).toBe(" WHERE `n` > 'abc'")
+  })
+
+  it('rejects a column name that could break out of the identifier', () => {
+    expect(() => filterClause([{ column: 'c; DROP TABLE t', op: 'eq', value: 'x' }])).toThrow('非法排序列名')
+  })
+
+  it('treats a missing value as an empty string', () => {
+    // `eq` with no value cannot happen through the UI, but the builder must not
+    // emit `= undefined` if a caller omits it.
+    expect(filterClause([{ column: 'c', op: 'eq' }])).toBe(" WHERE `c` = ''")
+  })
+
+  it('adds nothing when there is no filter', () => {
+    expect(filterClause(undefined)).toBe('')
+    expect(filterClause([])).toBe('')
+    expect(buildPagedQuery('SELECT 1', { limit: 5, offset: 0 })).not.toContain('WHERE')
   })
 })

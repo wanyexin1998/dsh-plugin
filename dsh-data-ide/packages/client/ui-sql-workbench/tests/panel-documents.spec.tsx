@@ -72,6 +72,170 @@ const type = (sql: string): void => {
 }
 const sqlText = (): string => readSql(container)
 
+describe('panel: server-side filters', () => {
+  it('re-runs the statement with the condition and can clear it', async () => {
+    const api = apiDouble({
+      execute: vi.fn(async () => ({
+        ok: true as const,
+        columns: [{ name: 'order_id', typeName: 'BIGINT' }],
+        rows: [[1], [2]],
+        total: 2,
+        hasNextPage: false,
+        offset: 0,
+        durationMs: 1,
+        statementId: 'ui-1',
+      })),
+    })
+    await mount(api)
+    type('SELECT * FROM t')
+
+    // A first run so the grid exists with columns to filter by.
+    act(() => {
+      container.querySelector('[aria-label="执行"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    act(() => {
+      container.querySelector('[aria-label="筛选 order_id"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const input = container.querySelector('[aria-label="筛选值 order_id"]') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '42')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const op = container.querySelector('[aria-label="筛选条件"]') as HTMLSelectElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+      setter?.call(op, 'gt')
+      op.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    act(() => {
+      container.querySelector('[aria-label="应用筛选"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    // `withConnection` awaits the active connection before it executes.
+    await act(async () => {
+      await new Promise(resolve => {
+        setTimeout(resolve, 30)
+      })
+    })
+
+    // The condition reached the grid (toolbar shows it)…
+    expect(container.textContent).toContain('清除筛选（1）')
+    // …and the re-run carried it to the server. `mock.calls` holds argument
+    // tuples, so the payload is `call[0]`.
+    const calls = (api.execute as unknown as { mock: { calls: [{ filters?: unknown }][] } }).mock.calls
+    expect(calls.map(call => call[0].filters)).toEqual([
+      undefined,
+      [{ column: 'order_id', op: 'gt', value: '42', numeric: true }],
+    ])
+
+    // Clearing goes back to an unfiltered run.
+    act(() => {
+      container.querySelector('[aria-label="清除筛选"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise(resolve => {
+        setTimeout(resolve, 30)
+      })
+    })
+    const after = (api.execute as unknown as { mock: { calls: [{ filters?: unknown }][] } }).mock.calls.at(-1)
+    expect(after?.[0].filters).toBeUndefined()
+  })
+})
+
+describe('panel: removing one column filter', () => {
+  it('drops just that condition and re-runs without it', async () => {
+    const api = apiDouble({
+      execute: vi.fn(async () => ({
+        ok: true as const,
+        columns: [{ name: 'order_id', typeName: 'BIGINT' }],
+        rows: [[1]],
+        total: 1,
+        hasNextPage: false,
+        offset: 0,
+        durationMs: 1,
+        statementId: 'ui-1',
+      })),
+    })
+    await mount(api)
+    type('SELECT * FROM t')
+    act(() => {
+      container.querySelector('[aria-label="执行"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise(resolve => {
+        setTimeout(resolve, 30)
+      })
+    })
+
+    // Seed one condition, then remove it from the editor.
+    act(() => {
+      container.querySelector('[aria-label="筛选 order_id"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const input = container.querySelector('[aria-label="筛选值 order_id"]') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '7')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      container.querySelector('[aria-label="应用筛选"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise(resolve => {
+        setTimeout(resolve, 30)
+      })
+    })
+
+    act(() => {
+      container.querySelector('[aria-label="筛选 order_id"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    act(() => {
+      container.querySelector('[aria-label="移除该列筛选"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise(resolve => {
+        setTimeout(resolve, 30)
+      })
+    })
+
+    const calls = (api.execute as unknown as { mock: { calls: [{ filters?: unknown }][] } }).mock.calls
+    expect(calls.at(-1)?.[0].filters).toBeUndefined()
+  })
+})
+
+describe('panel: clipboard failures', () => {
+  it('shows a corner notice when the browser refuses the copy', async () => {
+    await mount(apiDouble())
+    type('SELECT 1')
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: vi.fn(async () => {
+          throw new DOMException('Write permission denied.', 'NotAllowedError')
+        }),
+      },
+      configurable: true,
+    })
+    Object.defineProperty(document, 'execCommand', { value: vi.fn(() => false), configurable: true })
+
+    act(() => {
+      container.querySelector('[aria-label="复制全部"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // The copy path used to reject unhandled; now it explains itself in the corner.
+    expect(container.querySelector('[data-sql-notice]')?.textContent).toContain('复制失败')
+  })
+})
+
 describe('panel documents', () => {
   it('starts with one console bound to the active connection', async () => {
     await mount(apiDouble())
@@ -162,13 +326,14 @@ describe('panel documents', () => {
     })
 
     // console_1 never ran anything, so it must stay empty.
-    expect(container.textContent).not.toContain('4242')
+    expect(container.textContent).not.toContain('4,242')
 
     click(tabs()[1])
     await act(async () => {
       await Promise.resolve()
     })
-    expect(container.textContent).toContain('4242')
+    // BIGINT renders grouped, the way a number column should.
+    expect(container.textContent).toContain('4,242')
   })
 
   it('follows the surviving console’s connection when the active one is closed', async () => {

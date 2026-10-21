@@ -73,6 +73,10 @@ const clientTarget = {
   ...shared,
   format: 'cjs',
   platform: 'browser',
+  // CodeMirror pushed this bundle from 176KB to ~1MB unminified; minifying
+  // brings it back to ~520KB (167KB gzip). Stack traces from the browser are
+  // still usable — we read DOM state and error text in the CDP checks, not source.
+  minify: true,
   // Classic JSX: the shell module table seeds `react`, not `react/jsx-runtime`,
   // and an unknown specifier is a loud resolution failure at materialization.
   jsx: 'transform',

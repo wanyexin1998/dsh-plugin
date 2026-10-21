@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ResultGrid } from '../src/client/components/ResultGrid.tsx'
-import type { ExecuteResponse } from '../src/execute/core.ts'
+import type { ExecuteResponse, FilterSpec } from '../src/execute/core.ts'
 
 const page = (rows: unknown[][], statementId = 'st-1'): ExecuteResponse => ({
   columns: [
@@ -37,87 +37,181 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function render(result: ExecuteResponse, onSort = vi.fn()) {
+function render(
+  result: ExecuteResponse,
+  onSort = vi.fn(),
+  filters: readonly FilterSpec[] = [],
+  onFilter = vi.fn(),
+  onClearFilters = vi.fn(),
+) {
   act(() => {
     root.render(
-      <ResultGrid result={result} sort={null} error={null} running={false} onSort={onSort} />,
+      <ResultGrid
+        result={result}
+        sort={null}
+        error={null}
+        running={false}
+        onSort={onSort}
+        filters={filters}
+        onFilter={onFilter}
+        onClearFilters={onClearFilters}
+      />,
     )
   })
   const buttons = (): HTMLButtonElement[] => [...container.querySelectorAll('button')] as HTMLButtonElement[]
   const byLabel = (label: string): HTMLElement | undefined =>
     [...container.querySelectorAll('[aria-label]')].find(node => node.getAttribute('aria-label') === label) as HTMLElement | undefined
-  return { buttons, byLabel }
+  return { buttons, byLabel, onFilter, onClearFilters }
 }
 
 const rows = [[1, 'Alice'], [2, 'bob']]
 
-describe('result grid: filter', () => {
-  it('filters the page by a column substring', () => {
+describe('result grid: column filter (server-side)', () => {
+  it('opens a condition editor with an operator and a value', () => {
     const view = render(page(rows))
 
     act(() => {
       view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
-    expect(input).toBeDefined()
 
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, 'ali')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-
-    expect(container.textContent).toContain('筛选 1/2 行')
-    expect(container.textContent).toContain('Alice')
-    expect(container.textContent).not.toContain('bob')
+    const editor = container.querySelector('[data-sql-filter-editor]')
+    expect(editor).not.toBeNull()
+    expect(view.byLabel('筛选条件')).toBeDefined()
+    expect(view.byLabel('筛选值 customer')).toBeDefined()
   })
 
-  it('clears the filter with the toolbar button', () => {
-    const view = render(page(rows))
+  it('commits a condition through onFilter (the panel re-runs the query)', () => {
+    const onFilter = vi.fn()
+    const view = render(page(rows), vi.fn(), [], onFilter)
+
     act(() => {
       view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
+    const input = view.byLabel('筛选值 customer') as HTMLInputElement
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
       setter?.call(input, 'ali')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
+    act(() => {
+      view.byLabel('应用筛选')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
 
+    expect(onFilter).toHaveBeenCalledWith('customer', { column: 'customer', op: 'contains', value: 'ali' })
+    // The editor closes once the condition is committed.
+    expect(container.querySelector('[data-sql-filter-editor]')).toBeNull()
+  })
+
+  it('marks a numeric column so the server does not quote the literal', () => {
+    const onFilter = vi.fn()
+    const view = render(page(rows), vi.fn(), [], onFilter)
+
+    act(() => {
+      view.byLabel('筛选 order_id')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const op = view.byLabel('筛选条件') as HTMLSelectElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+      setter?.call(op, 'gt')
+      op.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const input = view.byLabel('筛选值 order_id') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '1')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      view.byLabel('应用筛选')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onFilter).toHaveBeenCalledWith('order_id', { column: 'order_id', op: 'gt', value: '1', numeric: true })
+  })
+
+  it('omits the value for 为空 / 非空', () => {
+    const onFilter = vi.fn()
+    const view = render(page(rows), vi.fn(), [], onFilter)
+
+    act(() => {
+      view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const op = view.byLabel('筛选条件') as HTMLSelectElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+      setter?.call(op, 'isNull')
+      op.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(view.byLabel('筛选值 customer')).toBeUndefined()
+
+    act(() => {
+      view.byLabel('应用筛选')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onFilter).toHaveBeenCalledWith('customer', { column: 'customer', op: 'isNull' })
+  })
+
+  it('renders an 为空 condition without a value', () => {
+    render(page(rows), vi.fn(), [{ column: 'customer', op: 'isNull' }])
+
+    // The funnel for that column is marked active and the toolbar counts it.
+    expect(container.textContent).toContain('清除筛选（1）')
+    expect(container.querySelector('[aria-label="筛选 customer"]')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('hides the funnel when filters are disabled (script results)', () => {
+    act(() => {
+      root.render(
+        <ResultGrid
+          result={page(rows)}
+          sort={null}
+          error={null}
+          running={false}
+          onSort={vi.fn()}
+          filterEnabled={false}
+        />,
+      )
+    })
+
+    expect(container.querySelector('[aria-label="筛选 customer"]')).toBeNull()
+  })
+
+  it('shows the active count and clears all conditions', () => {
+    const onClearFilters = vi.fn()
+    const filters: FilterSpec[] = [{ column: 'customer', op: 'contains', value: 'ali' }]
+    const view = render(page(rows), vi.fn(), filters, vi.fn(), onClearFilters)
+
+    expect(container.textContent).toContain('行（已筛选）')
     act(() => {
       view.byLabel('清除筛选')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-
-    expect(container.textContent).toContain('2 行')
+    expect(onClearFilters).toHaveBeenCalled()
   })
 
-  it('closes the filter row on Enter and Escape', () => {
+  it('prefills the editor from an existing condition and can remove it', () => {
+    const onFilter = vi.fn()
+    const filters: FilterSpec[] = [{ column: 'customer', op: 'eq', value: 'Alice' }]
+    const view = render(page(rows), vi.fn(), filters, onFilter)
+
+    act(() => {
+      view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect((view.byLabel('筛选值 customer') as HTMLInputElement).value).toBe('Alice')
+
+    act(() => {
+      view.byLabel('移除该列筛选')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onFilter).toHaveBeenCalledWith('customer', null)
+  })
+
+  it('closes the editor on Escape', () => {
     const view = render(page(rows))
     act(() => {
       view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
+    const input = view.byLabel('筛选值 customer') as HTMLInputElement
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
-    expect(view.byLabel('筛选输入 customer')).toBeUndefined()
-  })
-
-  it('drops the filter when a new page arrives', () => {
-    const view = render(page(rows))
-    act(() => {
-      view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, 'ali')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-
-    render(page(rows, 'st-2'))
-
-    expect(container.textContent).toContain('2 行')
+    expect(container.querySelector('[data-sql-filter-editor]')).toBeNull()
   })
 })
 
@@ -247,7 +341,7 @@ describe('result grid: states', () => {
   it('shows the error with its code', () => {
     act(() => {
       root.render(
-        <ResultGrid result={null} sort={null} error={{ code: 'WRITE_DISABLED', message: '写操作未开启' }} running={false} onSort={vi.fn()} />,
+        <ResultGrid result={null} sort={null} error={{ code: 'WRITE_DISABLED', message: '写操作未开启' }} running={false} onSort={vi.fn()} filters={[]} onFilter={vi.fn()} onClearFilters={vi.fn()} />,
       )
     })
 
@@ -257,7 +351,7 @@ describe('result grid: states', () => {
 
   it('shows the running placeholder', () => {
     act(() => {
-      root.render(<ResultGrid result={null} sort={null} error={null} running onSort={vi.fn()} />)
+      root.render(<ResultGrid result={null} sort={null} error={null} running onSort={vi.fn()} filters={[]} onFilter={vi.fn()} onClearFilters={vi.fn()} />)
     })
 
     expect(container.textContent).toContain('正在执行')
@@ -265,7 +359,7 @@ describe('result grid: states', () => {
 
   it('says when a query returned no rows', () => {
     act(() => {
-      root.render(<ResultGrid result={page([])} sort={null} error={null} running={false} onSort={vi.fn()} />)
+      root.render(<ResultGrid result={page([])} sort={null} error={null} running={false} onSort={vi.fn()} filters={[]} onFilter={vi.fn()} onClearFilters={vi.fn()} />)
     })
 
     expect(container.textContent).toContain('没有返回行')
@@ -273,16 +367,22 @@ describe('result grid: states', () => {
 })
 
 describe('result grid: further edges', () => {
-  it('closes the filter row on Enter as well', () => {
-    const view = render(page(rows))
+  it('commits on Enter as well', () => {
+    const onFilter = vi.fn()
+    const view = render(page(rows), vi.fn(), [], onFilter)
     act(() => {
       view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
+    const input = view.byLabel('筛选值 customer') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, 'zzz')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
-    expect(view.byLabel('筛选输入 customer')).toBeUndefined()
+    expect(onFilter).toHaveBeenCalledWith('customer', { column: 'customer', op: 'contains', value: 'zzz' })
   })
 
   it('toggles the filter row closed when the same column is clicked twice', () => {
@@ -353,21 +453,27 @@ describe('result grid: copy with nothing selected', () => {
 
 describe('grid: hardening', () => {
   it('clears the selection when a filter reshuffles the rows', () => {
-    const view = render(page(rows))
+    render(page(rows))
     const cells = [...container.querySelectorAll('tbody td')] as HTMLElement[]
     act(() => {
       cells[0]?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })
     expect(container.querySelectorAll('td[data-selected]')).toHaveLength(1)
 
+    // A new filter set re-runs the query; the old rectangle no longer maps.
     act(() => {
-      view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, 'a')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
+      root.render(
+        <ResultGrid
+          result={page(rows)}
+          sort={null}
+          error={null}
+          running={false}
+          onSort={vi.fn()}
+          filters={[{ column: 'customer', op: 'contains', value: 'a' }]}
+          onFilter={vi.fn()}
+          onClearFilters={vi.fn()}
+        />,
+      )
     })
 
     expect(container.querySelectorAll('td[data-selected]')).toHaveLength(0)
@@ -455,7 +561,7 @@ describe('grid: refresh and keyboard', () => {
   it('asks for a refresh when the toolbar button is pressed', () => {
     const onRefresh = vi.fn()
     act(() => {
-      root.render(<ResultGrid result={page(rows)} sort={null} error={null} running={false} onSort={vi.fn()} onRefresh={onRefresh} />)
+      root.render(<ResultGrid result={page(rows)} sort={null} error={null} running={false} onSort={vi.fn()} onRefresh={onRefresh} filters={[]} onFilter={vi.fn()} onClearFilters={vi.fn()} />)
     })
     const button = [...container.querySelectorAll('[aria-label="刷新结果"]')][0] as HTMLElement
     act(() => {
@@ -481,24 +587,19 @@ describe('grid: refresh and keyboard', () => {
 })
 
 describe('grid: empty filter result', () => {
-  it('says when the page filter matches nothing', () => {
-    const view = render(page(rows))
-    act(() => {
-      view.byLabel('筛选 customer')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    const input = view.byLabel('筛选输入 customer') as HTMLInputElement
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, 'zzz')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+  it('says when a filtered query matches nothing', () => {
+    render(page([]), vi.fn(), [{ column: 'customer', op: 'contains', value: 'zzz' }])
 
-    expect(container.textContent).toContain('本页没有匹配的行')
+    // Zero rows comes back as a successful empty result, with the filter still
+    // visible in the toolbar so the state is not mistaken for "table is empty".
+    expect(container.textContent).toContain('0 行（已筛选）')
+    // The way out stays on screen.
+    expect(container.textContent).toContain('清除筛选（1）')
   })
 
   it('shows 执行中 in the toolbar while a query runs', () => {
     act(() => {
-      root.render(<ResultGrid result={page(rows)} sort={null} error={null} running onSort={vi.fn()} />)
+      root.render(<ResultGrid result={page(rows)} sort={null} error={null} running onSort={vi.fn()} filters={[]} onFilter={vi.fn()} onClearFilters={vi.fn()} />)
     })
 
     expect(container.textContent).toContain('执行中')
@@ -533,7 +634,9 @@ describe('grid: status bar aggregator', () => {
     expect(status).not.toBeNull()
     expect(container.querySelector('[data-grid-range]')?.textContent).toBe('整页 3 行 × 3 列')
     // amount sums to 3500; NULL is skipped rather than counted as zero.
-    expect(container.querySelector('[data-grid-stat]')?.textContent).toBe('SUM = 3,500')
+    // `order_id` is BIGINT, which now counts as numeric, and it is the first
+    // numeric column — so the default aggregate runs on it.
+    expect(container.querySelector('[data-grid-stat]')?.textContent).toBe('SUM = 6')
     expect(container.querySelector('[data-grid-charset]')?.textContent).toBe('UTF-8')
     expect((container.querySelector('[aria-label="聚合函数"]') as HTMLSelectElement).value).toBe('SUM')
   })
@@ -548,7 +651,7 @@ describe('grid: status bar aggregator', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    expect(container.querySelector('[data-grid-stat]')?.textContent).toBe('AVG = 1,750')
+    expect(container.querySelector('[data-grid-stat]')?.textContent).toBe('AVG = 2')
   })
 
   it('narrows to the selection once cells are picked', () => {
@@ -576,12 +679,12 @@ describe('grid: status bar aggregator', () => {
     act(() => {
       view.byLabel('查询结果')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, shiftKey: true, bubbles: true }))
     })
-    expect(writeText).toHaveBeenLastCalledWith('3500')
+    expect(writeText).toHaveBeenLastCalledWith('6')
 
     act(() => {
       view.byLabel('复制聚合结果')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    expect(writeText).toHaveBeenLastCalledWith('3500')
+    expect(writeText).toHaveBeenLastCalledWith('6')
   })
 
   it('disables the copy button when there is nothing to add up', () => {
@@ -596,6 +699,9 @@ describe('grid: status bar aggregator', () => {
           error={null}
           running={false}
           onSort={vi.fn()}
+          filters={[]}
+          onFilter={vi.fn()}
+          onClearFilters={vi.fn()}
         />,
       )
     })
@@ -687,6 +793,9 @@ describe('grid: value viewer', () => {
           error={null}
           running={false}
           onSort={vi.fn()}
+          filters={[]}
+          onFilter={vi.fn()}
+          onClearFilters={vi.fn()}
         />,
       )
     })

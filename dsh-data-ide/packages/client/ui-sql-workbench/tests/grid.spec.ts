@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import type { QueryField } from '../src/execute/core.ts'
 import {
   cellText,
-  filterIndexes,
   formatRows,
   inSelection,
   normalizeSelection,
@@ -32,34 +31,6 @@ describe('formatRows', () => {
 
   it('marks NULL cells', () => {
     expect(formatRows([[3, null]], columns)[0]?.[1]).toMatchObject({ text: 'NULL', isNull: true })
-  })
-})
-
-describe('filterIndexes', () => {
-  const indexes = (data: readonly (readonly unknown[])[], filters: Record<string, string>) =>
-    [...filterIndexes(formatRows(data, columns), columns, filters)]
-
-  it('returns every row when no filter is set', () => {
-    expect(indexes(rows, {})).toEqual([0, 1, 2])
-    expect(indexes(rows, { customer: '   ' })).toEqual([0, 1, 2])
-  })
-
-  it('filters by a substring, case-insensitively', () => {
-    expect(indexes(rows, { customer: 'ali' })).toEqual([0])
-  })
-
-  it('matches numbers by their formatted text', () => {
-    const numeric = [{ name: 'n', typeName: 'BIGINT' }]
-    expect([...filterIndexes(formatRows([[1234567, 'x']], numeric), numeric, { n: '123' })]).toEqual([0])
-  })
-
-  it('requires every active column to match', () => {
-    expect(indexes(rows, { customer: 'b', order_id: '2' })).toEqual([1])
-  })
-
-  it('skips a row whose cell is missing', () => {
-    const short: readonly (readonly unknown[])[] = [[1]]
-    expect(indexes(short, { customer: 'x' })).toEqual([])
   })
 })
 
@@ -117,12 +88,5 @@ describe('cellText', () => {
 describe('selection outside the column range', () => {
   it('renders an empty cell rather than throwing', () => {
     expect(selectionToTsv(rows, columns, { fromRow: 0, fromColumn: 0, toRow: 0, toColumn: 5 })).toBe('1\tAlice\t\t\t\t')
-  })
-})
-
-describe('filterIndexes: malformed rows', () => {
-  it('treats a missing cell as an empty string', () => {
-    expect([...filterIndexes([[]], columns, { customer: 'x' })]).toEqual([])
-    expect([...filterIndexes([[]], columns, { order_id: '' })]).toEqual([0])
   })
 })

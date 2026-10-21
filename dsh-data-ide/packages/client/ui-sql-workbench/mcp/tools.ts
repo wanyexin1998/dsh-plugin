@@ -39,7 +39,10 @@ export const TOOL_NAMES: readonly string[] = [
   PING_TOOL,
   'list_datasources',
   'test_connection',
+  'get_schema',
+  'list_tables',
   'execute_sql',
+  'execute_script',
   'fetch_page',
   'cancel_statement',
 ]

@@ -5,15 +5,16 @@
 
 ## 0. 项目一句话
 
-dsh（DeepSeek Harness，**0.1.7-rc.2**）右栏的**新页面类型 tab**——轻量 SQL 工作台（连接 / SQL 编辑 / 结果网格 / git），同包附带 MCP server（serverName `sql`），人与 agent 共用同一套能力。
+dsh（DeepSeek Harness，**0.2.1-rc.2**）右栏的**新页面类型 tab**——轻量 SQL 工作台（连接 / SQL 编辑 / 结果网格 / git），同包附带 MCP server（serverName `sql`），人与 agent 共用同一套能力。
 
 ## 1. 宿主与仓库
 
 | 项 | 值 |
 |---|---|
 | 目标宿主 | **dsh 0.2.1-rc.2**（桌面端 `E:/deepseek-harness`，代码在 `resources/app.asar`）。**2026-10-18 基线切换**：原 0.1.7-rc.2（`E:/wyx_code/dsh-official-v0.1.7-rc.2`）仅留作只读参照——用户最终要装的就是桌面端这一版 |
-| 桌面端启动（0.2.1） | `E:/deepseek-harness/resources/runtime/cli/bin/dsh.cmd --profile <p> --port <n>`（内部以 `ELECTRON_RUN_AS_NODE=1` 跑 `app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js`）｜旧 0.1.7 记录：`dsh-desktop.exe` → `node <harness>/apps/cli/lib/bin.js --profile web --no-open --port N`（`src-tauri/src/lib.rs` L138-160）。**桌面端跑的是 `web` profile**；`desktop` profile 是另一套手工环境 |
-| 开发验证 profile | **`dev-sql-021`**（0.2.1 上新建，`dsh.cmd plugin --profile dev-sql-021 add link:<包目录>` 自动创建）；旧的 `dev-sql` 属于 0.1.7。**禁止**改动 `web` / `desktop` profile，除非用户明确批准 |
+| 桌面端启动（0.2.1） | **桌面应用 = `E:/deepseek-harness/DeepSeek Harness.exe`**（Electron，桌面快捷方式指向它）。它默认使用 **`desktop` profile**，且该 profile **由 Electron 独占**：`dsh.cmd --profile desktop …` 会直接报 `profile "desktop" is managed exclusively by the Electron application`，连 `--dump-config` 都不行 |
+| profile 三分（2026-10-20 实测更正） | ① **`desktop`** = 桌面应用默认用，Electron 独占，装插件要 `dsh.cmd plugin --profile desktop add link:<包目录>`；② **`dev-sql-021`** = 本项目的开发验证 profile，CLI 可自由启停，`dsh.cmd --profile dev-sql-021 --port <n>`；③ `web` = 另一套手工环境，与桌面应用无关（此前文档误写「桌面端跑 web profile」，2026-10-20 更正） |
+| 开发验证 profile | **`dev-sql-021`**（0.2.1 上新建，`dsh.cmd plugin --profile dev-sql-021 add link:<包目录>` 自动创建）；旧的 `dev-sql` 属于 0.1.7。改 `web` / `desktop` 前需用户明确批准 |
 | 开发仓库 | `E:/dsh-plugin/dsh-data-ide`（独立 git 仓，pnpm workspace） |
 | 包目录 / 包名 | `packages/client/ui-sql-workbench/` / **`dsh-data-ide`**（裸包名；`@deepseek-ai/*` 是官方命名空间，外部插件不占用） |
 | dsh monorepo（只读参照） | `E:/wyx_code/deepseek-harness`（本地 checkout 在 master）。**不切用户分支、不改 monorepo** |
@@ -62,6 +63,9 @@ docs/                       # 00-08 + reference/
 
 ### 质量
 - **per-file 100% 覆盖率**（vitest；`vitest.config.ts` 已开 thresholds）。豁免仅限不可达分支且写 `/* v8 ignore -- reason */`。
+- **事件型 UI 用例必须按真实事件序列写**：`pointerdown → pointerup → click`。直接 `.click()` 会漏掉「在 pointerdown 里卸载节点」这类 bug（2026-10-20 右键菜单实测踩过）。
+- **`void somePromise()` 等于放弃错误处理**：凡 `void` 掉的 Promise 必须有内部 `catch`（2026-10-20 剪贴板实测踩过）。
+- 测试环境：jsdom 无布局，CodeMirror 需要 `tests/setup/jsdom-cm.ts` 的 `Range.getClientRects` 补丁；网格类用例用 `EditorView.findFromDOM` 驱动（`tests/support/editor.ts`）。
 - 先写失败测试再写实现；每完成一个里程碑更新 `docs/07` 状态 + `docs/08` 风险复盘 + `docs/00` 变更记录。
 
 ### 合规
@@ -83,6 +87,9 @@ docs/                       # 00-08 + reference/
 | 8 | 安全 | agent 默认只读（仅 SELECT）；写操作需连接级 `writeEnabled`；DDL 黑名单默认拒绝；写操作审计；单单元格 1MB、预览截断 32KB |
 | 9 | 分发 | 开发期 `link:` 装进 dev-sql；验收后经用户批准装进 `web` profile；终态 tgz |
 | 10 | MCP | `serverName: sql`；`toolCallTimeoutMs: 120000`；凭据**不经 env**；server 入口路径经 `!!js` 表达式从活动 profile 的 node_modules 解析 |
+| 11 | 编辑器内核 | **CodeMirror 6**（2026-10-20，用户拍板）：`client/editor-cm.ts` 装配 + `SqlEditor.tsx` 适配；主题走 `EditorView.theme` + `--dsw-*`（不产 CSS 文件）；client 目标开 `minify`（513KB / gzip 167KB）。不引入 Monaco |
+| 12 | 结果筛选 | **服务端 WHERE**：`ExecuteRequest.filters` 进分页包裹与 COUNT；不做"仅本页"客户端过滤（`grid.filterIndexes` 仅为历史遗留，勿再用） |
+| 13 | 错误文案 | 驱动错误先经 `client/db-error.ts` 翻译（剥 `errCode` 外壳、按模式成人话）；**注意拒绝有两形态**：`ok:false` 与 HTTP 5xx 抛异常，两处都要处理 |
 
 ## 5. 工作流
 
@@ -111,5 +118,8 @@ docs/                       # 00-08 + reference/
 
 ## 7. 明确不做（防范围蔓延）
 
-编辑回写、introspection/schema 树、SSH/SSL 隧道、SQL 智能补全/解析器、远程执行、图表、驱动下载生态、多结果集对比、**对话分屏 / per-pane 右栏**（0.1.7 无此能力，见 08-RISKS R1）、**Oracle 连接与 Java 桥**（2026-10-17 降级 P1）。
-新需求先记入 `docs/08` 风险表与 backlog，不擅自扩范围。
+**已实现，不要当成"不做"**：introspection/对象树（2026-10-19 起，含表/视图分组、右键菜单、DDL）、SQL 语法高亮与 schema 补全（2026-10-20 由 CodeMirror 6 提供）。
+
+明确不做：编辑回写、事务/会话管理、SSH/SSL 隧道、远程执行、图表/Geo/Compare、多结果集对比、**对话分屏 / per-pane 右栏**（0.1.7 起就无此能力，见 08-RISKS R1）、**Oracle 连接与 Java 桥**（2026-10-17 降级 P1）。
+
+待办清单的唯一事实源是 `docs/09-BACKLOG.md`；新需求先写进 09（并判断是否要进 §7 的不做清单），不擅自扩范围。

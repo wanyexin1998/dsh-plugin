@@ -31,8 +31,13 @@ export interface SchemaTreeProps {
   readonly onInsert: (name: string) => void
   /** DataGrip's `Edit Data` (F4): we run `SELECT * …` in the console. */
   readonly onOpenData: (sql: string) => void
-  /** `SHOW CREATE …` text, or a rejection the dialog shows. */
-  readonly loadDdl: (target: DdlTarget) => Promise<string>
+  /**
+   * Show the object's DDL.
+   *
+   * The panel opens it in a console tab (DataGrip's *Go to DDL* does the same);
+   * a refusal surfaces as a corner notice, not a dialog over the tree.
+   */
+  readonly onShowDdl: (target: DdlTarget) => void
   readonly onCopy: (text: string) => void
   readonly onRefresh: () => void
   /**
@@ -51,12 +56,6 @@ interface OpenMenu {
   readonly items: readonly MenuItem[]
 }
 
-interface DdlView {
-  readonly title: string
-  readonly text: string
-  readonly pending: boolean
-  readonly error?: string
-}
 
 /**
  * Object browser for the active connection.
@@ -78,7 +77,7 @@ export function SchemaTree({
   connectionName,
   onInsert,
   onOpenData,
-  loadDdl,
+  onShowDdl,
   onCopy,
   onRefresh,
   showRefresh = true,
@@ -86,7 +85,6 @@ export function SchemaTree({
   const [filter, setFilter] = React.useState('')
   const [open, setOpen] = React.useState<ReadonlySet<string>>(new Set())
   const [menu, setMenu] = React.useState<OpenMenu | null>(null)
-  const [ddl, setDdl] = React.useState<DdlView | null>(null)
   const needle = filter.trim()
   const groups = React.useMemo(() => filterGroups(groupBySchema(tables), needle), [tables, needle])
   // A single namespace needs no extra level; the schema row would be a lone
@@ -104,6 +102,8 @@ export function SchemaTree({
     ? '\u0000empty'
     : groupBySchema(tables).map(group => group.schema).join('\u0001')
   const seeded = React.useRef<string | null>(null)
+  /** The menu element, so its own pointerdown does not count as "outside". */
+  const menuRef = React.useRef<HTMLDivElement | null>(null)
   React.useEffect(() => {
     if (seeded.current === signature) return
     seeded.current = signature
@@ -122,19 +122,25 @@ export function SchemaTree({
   // the list out from under them.
   React.useEffect(() => {
     if (menu === null) return
-    const close = (): void => {
+    // A click inside the menu must survive its own pointerdown: closing here
+    // unmounts the button before `click` fires, which is why every item did
+    // nothing at all.
+    const close = (event?: Event): void => {
+      const node = menuRef.current
+      const target = event?.target
+      if (node !== null && target instanceof Node && node.contains(target)) return
       setMenu(null)
     }
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close()
     }
-    window.addEventListener('pointerdown', close)
+    window.addEventListener('pointerdown', close as EventListener, true)
     window.addEventListener('keydown', onKey)
-    window.addEventListener('scroll', close, true)
+    window.addEventListener('scroll', close as EventListener, true)
     return () => {
-      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('pointerdown', close as EventListener, true)
       window.removeEventListener('keydown', onKey)
-      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('scroll', close as EventListener, true)
     }
   }, [menu])
 
@@ -148,17 +154,6 @@ export function SchemaTree({
   }
   const isOpen = (key: string): boolean => open.has(key) || needle !== ''
 
-  const showDdl = async (target: DdlTarget): Promise<void> => {
-    const title = ddlTitle(target)
-    setDdl({ title, text: '', pending: true })
-    try {
-      const text = await loadDdl(target)
-      setDdl({ title, text, pending: false })
-    } catch (error) {
-      setDdl({ title, text: '', pending: false, error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
   const openMenu = (event: React.MouseEvent, title: string, build: () => readonly MenuItem[]): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -169,7 +164,7 @@ export function SchemaTree({
     { id: 'data', label: '打开数据', hint: 'F4', run: () => { onOpenData(openDataSql(table)) } },
     { id: 'insert', label: '插入名称', hint: 'Enter', run: () => { onInsert(table.name) } },
     { id: 'copy', label: '复制引用', run: () => { onCopy(qualifiedName(table)) } },
-    { id: 'ddl', label: '查看 DDL', hint: 'Ctrl+B', run: () => { void showDdl({ schema: table.schema ?? '', table: table.name, ...(table.kind === undefined ? {} : { kind: table.kind }) }) } },
+    { id: 'ddl', label: '查看 DDL', hint: 'Ctrl+B', run: () => { onShowDdl({ schema: table.schema ?? '', table: table.name, ...(table.kind === undefined ? {} : { kind: table.kind }) }) } },
     { id: 'refresh', label: '刷新表结构', run: onRefresh },
   ]
 
@@ -206,13 +201,17 @@ export function SchemaTree({
             }}
             title={`插入 ${table.name}（右键更多操作）`}
           >
-            <span className={styles.schemaKindBadge}>{table.kind === 'view' ? 'V' : 'T'}</span>
             {table.name}
             <span className={styles.schemaCount}>{table.columns.length}</span>
           </button>
         </div>
         {expanded ? (
           <ul className={styles.schemaColumns}>
+            {table.columns.length === 0 ? (
+              <li className={styles.schemaEmpty} data-sql-empty-object="">
+                无列信息{table.kind === 'view' ? '（视图）' : ''}
+              </li>
+            ) : null}
             {table.columns.map(column => (
               <li key={columnKey(table, column.name)}>
                 <button
@@ -356,6 +355,7 @@ export function SchemaTree({
 
       {menu === null || menuBox === null ? null : (
         <div
+          ref={menuRef}
           className={styles.schemaMenu}
           role="menu"
           data-sql-schema-menu=""
@@ -385,37 +385,6 @@ export function SchemaTree({
         </div>
       )}
 
-      {ddl === null ? null : (
-        <div className={styles.schemaDdl} role="dialog" aria-label={`DDL ${ddl.title}`} data-sql-ddl="">
-          <div className={styles.schemaDdlHead}>
-            <span className={styles.schemaDdlTitle}>{ddl.title}</span>
-            <button
-              type="button"
-              className={styles.button}
-              disabled={ddl.pending || ddl.error !== undefined}
-              onClick={() => {
-                onCopy(ddl.text)
-              }}
-              aria-label="复制 DDL"
-            >
-              复制
-            </button>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={() => {
-                setDdl(null)
-              }}
-              aria-label="关闭 DDL"
-            >
-              关闭
-            </button>
-          </div>
-          {ddl.pending ? <pre className={styles.schemaDdlBody}>读取中…</pre> : null}
-          {ddl.error === undefined ? null : <p className={styles.schemaDdlError}>{ddl.error}</p>}
-          {ddl.pending || ddl.error !== undefined ? null : <pre className={styles.schemaDdlBody}>{ddl.text}</pre>}
-        </div>
-      )}
     </section>
   )
 }

@@ -9,7 +9,17 @@ const doris: DataSource = createDataSource({ id: connId, name: 'doris', dbms: 'd
 
 /** Build a fetch double answering the given payload per path. */
 function fetchDouble(payloads: Record<string, unknown>, status = 200) {
-  return vi.fn(async (input: string) => ({ ok: status < 400, status, json: async () => payloads[input] ?? {} }) as Response)
+  // `unwrap` reads text first (an empty body has its own error), so the double
+  // has to answer both shapes.
+  return vi.fn(
+    async (input: string) =>
+      ({
+        ok: status < 400,
+        status,
+        text: async () => JSON.stringify(payloads[input] ?? {}),
+        json: async () => payloads[input] ?? {},
+      }) as Response,
+  )
 }
 
 const okResult = { ok: true, columns: [], rows: [[1]], total: 1, hasNextPage: false, offset: 0, durationMs: 3, statementId: 'ui-1' }
@@ -110,7 +120,15 @@ describe('http panel api', () => {
   })
 
   it('uses the global fetch by default', async () => {
-    const stub = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, connections: [], activeId: null }) }) as Response)
+    const stub = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ ok: true, connections: [], activeId: null }),
+          json: async () => ({ ok: true, connections: [], activeId: null }),
+        }) as Response,
+    )
     vi.stubGlobal('fetch', stub)
 
     const api = createHttpApi()
@@ -118,6 +136,28 @@ describe('http panel api', () => {
 
     expect(stub).toHaveBeenCalledWith(HTTP_ROUTES.connections, { method: 'GET' })
     vi.unstubAllGlobals()
+  })
+
+  it('loads and best-effort saves panel layout', async () => {
+    const layout = { ratio: 0.4, objectsOpen: false }
+    const fetchImpl = fetchDouble({ [HTTP_ROUTES.layout]: { ok: true, layout } })
+    const api = createHttpApi(fetchImpl)
+
+    await expect(api.layout!()).resolves.toEqual(layout)
+    await expect(api.saveLayout!(layout)).resolves.toBeUndefined()
+    expect(fetchImpl).toHaveBeenCalledWith(HTTP_ROUTES.layout, { method: 'GET' })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      HTTP_ROUTES.layout,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ layout }) }),
+    )
+  })
+
+  it('returns null for a missing layout and absorbs save failures', async () => {
+    const api = createHttpApi(fetchDouble({ [HTTP_ROUTES.layout]: { ok: false } }, 500))
+    await expect(api.saveLayout!({ ratio: 0.5 })).resolves.toBeUndefined()
+
+    const missing = createHttpApi(fetchDouble({ [HTTP_ROUTES.layout]: { ok: true } }))
+    await expect(missing.layout!()).resolves.toBeNull()
   })
 })
 
@@ -128,6 +168,7 @@ describe('http panel api: schema', () => {
   const schemaFetch = (payload: unknown, status = 200) => vi.fn(async () => ({
     ok: status < 400,
     status,
+    text: async () => JSON.stringify(payload),
     json: async () => payload,
   }) as Response)
 

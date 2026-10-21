@@ -346,3 +346,61 @@ describe('panel api: script without ports', () => {
     expect(outcome.statements[0]?.ok === false && outcome.statements[0].error.code).toBe('CONN_NOT_FOUND')
   })
 })
+
+describe('panel api: layout', () => {
+  it('returns null and treats save as a no-op without a key-value store', async () => {
+    const { store } = storeDouble()
+    const api = createPanelApi({ dataSources: store, credentials: credentialsDouble('p').credentials, execution, probe: yesProbe })
+
+    await expect(api.readLayout!()).resolves.toBeNull()
+    await expect(api.saveLayout!({ treeOpen: true })).resolves.toBeUndefined()
+  })
+
+  it('loads and saves an object through the key-value store', async () => {
+    const { store } = storeDouble()
+    const get = vi.fn(async () => ({ treeOpen: false }))
+    const put = vi.fn(async () => undefined)
+    const kv = { get, put, delete: vi.fn(), entries: vi.fn() }
+    const api = createPanelApi({
+      dataSources: store,
+      credentials: credentialsDouble('p').credentials,
+      execution,
+      probe: yesProbe,
+      kv: kv as never,
+    })
+
+    await expect(api.readLayout!()).resolves.toEqual({ treeOpen: false })
+    await api.saveLayout!({ treeOpen: true })
+    expect(put).toHaveBeenCalledWith('layout', { treeOpen: true })
+  })
+
+  it('maps a missing stored layout to null', async () => {
+    const { store } = storeDouble()
+    const kv = { get: vi.fn(async () => undefined), put: vi.fn(), delete: vi.fn(), entries: vi.fn() }
+    const api = createPanelApi({
+      dataSources: store,
+      credentials: credentialsDouble('p').credentials,
+      execution,
+      probe: yesProbe,
+      kv: kv as never,
+    })
+    await expect(api.readLayout!()).resolves.toBeNull()
+  })
+
+  it('rejects primitive, null and array layouts', async () => {
+    const { store } = storeDouble()
+    const kv = { get: vi.fn(), put: vi.fn(), delete: vi.fn(), entries: vi.fn() }
+    const api = createPanelApi({
+      dataSources: store,
+      credentials: credentialsDouble('p').credentials,
+      execution,
+      probe: yesProbe,
+      kv: kv as never,
+    })
+
+    for (const value of [null, [], 'wide']) {
+      await expect(api.saveLayout!(value)).rejects.toMatchObject({ code: 'BAD_LAYOUT' })
+    }
+    expect(kv.put).not.toHaveBeenCalled()
+  })
+})

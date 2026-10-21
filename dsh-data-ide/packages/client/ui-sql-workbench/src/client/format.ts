@@ -13,7 +13,16 @@
 /** How a column is rendered; derived from the driver's wire type name. */
 export type ColumnKind = 'number' | 'date' | 'time' | 'binary' | 'json' | 'text' | 'unknown'
 
-const NUMBER_TYPES = new Set(['DECIMAL', 'NEWDECIMAL', 'TINY', 'SHORT', 'LONG', 'LONGLONG', 'INT24', 'FLOAT', 'DOUBLE', 'YEAR'])
+// Driver wire names vary by server: MySQL-family reports TINY/SHORT/LONG/LONGLONG,
+// Doris and MySQL 8 also report the SQL spellings (BIGINT, INT, …). Missing them
+// meant BIGINT columns were left-aligned, ungrouped, and got a quoted literal in
+// server-side filters.
+const NUMBER_TYPES = new Set([
+  'DECIMAL', 'NEWDECIMAL', 'NUMERIC',
+  'TINY', 'SHORT', 'LONG', 'LONGLONG', 'INT24', 'LARGEINT',
+  'TINYINT', 'SMALLINT', 'MEDIUMINT', 'INT', 'INTEGER', 'BIGINT',
+  'FLOAT', 'DOUBLE', 'REAL', 'YEAR',
+])
 const DATE_TYPES = new Set(['DATE', 'DATETIME', 'TIMESTAMP', 'NEWDATE'])
 const BINARY_TYPES = new Set(['TINY_BLOB', 'MEDIUM_BLOB', 'LONG_BLOB', 'BLOB', 'BIT', 'GEOMETRY', 'VECTOR'])
 const TEXT_TYPES = new Set(['VARCHAR', 'VAR_STRING', 'STRING', 'ENUM', 'SET'])

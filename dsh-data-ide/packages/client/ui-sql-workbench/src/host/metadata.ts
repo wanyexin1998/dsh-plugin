@@ -134,24 +134,48 @@ export function foldSchema(rows: readonly unknown[][], maxRows: number): { table
   }
 }
 
-/** Attach `kind` to folded tables from a `TABLES` answer. */
-export function attachKinds(
+/**
+ * Complete the object list from `information_schema.TABLES`.
+ *
+ * The column catalogue is *not* a complete object list: Doris does not report
+ * columns for views (they only appear in `TABLES`), so folding COLUMNS alone
+ * silently drops every view — and any database that contains only views.
+ * Objects come from `TABLES`; COLUMNS merely fills in the columns.
+ *
+ * @param tables - Objects folded from COLUMNS (they have columns).
+ * @param rows - `[schema, name, type]` rows from `TABLES`.
+ */
+export function withObjects(
   tables: readonly SchemaTable[],
   rows: readonly unknown[][],
 ): SchemaTable[] {
-  const kinds = new Map<string, 'table' | 'view'>()
+  const byKey = new Map<string, SchemaTable>()
+  for (const table of tables) byKey.set(objectKey(table.schema, table.name), table)
+
   for (const row of rows) {
-    const [schema, name, type] = row
-    if (typeof name !== 'string') continue
-    kinds.set(objectKey(typeof schema === 'string' ? schema : undefined, name), toKind(type))
+    const name = typeof row[1] === 'string' ? row[1] : undefined
+    if (name === undefined || name === '') continue
+    // Only a real `TABLE_TYPE` may create an object: a mis-shaped answer (or a
+    // shared test double) must not invent entries in the tree.
+    const kindCell = row[2]
+    if (typeof kindCell !== 'string' || !/table|view/i.test(kindCell)) continue
+    const schema = typeof row[0] === 'string' && row[0] !== '' ? row[0] : undefined
+    const kind = toKind(kindCell)
+    const key = objectKey(schema, name)
+    const known = byKey.get(key)
+    byKey.set(key, known === undefined
+      ? { ...(schema === undefined ? {} : { schema }), name, kind, columns: [] }
+      : { ...known, kind })
   }
-  return tables.map(table => {
-    const kind = kinds.get(objectKey(table.schema, table.name))
-    return kind === undefined ? table : { ...table, kind }
-  })
+
+  // Stable order: schema, then name. An unnamed schema (the SHOW fallback) sorts
+  // last so a real database list keeps its alphabetical order — the sentinel does
+  // that without a branch per comparison.
+  const schemaOf = (table: SchemaTable): string => table.schema ?? '\uffff'
+  return [...byKey.values()].sort((left, right) =>
+    schemaOf(left).localeCompare(schemaOf(right)) || left.name.localeCompare(right.name))
 }
 
-/** Cap on the SHOW fallback: one round trip per table, so keep it small. */
 export const SHOW_FALLBACK_TABLES = 60
 
 /** List tables and columns with SHOW, for accounts that cannot read the catalogue. */
@@ -229,7 +253,7 @@ export function createSchemaReader(deps: SchemaReaderDeps): SchemaReader {
       if (folded.tables.length > 0) {
         try {
           const kinds = await deps.executor.query(spec, kindsQuery(spec.database), `schema-kinds-${connId}`)
-          folded.tables = attachKinds(folded.tables, kinds.rows)
+          folded.tables = withObjects(folded.tables, kinds.rows)
         } catch {
           // Grouping is a presentation nicety; the columns are still right.
           kindsNote = '读不到 information_schema.TABLES：表与视图暂不分组'
@@ -269,9 +293,4 @@ export function createSchemaReader(deps: SchemaReaderDeps): SchemaReader {
       return snapshot
     },
   }
-}
-
-/** The completion engine's view of a snapshot. */
-export function toSchemaIndex(snapshot: SchemaSnapshot): SchemaIndex {
-  return { tables: snapshot.tables }
 }
