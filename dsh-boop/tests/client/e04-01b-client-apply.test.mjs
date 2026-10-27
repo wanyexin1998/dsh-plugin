@@ -146,52 +146,41 @@ test('E04-01 the generated bundle keeps the package module id and platform React
   assert.equal(typeof definition.factory, 'function')
 })
 
-test('E04-01 activation registers only additive seats and never the reserved conversation key', async () => {
+test('E04-01 activation registers the BOOP home and never the reserved conversation key', async () => {
   const { exported } = await loadClientBundle()
   const records = makeContext()
   exported.apply(records.ctx)
   await tick()
   assert.deepEqual(
     [...records.injections].sort(),
-    [
-      'conversation.input.dock',
-      'conversation.session.header.actions',
-      'main',
-      'settings.general.item',
-      'sidebar.footer.action',
-      'sidebar.panellist',
-    ],
-    'exactly the additive seats this batch owns',
+    ['boop.session', 'main', 'settings.general.item', 'sidebar.footer.action'],
+    'home panel, its session slot, the fixed entry, and one settings row',
   )
   const main = records.registrations.find((entry) => entry.options.name === 'main')
-  assert.equal(main.options.key, 'boop.tasks')
+  assert.equal(main.options.key, 'boop.home')
   assert.notEqual(main.options.key, 'conversation', 'the reserved Conversation key is never claimed')
-  const dock = records.registrations.find((entry) => entry.options.name === 'conversation.input.dock')
-  assert.equal(dock.options.id, 'boop-init')
-  assert.ok(dock.options.order < 0, 'the initialization card sits above the shipped docks')
-  const header = records.registrations.find((entry) => entry.options.name === 'conversation.session.header.actions')
-  assert.equal(header.options.id, 'boop-main')
+  assert.equal(records.registrations.some((entry) => entry.options.name === 'conversation.input.dock'), false)
+  assert.equal(records.registrations.some((entry) => entry.options.name === 'conversation.session.header.actions'), false)
+  assert.equal(records.registrations.some((entry) => entry.options.name === 'sidebar.panellist'), false)
   const footer = records.registrations.find((entry) => entry.options.name === 'sidebar.footer.action')
   assert.equal(footer.options.id, 'boop-main')
-  const icon = records.registrations.find((entry) => entry.options.name === 'sidebar.panellist')
-  assert.equal(icon.options.id, 'boop.tasks', 'the icon addresses the registered main panel')
+  assert.equal(footer.options.label, 'BOOP · 波波')
   const settings = records.registrations.find((entry) => entry.options.name === 'settings.general.item')
   assert.equal(settings.options.id, 'boop', 'one additive row in the native General section')
 })
 
-test('E04-01 activation resolves the identity but never navigates or creates a Session', async () => {
+test('E04-01 activation does not navigate, create a Session, or call the host', async () => {
   const { exported } = await loadClientBundle()
   const records = makeContext()
   exported.apply(records.ctx)
   await tick()
-  assert.deepEqual(records.rpcCalls.map((call) => call.endpoint), ['boop/mainSession'])
-  assert.deepEqual(records.rpcCalls[0].payload, { args: {} }, 'the Gateway payload is one plain args field')
+  assert.deepEqual(records.rpcCalls, [], 'the home identity is requested when the page mounts, not at activation')
   assert.deepEqual(records.opened, [], 'activation never steals the current page')
   assert.deepEqual(records.created, [], 'activation never creates a Session')
-  assert.deepEqual(records.panels, [], 'activation never changes the selected panel')
+  assert.deepEqual(records.panels, [], 'activation never changes the selected panel without a saved intent')
 })
 
-test('E04-01 the registered fixed entry creates once, opens natively, and repeats idempotently (FE-02)', async () => {
+test('E04-01 the fixed entry opens the BOOP home panel and does not open a native session', async () => {
   const { exported } = await loadClientBundle()
   const records = makeContext()
   exported.apply(records.ctx)
@@ -207,13 +196,12 @@ test('E04-01 the registered fixed entry creates once, opens natively, and repeat
   assert.ok(button, 'the entry renders in the sidebar foot')
   button.click()
   await tick()
-  assert.deepEqual(records.created, [{ sessionId: 'boop-main' }], 'one native create with the durable id')
-  assert.deepEqual(records.opened, ['boop-main'], 'opened by the native Conversation navigation')
-  assert.deepEqual(records.panels, [], 'the reserved panel selection is not touched; openSession owns the reveal')
+  assert.deepEqual(records.created, [], 'the entry does not create a Session')
+  assert.deepEqual(records.opened, [], 'the entry does not call openSession')
+  assert.deepEqual(records.panels, ['boop.home'])
   button.click()
   await tick()
-  assert.equal(records.created.length, 1, 'the second click must not create another main Session')
-  assert.deepEqual(records.opened, ['boop-main', 'boop-main'], 'the same exact Session is re-opened')
+  assert.deepEqual(records.panels, ['boop.home', 'boop.home'])
   root.unmount()
   container.remove()
 })
@@ -226,24 +214,24 @@ test('E04-01 scoped styles are BOOP-only, theme-aware, reduced-motion-aware, and
   const records = makeContext()
   exported.apply(records.ctx)
   await tick()
-  const panelStyle = document.head.querySelector('style[data-plugin-css="boop/panel"]')
+  const homeStyle = document.head.querySelector('style[data-plugin-css="boop/home"]')
   const interactionStyle = document.head.querySelector('style[data-plugin-css="boop/interaction"]')
-  assert.ok(panelStyle, 'panel styles are injected under a BOOP-owned data-plugin-css tag')
-  assert.ok(interactionStyle, 'interaction styles are injected under their own tag')
-  const css = interactionStyle.textContent
-  for (const selector of ['[data-boop-entry]', '[data-boop-header]', '[data-boop-dock]', '[data-boop-source]', '[data-boop-settings]']) {
-    assert.ok(css.includes(selector), `${selector} is styled`)
-  }
-  assert.ok(css.includes('body[data-ds-dark-theme]'), 'dark theme follows the APP signal, not the OS media query')
+  assert.ok(homeStyle, 'home styles are injected under a BOOP-owned tag')
+  assert.ok(interactionStyle, 'entry styles stay on their own tag')
+  const css = `${homeStyle.textContent}\n${interactionStyle.textContent}`
+  assert.ok(css.includes('[data-boop-home]'), 'home rules are scoped')
+  assert.ok(css.includes('[data-boop-entry]'), 'the fixed entry keeps its selector')
+  assert.ok(css.includes('body[data-ds-dark-theme] [data-boop-home]'), 'dark theme follows the app signal')
   assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'), 'reduced motion is honoured')
-  assert.ok(css.includes('[data-boop-panel] .boop-action'), 'panel additions stay inside the BOOP panel scope')
+  assert.ok(css.includes('[data-composer-dock]'), 'composer stats dock can be folded')
+  assert.equal(css.includes('[data-slot="conversation.input.dock"]'), false, 'approval dock is not hidden')
   assert.equal(/(^|\n)\s*(html|body)\s*\{/.test(css), false, 'no bare global element rule')
   assert.equal(css.includes('.dsw-'), false, 'no host class is restyled')
   for (const effect of records.effects) {
     if (typeof effect.dispose === 'function') effect.dispose()
   }
   await tick()
-  assert.equal(document.head.querySelector('style[data-plugin-css="boop/panel"]'), null, 'unload removes the panel styles')
+  assert.equal(document.head.querySelector('style[data-plugin-css="boop/home"]'), null, 'unload removes the home styles')
   assert.equal(document.head.querySelector('style[data-plugin-css="boop/interaction"]'), null, 'unload removes the interaction styles')
 })
 

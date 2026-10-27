@@ -71,9 +71,9 @@ export function BoopEntryButton({ wide, observer, onOpen }: BoopEntryButtonProps
       data-boop-entry=""
       data-wide={wide === false ? 'false' : 'true'}
       data-pending={pending ? 'true' : 'false'}
-      aria-label="打开 BOOP 主聊天"
+      aria-label="打开波波"
       aria-busy={pending}
-      title={error ?? reasonText ?? '打开 BOOP 主聊天（原生 Conversation）'}
+      title={error ?? reasonText ?? '打开波波'}
       onClick={activate}
     >
       <BoopMark size={wide === false ? 18 : 16} />
