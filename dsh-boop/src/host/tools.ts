@@ -30,7 +30,29 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 import { runVerifyTool } from './verify/verify-api.ts'
+import { validateDispatchArgs, validateStopArgs } from '../shared/mvp-contract.ts'
+import type { TrustedCall } from './delegation/service.ts'
 
+function trustedCall(exec: any, ctx: any): TrustedCall | null {
+  const delegation = ctx.boop?.delegation?.()
+  const home = ctx.boop?.home?.()
+  void home
+  const agent = exec?.agent
+  const sessionId = agent?.session?.id ?? agent?.id
+  const origin = exec?.originUserMessageId ?? exec?.userMessageId ?? exec?.callId
+  if (typeof sessionId !== 'string' || typeof origin !== 'string') return null
+  const storage = ctx.boop?.storage?.()
+  return {
+    originRef: origin,
+    originKind: 'user',
+    mainSessionId: sessionId,
+    bindingVersion: 1,
+    policyEpoch: storage?.repo?.getScope?.(storage.identity.scopeId)?.policyEpoch ?? 1,
+    holder: storage?.identity?.ownerId ?? 'owner',
+    fence: storage?.facts?.(true)?.lease?.fencingToken ?? 0,
+    toolCallId: typeof exec?.callId === 'string' ? exec.callId : undefined,
+  }
+}
 export const name = 'boop-tools'
 
 export const inject = ['tools', 'boop']
@@ -46,6 +68,11 @@ export function apply(ctx: any): void {
           'It never creates tasks and never dispatches anything.',
         parameters: {
           scope: { type: 'string', description: 'Optional scope filter; default is the current data domain.' },
+          mode: { type: 'string', enum: ['work', 'tasks', 'capabilities'] },
+          query: { type: 'string' },
+          workspaceId: { type: 'string' },
+          taskId: { type: 'string' },
+          limit: { type: 'integer' },
         },
         output: {
           schema: {
@@ -67,21 +94,37 @@ export function apply(ctx: any): void {
           render: (_args, value) => [
             {
               type: 'text',
-              text:
-                `BOOP scope: ${value.scope.product} on DSH ${value.scope.dshProfileVersion}; ` +
-                `write mode ${value.writeModeEnabled ? 'ENABLED' : 'disabled (gates pending)'}.`,
+              text: value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 2
+                ? JSON.stringify(value)
+                : `BOOP scope: ${(value as { scope?: { product?: string; dshProfileVersion?: string } }).scope?.product ?? 'BOOP'} on DSH ${(value as { scope?: { dshProfileVersion?: string } }).scope?.dshProfileVersion ?? ''}; write mode ${(value as { writeModeEnabled?: boolean }).writeModeEnabled ? 'ENABLED' : 'disabled (gates pending)'}.`,
             },
           ],
         },
-        execute: async () => {
+        execute: async (args, exec) => {
+          const delegation = ctx.boop?.delegation?.()
+          const mode = args?.mode === 'work' || args?.mode === 'tasks' || args?.mode === 'capabilities' ? args.mode : 'capabilities'
+          if (delegation && mode !== 'capabilities') {
+            const trusted = trustedCall(exec, ctx)
+            if (!trusted) {
+              return { schemaVersion: 2, kind: 'boop.catalog', ok: false, error: { code: 'SCOPE_DENIED', message: '这次读取没有对上当前的波波会话。', retryable: false } }
+            }
+            return delegation.catalog({
+              mode,
+              query: typeof args?.query === 'string' ? args.query : undefined,
+              limit: typeof args?.limit === 'number' ? args.limit : undefined,
+              originUserMessageId: trusted.originRef,
+              sourceSeq: null,
+              capabilities: delegation.capabilities(true),
+            })
+          }
           const boop = ctx.boop
           if (!boop) throw new Error('boop runtime service is not available')
           const state = boop.state()
+          if (delegation && mode === 'capabilities') {
+            return delegation.catalog({ mode: 'capabilities', originUserMessageId: null, sourceSeq: null, capabilities: delegation.capabilities(true) })
+          }
           return {
-            scope: {
-              product: 'BOOP',
-              dshProfileVersion: state.dshProfileVersion,
-            },
+            scope: { product: 'BOOP', dshProfileVersion: state.dshProfileVersion },
             capabilities: boop.capabilities(),
             writeModeEnabled: boop.isWriteModeEnabled(),
           }
@@ -190,9 +233,12 @@ export function apply(ctx: any): void {
         parameters: {
           question: {
             type: 'string',
-            required: true,
-            description: 'The question to match against remembered facts in this data domain.',
+            description: 'Question to match against remembered facts, or the reason for reading a session.',
           },
+          targetSessionId: { type: 'string' },
+          taskId: { type: 'string' },
+          beforeSeq: { type: 'integer' },
+          limit: { type: 'integer' },
         },
         output: {
           schema: {
@@ -208,11 +254,28 @@ export function apply(ctx: any): void {
           render: (_args, value) => [
             {
               type: 'text',
-              text: String((value as { body?: unknown }).body ?? ''),
+              text: value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 2
+                ? JSON.stringify(value)
+                : String((value as { body?: unknown }).body ?? ''),
             },
           ],
         },
-        execute: async (args) => {
+        execute: async (args, exec) => {
+          const delegation = ctx.boop?.delegation?.()
+          if (delegation && (typeof args.targetSessionId === 'string' || typeof args.taskId === 'string')) {
+            const trusted = trustedCall(exec, ctx)
+            if (!trusted) {
+              return { schemaVersion: 2, kind: 'boop.context', ok: false, error: { code: 'SCOPE_DENIED', message: '这次读取没有对上当前的波波会话。', retryable: false } }
+            }
+            return delegation.readContext({
+              targetSessionId: typeof args.targetSessionId === 'string' ? args.targetSessionId : undefined,
+              taskId: typeof args.taskId === 'string' ? args.taskId : undefined,
+              question: typeof args.question === 'string' ? args.question : undefined,
+              beforeSeq: typeof args.beforeSeq === 'number' ? args.beforeSeq : undefined,
+              limit: typeof args.limit === 'number' ? args.limit : undefined,
+              call: trusted,
+            })
+          }
           const storage = ctx.boop?.storage?.()
           const question = typeof args.question === 'string' ? args.question.trim() : ''
           if (!storage?.repo || question === '') {
@@ -244,5 +307,71 @@ export function apply(ctx: any): void {
     } catch {
       /* never break activation */
     }
+  }
+
+  try {
+    ctx.tools.register(defineTool({
+      name: 'boop_dispatch',
+      description: 'After the user explicitly asks BOOP to continue one existing session, prepare one task and one action. Does not wait for the target to finish. Never use this for ordinary discussion.',
+      parameters: {
+        requestId: { type: 'string', required: true },
+        targetSessionId: { type: 'string', required: true },
+        contextToken: { type: 'string', required: true },
+        goal: { type: 'string', required: true },
+        instruction: { type: 'string', required: true },
+        criteria: { type: 'array', items: { type: 'string' } },
+        exclusions: { type: 'array', items: { type: 'string' } },
+      },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      execute: async (args, exec) => {
+        const parsed = validateDispatchArgs(args)
+        if (!parsed.ok) return { schemaVersion: 2, kind: 'boop.dispatch', ok: false, error: { code: 'INVALID_ARGUMENT', message: parsed.message, retryable: false } }
+        const delegation = ctx.boop?.delegation?.()
+        const trusted = trustedCall(exec, ctx)
+        if (!delegation || !trusted) return { schemaVersion: 2, kind: 'boop.dispatch', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能委托，没有新建工作。', retryable: true } }
+        return delegation.prepare(parsed.value, trusted)
+      },
+    }))
+    ctx.tools.register(defineTool({
+      name: 'boop_task_control',
+      description: 'Stop, resume, or revise one exact BOOP task. Stop does not need a model. Resume and revise need a fresh context token and the user\'s new instruction. This tool cannot accept work or approve native permissions.',
+      parameters: {
+        requestId: { type: 'string', required: true },
+        taskId: { type: 'string', required: true },
+        expectedTaskVersion: { type: 'integer', required: true },
+        operation: { type: 'string', required: true, enum: ['stop', 'resume', 'revise'] },
+        contextToken: { type: 'string' },
+        instruction: { type: 'string' },
+        goal: { type: 'string' },
+        criteria: { type: 'array', items: { type: 'string' } },
+        exclusions: { type: 'array', items: { type: 'string' } },
+      },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      execute: async (args, exec) => {
+        const delegation = ctx.boop?.delegation?.()
+        const trusted = trustedCall(exec, ctx)
+        if (!delegation || !trusted) return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能控制这件工作。', retryable: true } }
+        if (args.operation === 'stop') {
+          const parsed = validateStopArgs(args)
+          if (!parsed.ok) return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'INVALID_ARGUMENT', message: parsed.message, retryable: false } }
+          return delegation.stop(parsed.value, { ...trusted, originKind: 'user' })
+        }
+        if ((args.operation === 'resume' || args.operation === 'revise') && typeof args.contextToken === 'string' && typeof args.instruction === 'string') {
+          return delegation.revise({
+            requestId: String(args.requestId),
+            taskId: String(args.taskId),
+            expectedTaskVersion: Number(args.expectedTaskVersion),
+            contextToken: args.contextToken,
+            instruction: args.instruction,
+            goal: typeof args.goal === 'string' ? args.goal : undefined,
+            criteria: Array.isArray(args.criteria) ? args.criteria : undefined,
+            exclusions: Array.isArray(args.exclusions) ? args.exclusions : undefined,
+          }, trusted)
+        }
+        return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'INVALID_ARGUMENT', message: '继续处理需要新的上下文和新的要求。', retryable: false } }
+      },
+    }))
+  } catch (error) {
+    try { ctx.logger?.warn?.('[boop] delegation tools failed to register', error) } catch { /* keep the host up */ }
   }
 }

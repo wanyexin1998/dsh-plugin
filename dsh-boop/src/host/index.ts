@@ -33,11 +33,15 @@ import {
 } from './transport/command-envelope.ts'
 import { apply as applyClosedChannels } from './channels-api.ts'
 import { readHostIdentity } from './host-identity.ts'
+import { HomeService } from './home/service.ts'
+import { createDelegationPorts, createHomeNative } from './home/native-session.ts'
+import { DelegationService } from './delegation/service.ts'
+import { failReply } from '../shared/mvp-contract.ts'
 
 export const name = 'dsh-boop'
 
 /** Nothing is required at M0: a missing optional surface is recorded, not fatal. */
-export const inject: string[] = []
+export const inject = ['sessionController', 'sessions']
 
 export interface BoopRuntimeState {
   schemaVersion: 1
@@ -140,6 +144,30 @@ export function apply(ctx: any): void {
     // ── Proxy provenance registry: message ids this process minted ─────────
     const proxyMessages = new Set<string>()
 
+    let home: HomeService | null = null
+    let delegation: DelegationService | null = null
+    if (storage && state.storage?.ok === true && state.storage.lease.held === true) {
+      const scopeId = storage.identity.scopeId
+      const policy = {
+        decide: (sessionId: string) => delegation?.canRead(sessionId, null) ?? 'unknown' as const,
+      }
+      home = new HomeService({
+        db: storage.db,
+        scopeId,
+        ownerId: storage.identity.ownerId,
+        dshHome: ctx.dshHomePath?.() ?? '',
+        native: createHomeNative(ctx, (value) => value),
+        policy,
+      })
+      delegation = new DelegationService(storage.db, scopeId, createDelegationPorts(ctx, scopeId, () => new Date().toISOString()))
+      delegation.bootRecover()
+      try {
+        delegation.inheritAccess(storage.identity.ownerId, 'host-local-owner')
+      } catch {
+        /* an existing explicit grant stays; a failed inherit leaves read closed */
+      }
+    }
+
     ctx.provide('boop', {
       state(): BoopRuntimeState {
         state.probe = surfaced()
@@ -175,6 +203,22 @@ export function apply(ctx: any): void {
         return [...proxyMessages]
       },
       proxySourceKind: PROXY_SOURCE_KIND,
+      home(): HomeService | null {
+        return home
+      },
+      delegation(): DelegationService | null {
+        return delegation
+      },
+      async ensureHome(request?: { requestId?: string }) {
+        if (!home) {
+          return failReply('boop.home', {
+            code: 'NATIVE_UNAVAILABLE',
+            message: '波波的数据还没准备好，这次没有创建会话。',
+            retryable: true,
+          })
+        }
+        return home.ensureHome(request ?? {})
+      },
       /**
        * Build one proxy command envelope with host-minted identity.
        *

@@ -235,10 +235,12 @@ function createPort(ctx: any, planeState: PlaneState): TasksPort {
  */
 class BoopTasksApi extends TypertRemoteService {
   private readonly port: TasksPort
+  private readonly ctx: any
 
   constructor(ctx: any, port: TasksPort) {
     super(ctx, TASKS_REMOTE_NAMESPACE, { namespace: TASKS_REMOTE_NAMESPACE })
     this.port = port
+    this.ctx = ctx
   }
 
   /** Read-only capability matrix; write mode comes from the one runtime gate. */
@@ -261,9 +263,89 @@ class BoopTasksApi extends TypertRemoteService {
   setPriority(request?: unknown): TasksWriteRefusalFacts {
     return setPriorityFacts(this.port, request)
   }
+
+  private mvp(): any {
+    try { return this.ctx.boop?.delegation?.() ?? null } catch { return null }
+  }
+
+  listV2(request?: unknown): unknown {
+    const delegation = this.mvp()
+    if (!delegation) return { schemaVersion: 2, kind: 'boop.tasks', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '工作列表还不可用。', retryable: true } }
+    void request
+    return { schemaVersion: 2, kind: 'boop.tasks', ok: true, data: delegation.list() }
+  }
+
+  detailV2(request?: unknown): unknown {
+    const delegation = this.mvp()
+    const taskId = request && typeof request === 'object' ? String((request as { taskId?: unknown }).taskId ?? (request as { request?: { taskId?: unknown } }).request?.taskId ?? '') : ''
+    if (!delegation || taskId === '') return { schemaVersion: 2, kind: 'boop.task', ok: false, error: { code: 'INVALID_ARGUMENT', message: '需要指定要查看的工作。', retryable: false } }
+    const detail = delegation.detail(taskId)
+    if (!detail) return { schemaVersion: 2, kind: 'boop.task', ok: false, error: { code: 'TARGET_NOT_FOUND', message: '没有找到这件工作。', retryable: false } }
+    return { schemaVersion: 2, kind: 'boop.task', ok: true, data: detail }
+  }
+
+  async stop(request?: unknown): Promise<unknown> {
+    return this.control('stop', request)
+  }
+
+  async confirm(request?: unknown): Promise<unknown> {
+    const delegation = this.mvp()
+    const body = unwrap(request)
+    if (!delegation) return { schemaVersion: 2, kind: 'boop.confirm', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能确认。', retryable: true } }
+    return delegation.confirm({
+      requestId: String(body.requestId ?? ''),
+      taskId: String(body.taskId ?? ''),
+      expectedTaskVersion: Number(body.expectedTaskVersion),
+      resultId: String(body.resultId ?? ''),
+      decision: 'accept',
+    }, uiCall(this.ctx, String(body.requestId ?? 'ui')))
+  }
+
+  async reconcile(request?: unknown): Promise<unknown> {
+    const delegation = this.mvp()
+    const body = unwrap(request)
+    if (!delegation) return { schemaVersion: 2, kind: 'boop.task', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能核对。', retryable: true } }
+    await delegation.reconcile(typeof body.taskId === 'string' ? body.taskId : undefined)
+    const detail = typeof body.taskId === 'string' ? delegation.detail(body.taskId) : delegation.list()
+    return { schemaVersion: 2, kind: 'boop.task', ok: true, data: detail }
+  }
+
+  private async control(operation: 'stop', request?: unknown): Promise<unknown> {
+    const delegation = this.mvp()
+    const body = unwrap(request)
+    if (!delegation) return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能停止。', retryable: true } }
+    return delegation.stop({
+      requestId: String(body.requestId ?? ''),
+      taskId: String(body.taskId ?? ''),
+      expectedTaskVersion: Number(body.expectedTaskVersion),
+    }, uiCall(this.ctx, String(body.requestId ?? 'ui-stop')))
+  }
+}
+
+function unwrap(request: unknown): Record<string, unknown> {
+  if (!request || typeof request !== 'object') return {}
+  const obj = request as Record<string, unknown>
+  if (obj.request && typeof obj.request === 'object') return obj.request as Record<string, unknown>
+  return obj
+}
+
+function uiCall(ctx: any, originRef: string): any {
+  const storage = ctx.boop?.storage?.()
+  return {
+    originRef,
+    originKind: 'ui',
+    mainSessionId: storage?.repo?.getScope?.(storage.identity.scopeId)?.mainSessionId ?? 'boop-home',
+    bindingVersion: 1,
+    policyEpoch: storage?.repo?.getScope?.(storage.identity.scopeId)?.policyEpoch ?? 1,
+    holder: storage?.identity?.ownerId ?? 'owner',
+    fence: 1,
+  }
 }
 
 for (const method of ['capabilities', 'list', 'detail', 'setPriority']) {
+  remote(method)(BoopTasksApi.prototype)
+}
+for (const method of ['listV2', 'detailV2', 'stop', 'confirm', 'reconcile']) {
   remote(method)(BoopTasksApi.prototype)
 }
 

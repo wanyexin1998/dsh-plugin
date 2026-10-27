@@ -1177,6 +1177,39 @@ export class NativeAutomationBinding {
     }
   }
 
+  /**
+   * Delete only schedules whose title is the BOOP marker. Other tasks at the
+   * same time of day stay. This does not create a replacement.
+   */
+  async retireOwned(): Promise<NativeBindingStatus> {
+    const port = this.port()
+    const sessionId = this.sessionIdOf()
+    if (!this.available() || port === null || sessionId === null) {
+      this.state = this.available() ? 'unbound' : 'unavailable'
+      this.note = 'no default daily schedule is registered'
+      return this.status()
+    }
+    try {
+      const tasks = await port.list({ sessionId })
+      for (const task of tasks) {
+        if (task.title !== NATIVE_AUTOMATION_MARKER) continue
+        await port.delete({ sessionId, id: task.id })
+      }
+      this.state = 'unbound'
+      this.taskId = null
+      this.title = null
+      this.kind = null
+      this.scheduledAt = null
+      this.note = 'BOOP-owned daily schedule retired; other schedules were left in place'
+      return this.status()
+    } catch (error) {
+      this.state = 'failed'
+      this.lastError = error instanceof Error ? error.message : String(error)
+      this.note = 'could not retire the BOOP-owned schedule'
+      return this.status()
+    }
+  }
+
   /** Remove ONLY BOOP's own recorded task; user-owned reminders are never touched. */
   async unbind(): Promise<NativeBindingStatus> {
     const port = this.port()

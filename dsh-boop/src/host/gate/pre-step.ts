@@ -80,6 +80,8 @@ export interface RuntimeGatePort {
   entries(): GateEntryLike[]
   /** Host-side registry of message ids BOOP itself minted in this process. */
   knownMessageIds(): ReadonlySet<string>
+  v2AdmissionAllows?(messageId: string): boolean
+  recordAdmission?(messageId: string, turnId: string): void
   scopeId(): string | null
   audit(record: PreStepAuditRecord): PreStepAuditReceipt
 }
@@ -209,6 +211,8 @@ export class PreStepRuntimeGate {
 
     this.counters.boopMessages += boopClaims.length
     const sessionId = this.sessionOf(payload)
+    const human = messages.some((message) => this.isDirectHuman(message))
+    if (human) return this.handleMixed(payload, messages, boopClaims, sessionId, next)
     const blocked: Array<{ messageId: string; reason: string }> = []
     const allowed: string[] = []
 
@@ -349,6 +353,7 @@ export class PreStepRuntimeGate {
     signal: AbortSignal | undefined,
   ): Promise<{ kind: 'allow' } | { kind: 'block'; reason: string }> {
     if (this.consumed.has(claim.messageId)) return { kind: 'block', reason: PRE_STEP_REASON.alreadyExecuted }
+    if (this.v2Allows(claim.messageId)) return { kind: 'allow' }
     let available = false
     try {
       available = this.port.available()
@@ -382,6 +387,73 @@ export class PreStepRuntimeGate {
       }
       await this.sleep(this.pollMs)
     }
+  }
+
+  private isDirectHuman(message: unknown): boolean {
+    if (!message || typeof message !== 'object') return false
+    let known: ReadonlySet<string> = new Set()
+    try { known = this.port.knownMessageIds() } catch { known = new Set() }
+    if (isBoopMessage(message, known)) return false
+    const kind = (message as { source?: { kind?: unknown } }).source?.kind
+    return kind === 'user' || kind === undefined
+  }
+
+  private v2Allows(messageId: string): boolean {
+    const port = this.port as RuntimeGatePort & { v2AdmissionAllows?: (messageId: string) => boolean }
+    try { return port.v2AdmissionAllows?.(messageId) === true } catch { return false }
+  }
+
+  private async handleMixed(
+    payload: PreStepPayloadLike,
+    messages: unknown[],
+    boopClaims: BoopClaim[],
+    sessionId: string | null,
+    next: () => Promise<PreStepDecisionLike>,
+  ): Promise<PreStepDecisionLike> {
+    const blocked = new Set<string>()
+    for (const claim of boopClaims) {
+      const outcome = this.evaluateNow(claim)
+      if (outcome.kind === 'allow') {
+        this.counters.allowed += 1
+        this.recordV2(claim.messageId, payload)
+      } else {
+        blocked.add(claim.messageId)
+        this.counters.blocked += 1
+        this.audit('gate/pre-step-blocked', claim.messageId, `${outcome.reason}; mixed-batch; session=${sessionId ?? 'unknown'}`)
+      }
+    }
+    const downstream = await next()
+    if (downstream.kind === 'reject') return downstream
+    const kept = (downstream.messages ?? messages).filter((message) => {
+      const id = (message as { id?: unknown })?.id
+      return typeof id !== 'string' || !blocked.has(id)
+    })
+    const substantive = kept.filter((message) => {
+      const kind = (message as { source?: { kind?: unknown } }).source?.kind
+      return kind !== 'runtime-context'
+    })
+    if (substantive.length === 0) return { kind: 'reject' }
+    return { ...downstream, messages: kept }
+  }
+
+  private evaluateNow(claim: BoopClaim): { kind: 'allow' } | { kind: 'block'; reason: string } {
+    if (this.consumed.has(claim.messageId)) return { kind: 'block', reason: PRE_STEP_REASON.alreadyExecuted }
+    if (this.v2Allows(claim.messageId)) return { kind: 'allow' }
+    try {
+      if (!this.port.available()) return { kind: 'block', reason: PRE_STEP_REASON.gateUnavailable }
+      if (!this.port.armed()) return { kind: 'block', reason: PRE_STEP_REASON.gateUnarmed }
+      const entry = this.port.entries().find((candidate) => candidate.messageId === claim.messageId)
+      if (!entry) return { kind: 'block', reason: PRE_STEP_REASON.notTracked }
+      if (entry.state === 'released') return { kind: 'allow' }
+      return { kind: 'block', reason: 'not-released' }
+    } catch {
+      return { kind: 'block', reason: PRE_STEP_REASON.gateUnavailable }
+    }
+  }
+
+  private recordV2(messageId: string, payload: PreStepPayloadLike): void {
+    const port = this.port as RuntimeGatePort & { recordAdmission?: (messageId: string, turnId: string) => void }
+    try { port.recordAdmission?.(messageId, `turn:${payload.turn ?? 'unknown'}`) } catch { /* admission is best-effort beside the decision */ }
   }
 
   private audit(kind: string, messageId: string | null, reason: string | null): void {
@@ -418,6 +490,30 @@ export function runtimeGatePortOf(ctx: any, options: { simulateUnavailable?: boo
         state: entry.state === 'released' ? 'released' : 'blocked',
         reason: String(entry.reason ?? ''),
       }))
+    },
+    v2AdmissionAllows(messageId: string): boolean {
+      try {
+        const db = ctx.boop?.storage?.()?.db?.db
+        if (!db) return false
+        const row = db.prepare(`SELECT state FROM action WHERE message_id = ? AND managed_v2 = 1`).get(messageId) as { state?: string } | undefined
+        return row?.state === 'dispatching' || row?.state === 'accepted' || row?.state === 'running'
+      } catch {
+        return false
+      }
+    },
+    recordAdmission(messageId: string, turnId: string): void {
+      try {
+        const db = ctx.boop?.storage?.()?.db?.db
+        if (!db) return
+        db.prepare(
+          `INSERT INTO action_admission(action_id,scope_id,message_id,target_generation,turn_id,admitted_at)
+           SELECT id, scope_id, message_id, 'observed', ?, ?
+           FROM action WHERE message_id = ? AND managed_v2 = 1
+           ON CONFLICT(action_id, scope_id) DO NOTHING`,
+        ).run(turnId, new Date().toISOString(), messageId)
+      } catch {
+        /* schema 1 or a missing action must not throw out of the gate */
+      }
     },
     knownMessageIds(): ReadonlySet<string> {
       const ids: string[] = ctx.boop.proxyMessageIds?.() ?? []

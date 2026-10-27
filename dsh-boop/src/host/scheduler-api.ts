@@ -1048,7 +1048,7 @@ export function apply(ctx: any, config: BoopSchedulerConfig = {}): void {
     // missing (unavailable). Never creates a Session and never runs a model.
     void (async () => {
       try {
-        await binding.bind()
+        await binding.retireOwned()
       } catch {
         /* status reports the failure; boot continues */
       }

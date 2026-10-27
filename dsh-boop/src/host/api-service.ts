@@ -256,6 +256,20 @@ export class BoopApi extends TypertRemoteService {
     if (apiConfig.pocEnabled) this.subscribeClaims()
   }
 
+  /** Find or create the real BOOP home session. */
+  async ensureHome(request?: { requestId?: string }): Promise<unknown> {
+    const ensure = this.ctx.boop?.ensureHome
+    if (typeof ensure !== 'function') {
+      return {
+        schemaVersion: 2,
+        kind: 'boop.home',
+        ok: false,
+        error: { code: 'NATIVE_UNAVAILABLE', message: '波波的主页服务还没有准备好。', retryable: true },
+      }
+    }
+    return ensure(request ?? {})
+  }
+
   /** Read-only bootstrap: identity, capability facts, gate ledger. */
   bootstrap(): BoopBootstrap {
     const state = this.ctx.boop.state()
@@ -1057,6 +1071,7 @@ export const PRODUCTION_API_METHODS = [
   'initPlan',
   'initApply',
   'observeSources',
+  'ensureHome',
 ] as const
 
 export const POC_API_METHODS = [
