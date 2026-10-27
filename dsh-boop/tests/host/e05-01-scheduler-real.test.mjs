@@ -248,7 +248,7 @@ test('E05-01 the real Host reports the scheduler row with background batches opt
   assert.ok(fixture)
   const status = await ok('boopScheduler/status')
   assert.equal(status.row, 'boop-scheduler')
-  assert.equal(status.writeMode.enabled, false, 'write mode is still OFF')
+  assert.equal(status.writeMode.enabled, true, 'write mode follows the open gate ledger')
   assert.equal(status.background.pocEnabled, true, 'the isolated profile explicitly enables background batches')
   assert.equal(status.background.modelRoute.providerId, 'qwen-local')
   assert.equal(status.background.modelRoute.modelId, MODEL_ID)
@@ -278,7 +278,7 @@ test('E05-01 one real background batch extracts and commits facts with a real wa
     `watermark must not move backwards: ${JSON.stringify(run.batch.watermark)}`,
   )
   assert.ok(run.batch.watermark.after <= fixture.headSeq, 'the processed boundary never passes the durable head')
-  assert.equal(run.writeMode.enabled, false)
+  assert.equal(run.writeMode.enabled, true)
 
   // Ledger truth: facts, real evidence seq, snapshot coverage, cursor watermark.
   const scopeRows = ledgerQuery('SELECT scope_id FROM scopes LIMIT 1')

@@ -13,9 +13,10 @@
 .sqlWorkbenchPanel {
   /* Restrained geometry, shared by every panel: one radius, one gap. Separation
      comes from the gap — the sashes themselves are invisible until hovered. */
-  --sql-radius: 10px;
+  --sql-radius: 6px;
   --sql-gap: 8px;
   --sql-space: 8px;
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -26,14 +27,81 @@
   font-size: var(--dsw-font-s-14);
 }
 
+/* Query-history drawer (SQL-204): a translucent sheet over the workbench so the
+   editor stays visible behind it and Esc/close returns to exactly the same spot. */
+.historyOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 10px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.historyOverlay > * {
+  width: 100%;
+  max-width: 540px;
+  min-height: 0;
+}
+
 .connectionBar {
   display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
+  flex: 1 1 auto;
+  gap: 4px;
   align-items: center;
-  padding: 8px;
-  background: var(--dsw-alias-bg-layer-1);
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+}
+
+.connectionDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.connectionDot[data-test-state='YES'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.connectionDot[data-test-state='NO'] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.connectionDot[data-test-state='testing'],
+.connectionDot[data-test-state='UNSURE'] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.connectionWrite {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: var(--dsw-font-s-11);
+}
+
+.connectionBar .select {
+  flex: 1 1 72px;
+  width: 72px;
+  height: 24px;
+  min-width: 0;
+  max-width: 148px;
+  padding: 0 6px;
+  font-size: var(--dsw-font-s-12);
+}
+
+.connectionBar .button,
+.connectionBar .primaryButton,
+.overflowMenu .button,
+.overflowMenu .primaryButton {
+  height: 24px;
+  padding: 0 8px;
+  font-size: var(--dsw-font-s-12);
 }
 
 .select,
@@ -92,11 +160,16 @@
 
 .dotOk,
 .dotBad,
-.dotPending {
+.dotPending,
+.dotIdle {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--dsw-alias-state-success-primary);
+}
+
+.dotIdle {
+  background: var(--dsw-alias-label-tertiary);
 }
 
 .dotBad {
@@ -227,18 +300,18 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
-.editorBar {
+.anchoredMenu {
+  position: fixed;
+  z-index: 80;
   display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-  overflow: hidden;
-  padding: 4px 8px;
-}
-
-.editorBar > button {
-  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 132px;
+  padding: 6px;
+  overflow: auto;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
 }
 
 /* CodeMirror paints its own surface; this element only bounds it. The old
@@ -298,8 +371,17 @@
 }
 
 .table {
-  width: 100%;
+  /*
+   * SQL-7 (second round): the table is only as wide as its columns — a single
+   * 120px SUM column must not stretch to fill the pane, and a selected row should
+   * end where the data ends. `table-layout: fixed` sizes columns from
+   * `<colgroup>`/`<col>`, the inline `min-width` (sum of widths) keeps them from
+   * being squeezed, and `max-content` makes the table track that sum exactly.
+   * A wide grid overflows into `.gridScroll`, which already scrolls both ways.
+   */
+  width: max-content;
   border-collapse: collapse;
+  table-layout: fixed;
   font-family: var(--ds-font-family-code);
   font-size: var(--dsw-font-xs-13);
 }
@@ -315,18 +397,27 @@
   white-space: nowrap;
 }
 
+/* Header row content: sort label (grows/ellipsizes) + explicit funnel button. */
+.tableHeadCell {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  min-width: 0;
+  padding-right: 4px;
+}
+
 .table td {
   height: 30px;
   padding: 0 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 360px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 
 .table td[data-align='right'] {
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .table td[data-null] {
@@ -338,8 +429,20 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/*
+ * Header cell order (DataGrip, image 1): funnel on the left, then the column
+ * name with its sort indicator. DOM order stays sort-first (panel tests and
+ * keyboard order expect `th button` to be the sort), so CSS `order` does the
+ * visual swap: `.filterButton` (order 1) < `.sortHeader` (order 2).
+ */
 .sortHeader {
-  width: 100%;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  align-items: center;
+  order: 2;
+  min-width: 0;
+  overflow: hidden;
   padding: 6px 10px;
   color: var(--dsw-alias-label-secondary);
   background: none;
@@ -347,11 +450,31 @@
   font: inherit;
   text-align: inherit;
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .sortHeader:hover {
   color: var(--dsw-alias-label-primary);
+}
+
+.sortLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Three-state indicator: ⇅ unsorted, ↑ ascending, ↓ descending. */
+.sortIcon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+  line-height: 1;
+}
+
+.sortIconActive {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 /* ── 分页条（03 §4.3 下部） ──────────────────────────────── */
@@ -401,6 +524,30 @@
   margin-left: auto;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
+}
+
+/* ── 直跑模式条（SQL-302/303）：不统计总数时的状态 + 切分页 ── */
+
+.directBar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.directBar .button {
+  height: 26px;
+  padding: 0 8px;
+  font-size: var(--dsw-font-xs-13);
+}
+
+.directBar .pagerRange {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* ── 编辑区在面板里的填空 ─────────────────────────────────── */
@@ -817,24 +964,45 @@
   outline-offset: -1px;
 }
 
+/*
+ * SQL-8: one explicit funnel button per column, not a 10px dingbat next to the
+ * sort label. Fixed 22px box so it stays legible (and clickable) in the ~300px
+ * result column, and `flex: 0 0 auto` so a long column name ellipsizes instead
+ * of pushing the button away. Hover/active use the semantic business token, so
+ * light and dark themes both work.
+ */
 .filterButton,
 .filterButtonActive {
-  margin-left: 2px;
-  padding: 0 2px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* Visual first (funnel, then name + sort): DOM order stays sort-first. */
+  order: 1;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   color: var(--dsw-alias-label-tertiary);
   background: transparent;
   border: 0;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 10px;
+}
+
+.filterButton:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterButton:focus-visible,
+.filterButtonActive:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
 }
 
 .filterButtonActive {
-  color: var(--dsw-alias-state-business-primary);
-}
-
-.filterRow th {
-  padding: 0 4px 4px;
-  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-state-business-primary);
 }
 
 .filterInput {
@@ -893,12 +1061,29 @@
 .documentTabs {
   display: flex;
   flex: 0 0 auto;
-  align-items: stretch;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 32px;
   overflow-x: auto;
-  padding: 2px 6px 0;
+  padding: 0 4px;
   /* The strip is the editor pane's own header now, so the rule goes below it. */
   border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.documentTabsTrailing {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.documentTabsTrailing .primaryButton {
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--dsw-font-s-12);
 }
 
 .documentTab,
@@ -971,18 +1156,28 @@
 
 /* ── 状态栏聚合 / 窗口化行 / 值查看器（03 §6.6，批次 5） ─────────── */
 
-.gridStatus {
+.gridFoot {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  min-width: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.gridStatus {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   flex-wrap: nowrap;
   gap: 8px;
+  min-width: 0;
   overflow-x: auto;
   padding: 2px 8px;
   color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-1);
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  background: transparent;
   font-size: var(--dsw-font-s-11);
+  font-variant-numeric: tabular-nums;
 }
 
 .gridScope {
@@ -1145,7 +1340,6 @@
   flex: 0 0 auto;
   color: var(--dsw-alias-label-secondary);
   font-size: var(--dsw-font-s-11);
-  letter-spacing: 0.04em;
 }
 
 .wbPanelMeta {
@@ -1246,7 +1440,11 @@
 /* The tablist wrapper carries no box of its own: its children stay flex items of
    `.documentTabs`, so the toggle / `+` / history can live outside the tablist. */
 .documentTabsList {
-  display: contents;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 /* Object-browser toggle. It lives in the console strip instead of a collapsed
@@ -1312,42 +1510,6 @@
   font-style: italic;
 }
 
-/* ── 查询工具栏（2026-10-20：从「两个裸按钮 + 一行提示」做成正式工具条） ── */
-
-.editorBarDivider {
-  width: 1px;
-  height: 14px;
-  margin: 0 2px;
-  background: var(--dsw-alias-border-l1);
-}
-
-.editorBarMeta {
-  flex: 0 1 auto;
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: var(--dsw-font-s-11);
-  white-space: nowrap;
-}
-
-.hintIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: help;
-  font-size: var(--dsw-font-s-12);
-}
-
-.hintIcon:hover {
-  color: var(--dsw-alias-label-primary);
-}
-
 /* ── 右下角提示（DDL 被拒等）：不遮挡、不阻塞 ───────────────── */
 
 .notice {
@@ -1395,15 +1557,138 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* ── 字段筛选编辑器（服务端 WHERE，作用于整个语句） ─────────── */
+/* ── 字段筛选面板（DataGrip 式：值列表 + 条件双模式，服务端 WHERE） ── */
 
-.filterEditor {
+/*
+ * The filter panel floats over the first rows instead of pushing the grid down
+ * (DataGrip opens the same panel as a popup under the header). `.grid` is
+ * `position: relative`, so `top` clears the query toolbar; `overflow: hidden`
+ * on `.grid` keeps it inside the pane even at ~300px width.
+ */
+.filterPanel {
+  position: absolute;
+  top: 34px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(320px, calc(100% - 16px));
+  /* A very short result pane still has to reach the list and the buttons. */
+  max-height: calc(100% - 42px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  box-shadow: 0 12px 28px -12px var(--dsw-alias-border-l2);
+}
+
+.filterPanelHead {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.filterModes {
+  display: flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+}
+
+.filterMode,
+.filterModeActive {
+  padding: 1px 8px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-base);
+  border: 0;
+  font-size: var(--dsw-font-s-11);
+  cursor: pointer;
+}
+
+.filterModeActive {
+  color: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.filterHint {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterSearch {
+  width: 100%;
+  padding: 2px 6px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  font-size: var(--dsw-font-s-12);
+}
+
+/* The list scrolls instead of growing the panel: a page can hold 200 values. */
+.filterValueList {
+  display: flex;
+  flex-direction: column;
+  max-height: 168px;
+  overflow: auto;
+  padding: 2px 0;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+}
+
+.filterValueItem {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.filterValueText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-s-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterValueCount {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+}
+
+.filterEmpty {
+  padding: 4px 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-11);
+}
+
+.filterActions {
   display: flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 8px;
-  background: var(--dsw-alias-bg-layer-1);
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.filterCondition {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .filterEditorColumn {
@@ -1423,10 +1708,6 @@
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 4px;
   font-size: var(--dsw-font-s-11);
-}
-
-.filterRow th {
-  padding: 0;
 }
 
 /* AI 历史（docs/10 §14）：被回收的 agent 控制台可以重新打开 */
@@ -1452,23 +1733,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.agentHistoryMenu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  min-width: 180px;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 4px;
-  background: var(--dsw-alias-bg-layer-1);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--sql-radius);
-  box-shadow: 0 12px 28px -12px var(--dsw-alias-border-l2);
-}
-
 .agentHistoryItem {
   padding: 4px 8px;
   overflow: hidden;
@@ -1485,4 +1749,100 @@
 
 .agentHistoryItem:hover {
   background: var(--dsw-alias-bg-base);
+}
+
+/* ── 结果区：列显隐 / 页内查找 / SQL 复制（SQL-311/312/402） ── */
+
+.columnMenu {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  padding: 6px 8px;
+  overflow: auto;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--sql-radius, 8px);
+}
+
+.columnMenuTitle {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsw-font-s-12);
+}
+
+.columnMenuItem {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  font-size: var(--dsw-font-xs-13);
+}
+
+.columnMenuActions {
+  display: flex;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.gridFindBar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  font-size: var(--dsw-font-xs-13);
+}
+
+.gridFindInput {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 26px;
+}
+
+.gridFindCount {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.gridFindScope {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+td[data-find-hit] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent);
+}
+
+td[data-find-current] {
+  outline: 1px solid var(--dsw-alias-state-warn-primary);
+  outline-offset: -1px;
+}
+
+/* 键盘导航统一焦点环（鼠标点击不显示，避免噪音） */
+.sqlWorkbenchPanel :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* 错误卡的动作行（SQL-310）：复制/定位/EXPLAIN/问 agent */
+.gridErrorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* 结果 tab 内联重命名（SQL-314） */
+.scriptTabInput {
+  min-width: 80px;
+  height: 24px;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 6px;
+  font: inherit;
 }

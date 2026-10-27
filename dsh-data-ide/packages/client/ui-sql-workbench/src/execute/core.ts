@@ -50,6 +50,8 @@ export type FilterOp =
   | 'le'
   | 'isNull'
   | 'notNull'
+  /** Value-list filter: `col IN (…)`; the values come from {@link FilterSpec.values}. */
+  | 'in'
 
 /**
  * One column filter, applied by the server to the wrapped statement.
@@ -61,10 +63,17 @@ export type FilterOp =
 export interface FilterSpec {
   readonly column: string
   readonly op: FilterOp
-  /** Ignored by `isNull` / `notNull`. */
+  /** Ignored by `isNull` / `notNull` and the `in` list. */
   readonly value?: string
   /** Quote-free literal, decided from the driver's type name by the caller. */
   readonly numeric?: boolean
+  /**
+   * Values for the `in` operator, as the literals the list renderer collected.
+   *
+   * An empty array means "match nothing" (`1=0`): a value list with nothing
+   * ticked is a deliberate empty selection, not an absent filter.
+   */
+  readonly values?: readonly string[]
 }
 
 export interface ExecuteRequest {
@@ -88,6 +97,15 @@ export interface ExecuteRequest {
    * goes through the permission gate.
    */
   readonly raw?: boolean
+  /**
+   * `direct` runs the authoring query as written (probe limit only, no COUNT);
+   * `paged` is the browsable wrapper with total/sort/filter/offset.
+   *
+   * Defaults to `paged` so existing callers (MCP tools, older panels) keep the
+   * documented contract; the UI's "执行" sends `direct` and only switches to
+   * `paged` when the user pages/sorts/filters.
+   */
+  readonly mode?: 'direct' | 'paged'
 }
 
 export interface ExecuteResponse {
@@ -102,6 +120,13 @@ export interface ExecuteResponse {
   /** Echo of the id `cancel_statement` / `cancel` needs. */
   readonly statementId: string
   readonly truncated?: { readonly cells: number }
+  /** Present on responses that ran a specific mode (direct responses set it). */
+  readonly mode?: 'direct' | 'paged'
+  /**
+   * Lines the server added before the user's SQL; a driver error line N maps to
+   * the user's line N - offset (1 for the paging wrapper, 0 for raw metadata).
+   */
+  readonly lineOffset?: number
 }
 
 export const DEFAULT_PAGE_SIZE = 500
@@ -124,6 +149,41 @@ export const MAX_CELL_BYTES = 1024 * 1024
 
 /** Statements that change data or schema are refused unless writes are enabled. */
 const WRITE_PREFIX = /^\s*(insert|update|delete|replace|merge|truncate|create|alter|drop|rename|grant|revoke|call|do|load|set)\b/i
+
+/** Keywords whose statement can sit inside a derived table (`SELECT * FROM (…)`). */
+const WRAPPER_SAFE_KEYWORDS = new Set(['select', 'with', 'values', 'table'])
+
+/** Full-line or block comments at the start of a statement. */
+const LEADING_COMMENTS = /^(?:\s|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/
+
+/**
+ * First keyword of a statement, ignoring leading whitespace and comments.
+ *
+ * @param sql - One statement as written by the user.
+ */
+export function headKeyword(sql: string): string {
+  const stripped = sql.replace(LEADING_COMMENTS, '')
+  const match = /^[A-Za-z_]+/.exec(stripped)
+  return (match?.[0] ?? '').toLowerCase()
+}
+
+/**
+ * Whether a statement may be limited with an outer derived-table wrapper.
+ *
+ * Only true for statements MySQL-family servers accept as a derived table.
+ * Metadata reads (`SHOW`, `DESC`, `EXPLAIN`) and DDL/DML run verbatim in direct
+ * mode even though several of them return rows.
+ *
+ * @param sql - One statement text.
+ */
+export function canWrapStatement(sql: string): boolean {
+  return WRAPPER_SAFE_KEYWORDS.has(headKeyword(sql))
+}
+
+/** The outer wrapper direct mode uses; exactly one added line (the error offset). */
+export function buildDirectQuery(sql: string, pageSize: number): string {
+  return `SELECT * FROM (\n${sql}\n) AS t LIMIT ${String(pageSize + PROBE_ROWS)}`
+}
 
 /** Hard-refused regardless of `writeEnabled` (docs/05 §6 DDL blacklist). */
 const DDL_BLACKLIST = /^\s*(drop|truncate|alter|grant|revoke)\b/i
@@ -210,6 +270,26 @@ function literalFor(filter: FilterSpec): string {
   return stringLiteral(value)
 }
 
+/** Is one list item safe to emit unquoted for a numeric column? */
+function isNumericLiteral(value: string): boolean {
+  return /^-?\d+(\.\d+)?$/.test(value.trim())
+}
+
+/**
+ * The `in` condition for a value-list filter.
+ *
+ * The list is what the user ticked in the grid, so the clause carries the
+ * literals verbatim: strings are quoted/escaped, numbers are emitted raw. An
+ * empty tick list is `1=0` — the deliberate "none of these values" filter.
+ */
+function inCondition(column: string, filter: FilterSpec): string {
+  const values = filter.values ?? []
+  if (values.length === 0) return '1=0'
+  const literals = values.map(value =>
+    filter.numeric === true && isNumericLiteral(value) ? value.trim() : stringLiteral(value))
+  return `${column} IN (${literals.join(', ')})`
+}
+
 /** One condition; the column goes through the same identifier gate as ORDER BY. */
 function conditionSql(filter: FilterSpec): string {
   const column = quoteIdentifier(filter.column)
@@ -225,13 +305,22 @@ function conditionSql(filter: FilterSpec): string {
     case 'le': return `${column} <= ${literalFor(filter)}`
     case 'isNull': return `${column} IS NULL`
     case 'notNull': return `${column} IS NOT NULL`
+    case 'in': return inCondition(column, filter)
+    // An unknown op can only come from a newer client than this host (the ops
+    // are additive). Returning nothing beats emitting a dangling `WHERE` like
+    // `) AS t WHERE  LIMIT 5001`, which is a driver syntax error.
+    default: return ''
   }
 }
 
 /** ` WHERE a AND b`, or an empty string when there is nothing to filter. */
 export function filterClause(filters: readonly FilterSpec[] | undefined): string {
   if (filters === undefined || filters.length === 0) return ''
-  return ` WHERE ${filters.map(conditionSql).join(' AND ')}`
+  // Drop conditions this host cannot express, so an old node half talking to a
+  // new client still builds valid SQL instead of `WHERE ` with no predicate.
+  const conditions = filters.map(conditionSql).filter(condition => condition !== '')
+  if (conditions.length === 0) return ''
+  return ` WHERE ${conditions.join(' AND ')}`
 }
 
 /** Everything before the first semicolon, which is the statement we run. */
@@ -353,7 +442,26 @@ export async function executeSql(deps: ExecutionDeps, request: ExecuteRequest): 
   if (request.raw === true) {
     const rawPage = await deps.executor.query(resolved.spec, sql, statementId)
     deps.registry.forget(statementId)
-    return toPage(rawPage, pageSize, offset, now() - started, statementId, null)
+    return { ...toPage(rawPage, pageSize, offset, now() - started, statementId, null), mode: 'paged', lineOffset: 0 }
+  }
+
+  // Direct mode: run the authoring query as written. Result-set statements only
+  // get an outer probe limit (no COUNT, no sort/filter), so the first page comes
+  // back at the speed of the statement itself; metadata/DML run verbatim.
+  if (request.mode === 'direct') {
+    const resultSet = canWrapStatement(sql)
+    const page = await deps.executor.query(
+      resolved.spec,
+      resultSet ? buildDirectQuery(sql, pageSize) : sql,
+      statementId,
+    )
+    deps.registry.forget(statementId)
+    return {
+      ...toPage(page, pageSize, 0, now() - started, statementId, null),
+      mode: 'direct',
+      // The wrapper adds one line above the user's SQL.
+      lineOffset: resultSet ? 1 : 0,
+    }
   }
 
   // The count runs alongside the page but must not hold it hostage.
@@ -374,7 +482,7 @@ export async function executeSql(deps: ExecutionDeps, request: ExecuteRequest): 
   deps.registry.forget(statementId)
 
   const total = await withTimeout(counted, deps.countTimeoutMs ?? COUNT_TIMEOUT_MS, null)
-  return toPage(page, pageSize, offset, now() - started, statementId, total)
+  return { ...toPage(page, pageSize, offset, now() - started, statementId, total), mode: 'paged', lineOffset: 1 }
 }
 
 /** Fetch another page without re-counting. */

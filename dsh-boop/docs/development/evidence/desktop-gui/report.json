@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "title": "DeepSeek Harness",
+  "elapsedMs": 18038,
+  "browser": "Chrome/152.0.7977.130",
+  "text": "新会话 Ctrl + N 插件 自动化任务 BOOP 任务板 更多 工作区 默认工作区 新会话 BOOP · 波波 已连接 更多 探索未至之境 预览版 默认工作区 描述你想要构建的内容, / 调用指令, @ 文件或对话 工作区内修改 请选择模型",
+  "boop": {
+    "count": 2,
+    "labels": [
+      "BOOP 任务板",
+      "打开 BOOP 主聊天"
+    ]
+  },
+  "boardText": "新会话 Ctrl + N 插件 自动化任务 BOOP 任务板 更多 工作区 默认工作区 新会话 BOOP · 波波 已连接 更多 有些门禁被阻断，需要你处理。 BOOP · 波波 你的 AI 项目助理 恢复门禁已装备 写模式开启 账本在位（单写者） BOOP 主会话（原生 Conversation） 会话 boop-main（点击“回到主聊天”由原生导航打开） 身份 已绑定（账本） 数据域 boop-1e92f03cc4b7aacb 账本 dsh-home/boop/boop.sqlite 回到主聊天 刷新身份 来源 已发现 1 账本记录 0 刷新 未命名会话 查看原会话 session-96…cfe504 尚未读取（只有发现记录） 覆盖：未读 世代 session-96…420909 状态 unseen 来源标签由宿主账本生成；模型不能伪造“已覆盖”状态。打开原会话只定位精确 Session，不按标题猜。 任务看板 看板 列表 搜索 工作区 全部工作区 只看待我处理 刷新 清除筛选 任务能力：可读；本地排序：可用； 写回优先级：服务端拒绝（canCommit=false；写模式 开启）。四组由任务/执行/验收三轴派生；跨列拖拽首版关闭；卡片文本按纯文本渲染（未启用 Markdown）； 验收与审批不可由此界面修改。 宿主可读：当前没有任务（真实空状态，不是读取失败）。 最近一次读取：宿主报告总数 0，本页 0 张。 人工控制（审批 / 停止 / 恢复） 控制面 写模式：开启 · 账本：可写（ledger，durable） · 派发：不可用（dispatch-not-on-this-row；需要模型：是） 刷新控制面 人工审批决定与确定性 Stop 不依赖模型；审批决定只落账，不执行副作用；恢复释放只改门禁账本。 待决审批 待决 0（可决定 0，失效 0）；已批准 0，已拒绝 0， 已过期 0，失效 0。 服务端确认：当前没有等待你决定的有效审批（不是读取失败）。 结果未知（需人工核查） 服务端确认：当前没有结果未知的动作。 停止 BOOP 动作 动作 0：待发 0，已投递 0，未知 0，阻塞 0，已取消 0。 全部 BOOP 动作 某任务 某动作 某会话 停止全部 BOOP 动作 只停 BOOP 自有动作/outbox（不需要模型）；用户自己的 turn 不会被停。请求已发送 ≠ 外部副作用已撤销：只有 BOOP 尚未投递的待发动作会被确定性取消；已投递的动作 BOOP 不宣称撤销，未知项不会自动重试。 重启恢复核查 门禁已装备（fail-closed）：待释放 0 条，已释放 0 条。 恢复必须逐项显式勾选释放；未勾选的旧 BOOP 命令保持阻断，不会自动执行。释放只改变门禁账本。 服务端确认：当前没有需要恢复核查的旧 BOOP 命令。 释放选中（0） 设置（只读） 主题 跟随宿主浅/深主题（BOOP 没有独立主题开关） 动效 遵循系统“减少动画”偏好 样式作用域 BOOP 自有 data-plugin-css，停用插件即移除 输入与队列 原生 Composer / 队列；BOOP 不接管输入根，不改普通 Session 配置 写模式 开启 数据域 宿主版本 DSH 0.2.1-rc.3 固定提交 be72761ee1a6… 账本 dsh-home/boop/boop.sqlite schema v1 数据域 boop-1e92f03cc4b7aacb 验证门（G01–G09） G01 · PASS G02 · PASS G03 · PASS G04 · PASS G05 · PASS G06 · PASS G07 · BLOCKED G08 · PASS G09 · PASS 写模式在所有门通过前保持关闭；这是安全姿态，不是待办。 宿主",
+  "writeModeText": "写模式开启\n账本在位（单写者）\nBOOP 主会话（原生 Conversation）\n会话\nboop-main（点击“回到主聊天”由原生导航打开）\n身份\n已绑定（账本）",
+  "theme": {
+    "light": {
+      "dark": false,
+      "panel": true,
+      "background": "rgba(0, 0, 0, 0)",
+      "sheets": 4,
+      "newChat": true,
+      "boopText": true
+    },
+    "dark": {
+      "dark": true,
+      "panel": true,
+      "background": "rgba(0, 0, 0, 0)",
+      "sheets": 4,
+      "newChat": true,
+      "boopText": true
+    },
+    "followsHost": true
+  },
+  "disable": {
+    "attempted": true,
+    "pluginReady": true,
+    "beforeChecked": "true",
+    "turnedOff": true,
+    "offSurface": {
+      "dark": true,
+      "panel": false,
+      "background": null,
+      "sheets": 0,
+      "newChat": true,
+      "boopText": true
+    },
+    "offLabels": {
+      "count": 0,
+      "labels": []
+    },
+    "enabledAgain": true,
+    "afterChecked": "true",
+    "restored": {
+      "count": 2,
+      "labels": [
+        "BOOP 任务板",
+        "打开 BOOP 主聊天"
+      ]
+    },
+    "restartNotice": false
+  },
+  "resources": [],
+  "hookErrors": [],
+  "consoleNotes": [],
+  "shutdown": {
+    "requested": false,
+    "ledger": {
+      "file": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\desktop-gui-1793092410382\\dsh-home\\boop\\boop.sqlite",
+      "present": true,
+      "meta": [
+        {
+          "key": "schema_version",
+          "value": "1"
+        },
+        {
+          "key": "clean_shutdown",
+          "value": "0"
+        }
+      ],
+      "audits": [
+        {
+          "kind": "boot/reconciled",
+          "reason": "clean=false unknown=0"
+        },
+        {
+          "kind": "boot/reconciled",
+          "reason": "clean=true unknown=0"
+        }
+      ]
+    }
+  },
+  "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\desktop-gui-1793092410382\\dsh-home",
+  "userDshUntouched": true,
+  "shot": "docs/development/evidence/desktop-gui/desktop-window.png"
+}

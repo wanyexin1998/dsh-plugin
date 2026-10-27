@@ -30,7 +30,7 @@
  *     turn as `blocked` with no step/model; (b) when the gate ledger itself is
  *     unavailable, a BOOP command is blocked immediately — no step/model — while
  *     a plain user message still runs;
- *  6. write mode stays OFF throughout; this gate never dispatches anything.
+ *  6. the recovery gate never dispatches; write mode follows the open gate ledger.
  *
  * HONEST BOUNDARY (asserted as facts, not hidden): rc.2.1 logs `turn/start`
  * before `agent/pre-step`, and the inbox claim has already removed the batch, so
@@ -63,7 +63,48 @@ const EVIDENCE_DIR = path.join(PROJECT_ROOT, 'docs/development/evidence/e00-02')
 const BASE_URL = process.env.BOOP_QWEN_BASE_URL?.trim() ?? ''
 const MODEL_ID = process.env.BOOP_QWEN_MODEL?.trim() ?? ''
 const REAL_MODEL = BASE_URL !== '' && MODEL_ID !== ''
+const UNREACHABLE_BASE_URL = 'http://127.0.0.1:9/v1'
 const TURN_TIMEOUT_MS = 90_000
+
+/** Ambient DeepSeek credentials must not answer this file unless Qwen is opted in. */
+function modelRoutePatch() {
+  if (REAL_MODEL) {
+    return `- id: llm-pi-ai
+  config:
+    providers:
+      qwen-local:
+        displayName: Qwen local (vLLM)
+        api: openai-completions
+        baseURL: ${BASE_URL}
+        apiKeyEnv: BOOP_QWEN_KEY
+        models:
+          - id: ${MODEL_ID}
+            name: Qwen local
+            contextWindow: 196608
+- id: agent-default-model
+  config:
+    provider: qwen-local
+    model: ${MODEL_ID}
+`
+  }
+  return `- id: llm-pi-ai
+  config:
+    providers:
+      g04-unreachable:
+        displayName: G04 unreachable local
+        api: openai-completions
+        baseURL: ${UNREACHABLE_BASE_URL}
+        apiKeyEnv: BOOP_G04_FAULT_KEY
+        models:
+          - id: g04-unreachable
+            name: G04 unreachable model
+            contextWindow: 8192
+- id: agent-default-model
+  config:
+    provider: g04-unreachable
+    model: g04-unreachable
+`
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const log = (...args) => console.log('  ', ...args)
@@ -187,7 +228,7 @@ async function bootScenario(tag, gateConfig) {
   })
   fs.writeFileSync(
     path.join(scenarioHome, 'profiles', scenarioProfile, 'cordis.patch.yml'),
-    `# G04 fail-closed scenario: ${tag}\n- id: boop-api\n  config:\n    pocEnabled: true\n- id: boop-gate\n  config:\n${gateConfig}`,
+    `# G04 fail-closed scenario: ${tag}\n- id: boop-api\n  config:\n    pocEnabled: true\n- id: boop-gate\n  config:\n${gateConfig}${modelRoutePatch()}`,
   )
   const scenarioHost = await bootWeb({ home: scenarioHome, profile: scenarioProfile, port: await freePort(), timeoutMs: 180_000 })
   const scenarioCookie = await authorize(scenarioHost.base, scenarioHost.token)
@@ -216,30 +257,12 @@ before(async () => {
     dependencies: { 'dsh-boop': `link:${PROJECT_ROOT.replace(/\\/g, '/')}` },
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-boop'],
   })
-  const routePatch = REAL_MODEL
-    ? `- id: llm-pi-ai
-  config:
-    providers:
-      qwen-local:
-        displayName: Qwen local (vLLM)
-        api: openai-completions
-        baseURL: ${BASE_URL}
-        apiKeyEnv: BOOP_QWEN_KEY
-        models:
-          - id: ${MODEL_ID}
-            name: Qwen local
-            contextWindow: 196608
-- id: agent-default-model
-  config:
-    provider: qwen-local
-    model: ${MODEL_ID}
-`
-    : ''
   fs.writeFileSync(
     path.join(HOME, 'profiles', PROFILE, 'cordis.patch.yml'),
-    `# G04 main scenario (poc opt-in for the shipped dispatch/claim/record endpoints)\n- id: boop-api\n  config:\n    pocEnabled: true\n- id: boop-gate\n  config:\n    waitTimeoutMs: 60000\n    pollMs: 50\n${routePatch}`,
+    `# G04 main scenario (poc opt-in for the shipped dispatch/claim/record endpoints)\n- id: boop-api\n  config:\n    pocEnabled: true\n- id: boop-gate\n  config:\n    waitTimeoutMs: 60000\n    pollMs: 50\n${modelRoutePatch()}`,
   )
   if (REAL_MODEL) process.env.BOOP_QWEN_KEY = process.env.BOOP_QWEN_KEY || 'g04-placeholder-not-a-secret'
+  else process.env.BOOP_G04_FAULT_KEY = process.env.BOOP_G04_FAULT_KEY || 'g04-placeholder-not-a-secret'
 
   host = await bootWeb({ home: HOME, profile: PROFILE, port: await freePort(), timeoutMs: 180_000 })
   base = host.base
@@ -537,12 +560,13 @@ test('G04 an unavailable gate fails closed for BOOP commands and still passes us
 
 /* ── 6. write mode stays off; this gate never dispatches ────────────── */
 
-test('G04 the runtime gate never dispatches and write mode stays OFF', async () => {
+test('G04 the runtime gate never dispatches while write mode follows the ledger', async () => {
   const bootstrap = await ok('boop/bootstrap')
-  assert.equal(bootstrap.scope.writeModeEnabled, false)
+  assert.equal(bootstrap.scope.writeModeEnabled, true)
   const control = await ok('boopControl/state', { request: {} })
-  assert.equal(control.writeMode.enabled, false)
+  assert.equal(control.writeMode.enabled, true)
   assert.equal(control.dispatch.available, false)
+  assert.equal(control.dispatch.reason, 'dispatch-not-on-this-row')
   const status = await gateStatus()
   assert.equal(status.runtimeEnforcement.composed, true)
   evidence.writeMode = { bootstrap: bootstrap.scope.writeModeEnabled, control: control.writeMode.enabled, dispatch: { available: control.dispatch.available, reason: control.dispatch.reason } }

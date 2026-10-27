@@ -11,10 +11,12 @@
 import React from 'react'
 import { BoopMark } from './brand.tsx'
 import { mainSessionReasonText, mainSessionStatusLine, type BoopCall, type MainSessionStore } from './main-session.ts'
+import { writeModeClosed } from './write-mode-copy.ts'
 import { useMainSessionState } from './header.tsx'
 
 interface BootstrapFacts {
   scope: { dshProfileVersion: string; writeModeEnabled: boolean }
+  writeMode?: { blockedByGates?: string[] }
   storage: { ok: boolean; path: string; scopeId: string } | null
 }
 
@@ -80,7 +82,7 @@ export function BoopSettingsRow({ observer, call, onOpenMain, onOpenBoard }: Boo
         <div className="boop-settings-row"><span>数据域</span><span>{state?.host?.scopeId ?? '不可用'}</span></div>
         {facts ? (
           <>
-            <div className="boop-settings-row"><span>写模式</span><span>{facts.scope.writeModeEnabled ? '开启' : '关闭（G01–G06 通过前）'}</span></div>
+            <div className="boop-settings-row"><span>写模式</span><span>{facts.scope.writeModeEnabled ? '开启' : writeModeClosed(facts.writeMode?.blockedByGates)}</span></div>
             <div className="boop-settings-row">
               <span>账本</span>
               <span>{facts.storage ? (facts.storage.ok ? '在位（单写者）' : '只读') : '不可用'}</span>

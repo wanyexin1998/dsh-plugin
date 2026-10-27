@@ -4,7 +4,10 @@ import { act } from 'react-dom/test-utils'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { renderToStaticMarkup } from 'react-dom/server'
+
 import { SqlWorkbenchPanel } from '../src/client/components/SqlWorkbenchPanel.tsx'
+import { WorkbenchPanel } from '../src/client/components/WorkbenchPanel.tsx'
 import type { WorkbenchApi } from '../src/client/api.ts'
 import type { SchemaSnapshot } from '../src/host/metadata.ts'
 import { createDataSource } from '../src/datasource/model.ts'
@@ -87,6 +90,33 @@ function drag(element: HTMLElement, from: number, to: number, axis: 'clientX' | 
   })
 }
 
+describe('WorkbenchPanel title strip', () => {
+  it('renders title, meta and actions when it has a header', () => {
+    const html = renderToStaticMarkup(
+      <WorkbenchPanel id="demo" title="对象" meta="1 个对象" actions={<button type="button">刷新</button>}>
+        <span>body</span>
+      </WorkbenchPanel>,
+    )
+
+    expect(html).toContain('对象')
+    expect(html).toContain('data-sql-panel-meta="demo"')
+    expect(html).toContain('1 个对象')
+    expect(html).toContain('刷新')
+  })
+
+  it('omits meta and actions when they are absent', () => {
+    const html = renderToStaticMarkup(
+      <WorkbenchPanel id="demo" title="结果">
+        <span>body</span>
+      </WorkbenchPanel>,
+    )
+
+    expect(html).toContain('结果')
+    expect(html).not.toContain('data-sql-panel-meta')
+    expect(html).toContain('body')
+  })
+})
+
 describe('panel layout: three panes', () => {
   it('puts the object browser on the left and editor over results on the right', async () => {
     await mount()
@@ -117,14 +147,15 @@ describe('panel layout: three panes', () => {
     expect(workspace().style.gridTemplateColumns).toContain(`${String(TREE_WIDTH_DEFAULT)}px`)
   })
 
-  it('names each pane in its header', async () => {
+  it('spends no title strip on the three panes', async () => {
     await mount()
 
-    const heads = [...container.querySelectorAll('[data-sql-panel] header')].map(head => head.textContent ?? '')
-    expect(heads.join('|')).toContain('对象')
-    expect(heads.join('|')).toContain('结果')
-    // The editor is headless: its own toolbar already names the action.
+    // Object summary stays available to tests and assistive tech, without a 26px header.
+    expect(container.querySelector('[data-sql-panel-meta="objects"]')?.textContent).toContain('个对象')
+    expect(panel('objects')?.querySelector('header')).toBeNull()
+    expect(panel('result')?.querySelector('header')).toBeNull()
     expect(panel('editor')?.querySelector('header')).toBeNull()
+    expect(panel('editor')?.querySelector('[data-sql-run]')).not.toBeNull()
   })
 
   it('keeps the console tabs inside the editor pane', async () => {

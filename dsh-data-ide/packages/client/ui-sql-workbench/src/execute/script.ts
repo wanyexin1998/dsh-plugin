@@ -24,6 +24,14 @@ export interface ScriptRequest {
    * queue an unbounded script; the panel leaves it undefined (unchanged).
    */
   readonly maxStatements?: number
+  /**
+   * Client-owned ids, one per statement (SQL-107).
+   *
+   * The console generates them before the request so 取消 can call
+   * `cancel_statement` for the statement that is currently running; the script
+   * then stops because the driver rejects the in-flight query.
+   */
+  readonly statementIds?: readonly string[]
 }
 
 export interface ScriptStatementOk {
@@ -91,6 +99,7 @@ export async function executeScript(
         connId: request.connId,
         sql: statement.text,
         ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
+        ...(request.statementIds?.[index] === undefined ? {} : { statementId: request.statementIds[index] }),
       })
     } catch (error) {
       // A driver failure belongs to this statement, not to the whole script.

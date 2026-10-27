@@ -102,6 +102,14 @@ export interface MemoryStore {
      */
     subjectKey?: string
   }>
+  /**
+   * Optional: a ledger that recorded a forget rule or a tombstone refuses to
+   * let a later extraction revive that fact or source (AT-23).
+   */
+  revivalBlocked?(
+    scopeId: string,
+    change: { factId?: string; evidenceRefs?: Array<{ sessionId: string }> },
+  ): string | null
   upsertFact(input: {
     scopeId: string
     factId: string
@@ -175,6 +183,14 @@ export class MemoryCommitter {
 
       if (existing && existing.status === 'tombstoned') {
         rejected.push({ index, reason: 'FACT_TOMBSTONED' })
+        return
+      }
+      const blocked = this.store.revivalBlocked?.(scopeId, {
+        factId,
+        evidenceRefs: change.evidenceRefs,
+      })
+      if (blocked) {
+        rejected.push({ index, reason: blocked })
         return
       }
       if (existing && change.op !== 'add' && authorityRank(change.authority) > authorityRank(existing.authority)) {

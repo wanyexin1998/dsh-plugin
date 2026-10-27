@@ -8,8 +8,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| DSH 宿主 | Desktop **`0.2.1-rc.2`**（`E:\deepseek-harness\resources\app.asar` 根 `package.json`） | asar 内 `@deepseek-ai/dsh-desktop` 版本字段；`dshBuildCommit = 332895e0f7c9d4dbfb29729f5eb367fa263ff986`，`dshBuildDirty=false` |
-| 冻结提交 | `332895e0f7c9d4dbfb29729f5eb367fa263ff986`（asar `dshBuildCommit` 声明值；安装产物无独立 commit 元数据） | asar 根 `package.json` |
+| 当前桌面宿主 | Desktop **`0.2.1-rc.3`**（`E:\deepseek-harness\resources\app.asar` 根 `package.json`，包名 `@deepseek-ai/dsh-desktop`） | `dshBuildCommit = be72761ee1a6736ebcdf4f3739363b083ae53c98`，`dshBuildDirty=false`。副本在 `.work/desktop-package.json` |
+| Web 测试载荷 | **`0.2.1-rc.2`**（`.work/test-host/payload-0.2.1/dsh`） | 宿主套件仍对着这份载荷；提交常量 `332895e0f7c9d4dbfb29729f5eb367fa263ff986` |
+| 插件兼容声明 | `engines.dsh = "0.2.1-rc.2 \|\| 0.2.1-rc.3"` | 宿主 `semver.satisfies(..., { includePrerelease: true })` 对这两版为真，对 `rc.1` / `rc.4` / `0.2.1` 为假。没有 `compatibility.json` |
 | 宿主运行时 Node | `v24.21.0`（`~/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe`） | 本机探测 |
 | 宿主 React | `18.3.1`（web shell 静态模块表内联） | `dsh-web-frontend/dist/assets` 字符串 |
 | 测试用宿主副本 | `.work/test-host/payload-0.2.1/dsh`（`tools/build-test-payload.mjs` 从 asar 只读提取 405.60 MiB / 17,262 文件 + `app.asar.unpacked` 原生模块；旧 rc.2 副本仍在 `.work/test-host/payload/dsh` 作差异对照） | 本仓库工具 + `payload.json` |
@@ -48,15 +49,15 @@
 |---|---|---|
 | G01 | **PASS** | `tests/host/e00-01-plugin-load.test.mjs` 11/11（0.2.1-rc.2，commit `2c99dc2`） |
 | G02 | **PASS** | `docs/development/evidence/e05-00/qwen-gold-report.md` — 真实 Qwen 8/8 能力，上下文 196608 实测 |
-| G03 | **PASS** | `tests/host/e02-03-idempotency-in-host.test.mjs` 6/6 ×3（真实宿主+真实 Qwen）：同 actionId/messageId 重试恒为 duplicate（不换 ID/不二次投递）；unknown 先 durable 三态对账（accepted/not-delivered/indeterminate；`claimed` 不作证据）；not-delivered 仅在 clean-restart 声明下成立且不自动重试；重复 reconcile 幂等（changed:false、审计 1 条）；SIGKILL+重启后由 durable 证据补记 accepted、零重放；真实模型 turn claim=1/user-message=1。边界：Host 自身无跨进程 messageId 去重（BOOP dispatcher/adapter 层覆盖）；生产 boot 自动对账待接线 |
-| G04 | **PASS** | `tests/host/e00-02-pre-step-gate.test.mjs` 8/8（真实宿主+真实 Qwen）：官方 `agent/pre-step` waterfall（行 `boop-gate`）在 step/user-commit/request/模型调用前拦截未释放的 boop-command；显式释放后同一已 claim 消息恰执行一次；普通用户消息透传；超时/未装备/账本不可读 fail-closed；`runtimeEnforcement.composed=true`。边界：rc.2.1 在 pre-step 前已写 turn/start 并取走 inbox claim，故保证"无 step/无提交/无模型"而非"无 turn/start"；被拒 claim 不可复活（durable re-admission NOT_RUN） |
-| G05 | NOT_RUN（部分） | E04-03 服务端控制面真实宿主 PASS（单次消费绑定/STALE 单卡失效/确定性 Stop/显式释放 16/16）；真实浏览器 UI/IME E2E 与 IM 规则未验、写派发仍关闭 |
-| G06 | **PASS** | `tests/host/e03-03-lifecycle-in-host.test.mjs` 6/6 + `e03-04-retrieval-in-host.test.mjs` 8/8（真实宿主+真实账本+plain-JSONL durable Session）：三种初始化/失败对象单列/暂停续跑、from_now 只落真实水位、导入预览→落盘且执行 canary 证明未执行、纠错带真实来源 seq+影响、遗忘写规则且原 Session 字节不变；分层检索可复现、命中带 durable 证据、世代变化 stale、失效/遗忘不入上下文、FTS 缺失 degraded；真实 Qwen 抽取 3 条事实 3/3 带 subjectKey、disputed=0（冲突收紧为同 (kind,subjectKey)）；E03-02 真实抽取 5/5。边界：生命周期执行面仍为 test-side InitStore（Host 端点未接）、跨提案 subjectKey 无列回退保守、forget 无 tombstone、生产 query planner/FTS 未实现 |
-| G07 | **BLOCKED** | IN-07/IN-08 渠道凭证未配置（M2，可选） |
-| G08 | NOT_RUN（部分） | 宿主侧存储/租约/迁移/备份 PASS；Desktop 侧与多环境回归待 E07-01 |
-| G09 | NOT_RUN（部分） | 客户端组件/slot 已实现；Desktop GUI + 浏览器截图/IME 真机回归 NOT_RUN |
+| G03 | **PASS** | 真实宿主幂等/对账见 `tests/host/e02-03-idempotency-in-host.test.mjs`。生产启动会在持有写租约时调用 `reconcileOutbox`，并只在正常退出写下 `clean_shutdown`（`tests/unit/e03-05-host-init.test.mjs`）。边界：Host 自身无跨进程 messageId 去重。 |
+| G04 | **PASS** | `tests/host/e00-02-pre-step-gate.test.mjs` 2026-10-27 为 7 通过、1 跳过（未设 Qwen，跳过真实模型回复）。官方 `agent/pre-step` waterfall（行 `boop-gate`）在 step/user-commit/request 前拦截未释放的 boop-command；显式释放后同一已 claim 消息恰执行一次，模型端口不可达时以错误结束且没有伪造回复；普通用户消息透传；超时/账本不可读 fail-closed；`runtimeEnforcement.composed=true`。边界：rc.2.1 在 pre-step 前已写 turn/start 并取走 inbox claim，故保证"无 step/无提交/无模型"而非"无 turn/start"；被拒 claim 不可复活（durable re-admission NOT_RUN） |
+| G05 | **PASS** | 宿主控制面与 Edge 用同一套规则。2026-10-27T09-16-44-730Z：写模式开启时停止是 noop，恢复没有全选，批准落账且动作保持 `awaiting_approval`，过期卡批准按钮禁用。控制行 `dispatch.available` 始终为 false（`dispatch-not-on-this-row`）。渠道准入拒绝未知身份，没有审批授权方法。 |
+| G06 | **PASS** | 真实宿主 `tests/host/e04-01b-main-session.test.mjs` 10/10：`from_now` 写入水位，`learn_history` 读完已解析来源并结束作业（不调用模型），没有确认预览的导入不写。遗忘 tombstone 与 FTS 降级见 `tests/unit/e03-05-host-init.test.mjs` 5/5。 |
+| G07 | **BLOCKED** | 凭证未配置。主宿主行只挂关闭的渠道运行时（`tests/unit/e06-01-admission.test.mjs`）。不开网络。 |
+| G08 | **PASS** | 真实 Web Host：第二进程在第一进程心跳期间保持只读且 fencing token 不变，释放后重启 token+1（`tests/host/e01-01-storage-in-host.test.mjs` 6/6）。单元：心跳越过 TTL 不放权、关闭后接管 token 增大（`e01-01-lease-heartbeat`）；node:sqlite、一致备份、失败迁移仍可读（`e00-03` 11/11）。Desktop GUI 打开同一账本并出现 `boot/reconciled clean=true`。macOS/Linux 不宣称。 |
+| G09 | **PASS** | Desktop **0.2.1-rc.3** 私有窗口：任务板显示写模式开启且派发不可用（`dispatch-not-on-this-row`）、浅色/深色跟随宿主、停用后侧边栏和样式表消失且「新会话」仍在、同一开关重新打开后侧边栏回来（`docs/development/evidence/desktop-gui/report.md`，`desktop-gui-1793092410382`）。Edge 任务板搜索框 IME「波波」（`web-e2e-control/2026-10-27T09-16-44-730Z`）。无重复 React 报错。macOS/Linux 仍不宣称支持。 |
 
-当前 `writeMode.enabled = false`，`blockedByGates = [G05,G08,G09]`（G01/G02/G03/G04/G06 PASS；G07 BLOCKED 不阻塞本地写）；
+当前 `writeMode.enabled = true`，`blockedByGates = []`（G01–G06、G08、G09 PASS；G07 BLOCKED 不阻塞本地写）。持有写租约的进程才会真正写入。
 `tests/unit/gates.test.mjs` 锁定规则（PASS 必须有证据、缺任一必需门则关闭、G07 不阻塞本地写）。
 
 ## 1. 已完成工作项
@@ -246,7 +247,7 @@
 6. 目录创建按 backend 如实：Windows native picker 不暴露 createDirectory → 报 unavailable + 原因（冻结规则禁止 UI 点击自动化替代）；只有 browse 后端可用时才报 available。
 7. 移除 bundle 后 `boop-workspace` 行消失、原生 web-profile 顶层行不变、启动零告警。
 
-**未覆盖 / 风险**：真实写模式仍关闭，端到端真实 commit 未执行（部分成功仅在单元注入验证）；本机 directoryPicker=native，因此目录创建 unavailable；冷会话标题可能不可读（`titlesUnknown`，不猜）。
+**未覆盖 / 风险**：本节记录时写模式尚未打开，端到端 commit 当时未执行。当前门账本已打开写模式（见 §0.2）；坏的 previewHash 仍然拒绝执行。本机 directoryPicker=native，因此目录创建 unavailable；冷会话标题可能不可读（`titlesUnknown`，不猜）。
 
 ### E03-01 · 全域轻量观察与持久化读取水位
 
@@ -387,7 +388,7 @@
 4. **客户端**：审批卡有效/失效/拒绝原因回显、Stop 三桶结果与“请求已发送≠已撤销”文案、恢复逐项勾选（无全选按钮）、unknown/断线/旧响应/截断如实显示、键盘可达、header 待批角标（仅真实 valid-pending 计数）、作用域样式与卸载清理。
 5. 缺 writer lease → 控制面只读（canDecide:false，decide/stop CAPABILITY_UNAVAILABLE）；无门禁 → recovery unavailable；所有响应带 writeMode/ledger/dispatch/audit 事实；匿名 401。
 
-**NOT_RUN**：真实 Web/Desktop 三屏宽度与深浅主题截图、真机 IME/触控、AT-26/28/30/G04/G05/G09 的浏览器端到端联调（Host/服务端已证）。G04 已由 E00-02 的 `agent/pre-step` 收口为 PASS；G05 仍 NOT_RUN（交互审批/停止/恢复真机流程与 IM 规则未验、写派发仍关闭）。
+**后续证据**：Edge 已覆盖停止、恢复、审批点击、过期卡和 IME（`docs/development/evidence/web-e2e-control/2026-10-27T07-02-41-595Z`）。Desktop 窗口、浅色/深色和停用恢复见 `docs/development/evidence/desktop-gui/report.md`。G05 已 PASS：批准只落账，控制行不派发。
 
 ### Web 真机 UI 回归环境（浏览器自动化，2026-10-18）
 
@@ -475,7 +476,7 @@
 
 已验证：
 1. **SIGKILL/重启**：真实 turn 中途杀进程 → 同 DSH_HOME 重启：恢复门禁不收养（entries/adopted 空）、无自动重放/无 claim、durable `turn/end=interrupted`、assistant=0；4 份 DB `integrity ok`、scopeId/schema 不变、旧行可读、无关用户 Session 不变。
-2. **模型不可达**：闭合端口路由 → `turn/end="error: Connection error."`、assistant=0、无外部回退、有限重试（5 次）收敛、claim 1 次、writeMode=false；确定性 Stop 仍可用且 noop 如实。
+2. **模型不可达**：闭合端口路由 → `turn/end="error: Connection error."`、assistant=0、无外部回退、有限重试（5 次）收敛、claim 1 次；确定性 Stop 仍可用且 noop 如实。2026-10-27 重跑 4/4：`writeMode.enabled=true`，控制行仍不派发（`docs/development/evidence/e07-01/fault-model-down-2026-10-27T09-11-29-738Z.json`）。同日审批并发 4/4：伪造卡 `APPROVAL_STALE`，决定不派发。
 3. **审批并发/伪造**：并发两次 decide → 恰好 1 allowed + 1 already-handled、1 条 decision 审计；伪造 payloadHash/nonce → `APPROVAL_STALE` 且不毁合法卡；审批不派发。
 4. 编排工具三组独立报告、失败非零退出、real 组无 env 时 SKIPPED 不伪造；证据 `docs/development/evidence/e07-01/`。
 
@@ -495,10 +496,12 @@
 
 **NOT_RUN（Gate E07-02 仍 NOT_RUN）**：真实**用户 profile** 安装、真实版本→版本升级与回滚演练、Desktop GUI、macOS/Linux、公开 registry 发布（`private:true` 防误发布）、独立法务评审、真实环境隐私审计；证据绑定取证时工作区，最终提交后以 `node build.mjs && node tools/package-boop.mjs && node tools/rehearse-install.mjs` 刷新。恢复快照的租约处理已补进 rollback runbook。
 
-## 1.5 进度小结（截至 2026-10-18 第五轮：E05-02 + G03/G04/G06 收口）
+## 1.5 进度小结（2026-10-18 第五轮快照：E05-02 + G03/G04/G06 收口）
+
+本节只记录 2026-10-18 当时的数字。当前门账本、写模式和 G05/G08/G09 以 §0.2 为准。
 
 - 已完成：**E00-01**、**E00-02**（来源/门禁 + G04 运行时收口）、**E00-03**、**E01-01**（含租约心跳）、**E01-02**、**E02-01/02**、**E02-03**（真实派发 + **G03 幂等/对账收口**）、**E02-04**、**E03-01**、**E03-02**（提交层 + 真实 Qwen 抽取）、**E03-03**、**E03-04**（**G06 主机 E2E + 冲突语义收紧**）、**E04-00**、**E04-01 第一/二批**、**E04-02**、**E04-03**、**E05-00**（真实 Qwen 金标 8/8）、**E05-01**（调度/巡检/原生自动化）、**E05-02**（证据验收与有限自愈）、**E07-01（准备）**、**E07-02（准备 + 隔离安装/升级/卸载演练）**、rc.2.1 对齐、门账本如实化
-- 下一批：真实浏览器**交互流程**回归（种入 task/approval fixtures 后点审批/停止/恢复 + IME）→ Desktop 真机回归（G05/G09）→ E07-01 完整故障矩阵与真实版本升级/回滚 → **M1 放行评估**（写模式需 G05/G08/G09 收口）
+- 下一批：Desktop GUI 回归（G08/G09）→ 浏览器里的过期审批卡 → 写模式仍须等 G05/G08/G09。PoC 端点仅在 `BOOP_ALLOW_POC=1` 时生效，安装步骤不设置它。
 - 测试现状（rc.2.1-rc.2，最终树，宿主串行 `--test-concurrency=1`，真实 Qwen env 提供时）：
   - 离线：单元 **262/262** + 客户端 **82/82** = **344/344**
   - 宿主：**166/166 PASS**（真实 rc.2.1 宿主；含 G03 幂等 6、G04 pre-step 8、E05-02 7、E03-03 6、E03-04 8 等新增，及既有真实模型 opt-in 组）；E07-01 故障注入 13/13 含于其中
@@ -516,9 +519,7 @@
 | E05-00 | **完成（真实金标 8/8 PASS）** | 真实 Qwen 服务：能力熔断全 PASS、有效上下文 196608（服务端整数 + 越界 400 实测）、中文/Unicode 工具参数无损、严格 JSON、取消、token 计量；证据 `docs/development/evidence/e05-00/qwen-gold-report.md` |
 | E04-00 | 完成（Spike） | 上游 `chuspeeism/dashi-taskboard@723c400e` 已固定检出并完成兼容性审查，见 `docs/development/E04-00-taskboard-spike.md`；未移植代码，TB01–TB10 仍 NOT_RUN |
 
-M0 退出条件（Gate，以 §0.2 账本为准）：G01 ✅（装配/鉴权/适配面）、G02 ✅（真实 Qwen 金标 8/8）、
-**G03 ⏳（真实派发+对账已 PASS，AT-13 重复/断连对账未跑 → 门仍 NOT_RUN）**、G04 ⏳（部分；pre-step 运行时门控待接线）、
-G08 ⏳（宿主侧通过、Desktop 侧待补）、G07 ⛔ BLOCKED（渠道未配置，M2）、G09 ⏳（真机回归未跑）、TB02 ⏳ 未执行。
+M0 退出条件以 §0.2 为准：G01、G02、G03、G04、G05、G06、G08、G09 为 PASS。G07 为 BLOCKED，不挡住本地写。写模式因此打开，但仍要求本进程持有写租约。本节旧说法里「G03/G04 仍未跑」已经过时。
 
 ## 3. 风险与阻塞汇总
 
@@ -528,11 +529,11 @@ G08 ⏳（宿主侧通过、Desktop 侧待补）、G07 ⛔ BLOCKED（渠道未�
 | **模型服务为内网明文 HTTP、无 TLS/鉴权** | 数据边界 / G02 | 用户明确提供且为内网 vLLM；BOOP 只按配置路由、不落盘密钥、不外部回退。上线前若跨网络使用，需用户侧加网络边界或 TLS（不改代码） |
 | **共享 GPU 端点无并发控制** | E05-01 调度 | 64k prefill 实测 ~17s、接近上限 ~50s；BOOP 侧必须保持 1 并发许可 + 45s 软超时 + 退避（02§05），不得假设抢占 |
 | 未配置钉钉/飞书（IN-07/IN-08） | G07 | 渠道保持关闭；M2 才联调 |
-| 未实测 Desktop GUI | G09 | 等 E04-01 前端接入后统一做 Web/Desktop 回归 |
+| macOS/Linux 与真实用户 profile 的 Desktop 安装仍未测 | G09 | Windows Desktop 0.2.1-rc.3 私有窗口已测（`docs/development/evidence/desktop-gui/report.md`）。不把未测平台写成已支持 |
 | 安全关键代码（派发、审批、恢复门禁）尚无独立审查人 | G03/G04/G05 | 如实标记“待独立审查”，不冒充批准 |
 | ~~宿主租约无心跳~~（已收口） | G08 多 Host 场景 | 已实现进程内租约心跳（`tests/unit/e01-01-lease-heartbeat.test.mjs` 2/2）：活动 Host 不再被误判过期；只读第二 Host 关闭时**不再误释放**主 Host 租约。剩余：Desktop 侧多 Host 环境回归（E07-01）。 |
 | **DSH 升级兼容门** | 每次宿主升级 | 清单声明 `engines.dsh`；升级后必须重新对齐并复跑全套证据（旧证据只作历史），不申请版本豁免 |
 | `tsc --noEmit` 尚未全绿 | 开发体验 | `@types/node` 已补；剩余为 pre-existing 的 tsconfig（`allowImportingTsExtensions` 未开）与 `ctx.boop` 等未类型化的长尾错误。构建（esbuild）与全部测试通过；typecheck 不作为当前 Gate 证据 |
 | **目录创建能力依赖 directoryPicker backend** | E02-04 管理动作 | Windows native picker 不暴露 createDirectory → 如实 unavailable（禁止 UI 点击自动化替代）；browse/remote 组合才可用；E07-01 在目标环境确认 |
-| **E03-03 执行未接线** | E04-01 初始化卡 | 三种初始化目前只读真实状态并返回 unavailable；真正落盘/导入由后续批次接线（不得用 UI 假装完成） |
+| 导入初始化仍要确认过的预览 | E04-01 | `from_now` / `learn_history` 在写模式且持有租约时会执行；`import_memory` 没有确认预览时不写入 |
 | **client live Inspector 不可用** | A4 客户端 live 取证 | 当前 profile 未挂载 experimental-inspector；slot 以 payload 权威目录 + 静态证据核对，建议在 GUI 人工确认 `boop.tasks` 面板与“BOOP 任务板”菜单项 |

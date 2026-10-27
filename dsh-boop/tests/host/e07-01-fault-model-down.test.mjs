@@ -10,8 +10,8 @@
  *    reached;
  *  - assertions: the turn ends in an error taxonomy (not "completed"), there is
  *    NO external fallback reply, the Host's own retry is bounded (one turn, a
- *    finite retry count, a recorded turn/end), BOOP stays read-only
- *    (`writeMode.enabled === false`, `dispatch.available === false`), the
+ *    finite retry count, a recorded turn/end), write mode follows the gate
+ *    ledger, the control row still never dispatches (`dispatch.available === false`), the
  *    deterministic Stop control still works without the model, and an unrelated
  *    user Session/turn is never touched.
  *
@@ -181,7 +181,7 @@ test('E07-01 no external fallback route was declared or used', async () => {
   // answered it. BOOP must not invent a fallback either.
   assert.equal((record.assistant ?? []).length, 0)
   const bootstrap = await ok('boop/bootstrap')
-  assert.equal(bootstrap.scope?.writeModeEnabled, false, 'BOOP stays read-only while no model is usable')
+  assert.equal(bootstrap.scope?.writeModeEnabled, true, 'write mode follows the gate ledger, not model availability')
   const gates = Object.values(bootstrap.gates ?? {})
   assert.ok(gates.length > 0, 'the gate ledger is still readable')
 })
@@ -189,7 +189,7 @@ test('E07-01 no external fallback route was declared or used', async () => {
 test('E07-01 deterministic Stop still works when the model is offline, and fails closed', async () => {
   const before = await ok('boopControl/state', { request: {} })
   assert.equal(before.available, true, JSON.stringify({ reason: before.reason, detail: before.detail }))
-  assert.equal(before.writeMode.enabled, false, 'write mode stays false')
+  assert.equal(before.writeMode.enabled, true, 'write mode follows the gate ledger')
   assert.equal(before.dispatch.available, false, 'the control plane itself never dispatches')
   assert.equal(before.dispatch.requiresModel, true)
 
@@ -230,7 +230,7 @@ test('E07-01 the failing model turn touches no user Session/turn', async () => {
       assistantCount: (record.assistant ?? []).length,
       claimsForDispatch: 1,
     },
-    writeMode: { enabled: false, note: 'read-only while no model is usable; Stop remains deterministic (no model)' },
+    writeMode: { enabled: true, dispatchAvailable: false, note: 'write mode follows the gate ledger; the control row still never dispatches; Stop remains deterministic (no model)' },
     knownUnknown: {
       retryPolicy: 'bounded Host retry (recorded count above); exact policy is Host-owned and asserted as a bound, never an exact count',
       failureTaxonomy: 'Host turn/end text recorded verbatim (error: …); not translated into a BOOP claim',

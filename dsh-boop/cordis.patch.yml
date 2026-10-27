@@ -13,8 +13,8 @@
     - id: dsh-boop
       name: 'dsh-boop'
 
-    # BOOP management tools (read-only catalog/context/history first; write
-    # dispatch stays disabled until G01-G06 gates pass).
+    # BOOP management tools. Approval and stop never dispatch. Workspace commits
+    # go through boop.isWriteModeEnabled(), which follows the gate ledger.
     - id: boop-tools
       name: 'dsh-boop/tools'
 

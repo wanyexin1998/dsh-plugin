@@ -10,7 +10,7 @@
  *
  * Implemented so far: rc.2 surface probe (E00-01), the startup recovery gate and
  * proxy-message provenance (E00-02). Storage lands with E01-01 (E00-03 verified
- * the driver). Write dispatch stays disabled until G01-G06 pass.
+ * the driver). Write dispatch stays disabled until the required gates pass.
  */
 
 import { probeHostSurface, type ProbeResult } from './probe.ts'
@@ -31,6 +31,8 @@ import {
   payloadHash,
   PROXY_SOURCE_KIND,
 } from './transport/command-envelope.ts'
+import { apply as applyClosedChannels } from './channels-api.ts'
+import { readHostIdentity } from './host-identity.ts'
 
 export const name = 'dsh-boop'
 
@@ -61,14 +63,14 @@ export function apply(ctx: any): void {
   try {
     const gates = gateMap()
     const writeMode = writeModeStatus()
+    const hostIdentity = readHostIdentity()
     const state: BoopRuntimeState = {
       schemaVersion: 1,
       product: 'BOOP',
-      // Frozen verification environment: DSH Desktop 0.2.1-rc.2. The app-boot
-      // compatibility check (engines.dsh) refuses to mount this plugin on any
-      // other runtime, so these facts describe the only host BOOP may run on.
-      dshProfileVersion: '0.2.1-rc.2',
-      dshCommit: '332895e0f7c9d4dbfb29729f5eb367fa263ff986',
+      // engines.dsh admits the rc.2 web payload and the rc.3 desktop build.
+      // This string is the process that actually loaded the plugin.
+      dshProfileVersion: hostIdentity.version,
+      dshCommit: hostIdentity.commit,
       // Derived from the frozen gate ledger (src/host/gates.ts): today G01/G02
       // are PASS, the rest are NOT_RUN/BLOCKED, so every production write stays
       // fail-closed. Changing this requires evidence, not a switch.
@@ -110,8 +112,10 @@ export function apply(ctx: any): void {
       const dshHome = ctx.dshHomePath?.()
       storage = new BoopStorage({ dshHome, directoryName: 'boop' })
       state.storage = storage.start()
-      // Read-only unless this process owns the single-writer lease.
-      state.writeModeEnabled = false
+      // Write mode follows the frozen gate ledger AND the single-writer lease.
+      // Either one missing keeps every production write fail-closed.
+      const leaseHeld = state.storage?.ok === true && state.storage.lease.held === true
+      state.writeModeEnabled = writeMode.enabled && leaseHeld
     } catch (error) {
       // Storage failure is recorded, not swallowed: diagnostics must be able to
       // say WHY BOOP is read-only.
@@ -230,6 +234,11 @@ export function apply(ctx: any): void {
     }
 
     ctx.effect(() => () => storage?.close(), 'boop: storage disposal')
+
+    // Channels stay on this same package row. A separate ./lib/*.js loader
+    // entry is also resolved as package dsh-boop and rc.2.1 client-modules
+    // then refuses to boot (two client sources for one package).
+    applyClosedChannels(ctx)
 
     ctx.logger?.info?.(
       `[boop] runtime armed: recovery gate on, write mode off, ledger=${

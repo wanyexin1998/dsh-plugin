@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "verdict": "FAIL",
+  "capturedAt": "2026-10-27T06:34:04.737Z",
+  "blocker": null,
+  "gatesMarkedPass": false,
+  "writeModeEnabledByHarness": false,
+  "browser": {
+    "channel": "msedge",
+    "version": "156.0.4314.42"
+  },
+  "host": {
+    "url": "http://127.0.0.1:55275/",
+    "port": 55275,
+    "dshVersion": "0.2.1-rc.2",
+    "dshHome": ".work/test-runs/web-e2e-control-1793082807093/dsh-home",
+    "profile": "boop-web-e2e-control"
+  },
+  "steps": [
+    {
+      "name": "private web profile prepared (write mode not enabled)",
+      "status": "PASS",
+      "detail": "boop-web-e2e-control; DSH_HOME=.work/test-runs/web-e2e-control-1793082807093/dsh-home; write mode not enabled"
+    },
+    {
+      "name": "web Host booted on 127.0.0.1",
+      "status": "PASS",
+      "detail": "port 55275; http://127.0.0.1:55275/"
+    },
+    {
+      "name": "Edge shell ready",
+      "status": "FAIL",
+      "detail": "click-blocking masks remain: 1 [{\"text\":\"预览版说明DeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，\",\"buttons\":[{\"text\":\"继续\",\"aria\":null,\"disabled\":true}]}]"
+    },
+    {
+      "name": "BOOP task board opened",
+      "status": "NOT_RUN",
+      "detail": "Edge shell still has a blocking dialog"
+    },
+    {
+      "name": "deterministic Stop is honest",
+      "status": "NOT_RUN",
+      "detail": "Edge shell still has a blocking dialog"
+    },
+    {
+      "name": "recovery has no select-all and empty release is refused",
+      "status": "NOT_RUN",
+      "detail": "Edge shell still has a blocking dialog"
+    },
+    {
+      "name": "approval empty state is honest",
+      "status": "NOT_RUN",
+      "detail": "Edge shell still has a blocking dialog"
+    },
+    {
+      "name": "IME composition on a BOOP text field",
+      "status": "NOT_RUN",
+      "detail": "Edge shell still has a blocking dialog"
+    }
+  ],
+  "samples": {},
+  "shots": [],
+  "consoleNotes": []
+}

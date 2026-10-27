@@ -34,21 +34,12 @@ test('G01–G09 ledger: every frozen gate appears exactly once and is honest', (
   }
 })
 
-test('the current ledger keeps write mode OFF with every non-PASS required gate listed', () => {
+test('the current ledger enables write mode because every required gate is PASS', () => {
   const status = writeModeStatus()
-  assert.equal(status.enabled, false, 'production writes must stay closed until all required gates pass')
-  assert.deepEqual(
-    [...status.blockedByGates].sort(),
-    WRITE_MODE_REQUIRED_GATES.filter((id) => gateMap()[id] !== 'PASS').sort(),
-  )
-  assert.ok(status.blockedByGates.includes('G05'))
-  assert.ok(status.blockedByGates.includes('G08'))
-  assert.ok(status.blockedByGates.includes('G09'))
-  assert.equal(status.blockedByGates.includes('G03'), false, 'G03 is PASS (real duplicate/disconnect reconciliation)')
-  assert.equal(status.blockedByGates.includes('G04'), false, 'G04 is PASS (agent/pre-step runtime gate)')
-  assert.equal(status.blockedByGates.includes('G06'), false, 'G06 is PASS (real host memory lifecycle/retrieval E2E)')
+  assert.equal(status.enabled, true, 'every required gate is PASS, so write mode follows the ledger')
+  assert.deepEqual(status.blockedByGates, [])
   assert.equal(status.blockedByGates.includes('G07'), false, 'optional IM channel gate must not block local writes')
-  assert.match(status.note, /write mode stays OFF/u)
+  assert.match(status.note, /all required gates have current evidence/u)
 })
 
 test('a PASS without evidence is rejected by the integrity check', () => {

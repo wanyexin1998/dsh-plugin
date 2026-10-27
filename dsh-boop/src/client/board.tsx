@@ -23,6 +23,7 @@ import { BoopCompanion3D } from './companion3d.tsx'
 import { BoopSourceCard, type SourceLoad, type SourcesFacts } from './source.tsx'
 import { TaskboardPanel } from './taskboard/index.tsx'
 import { BoopControlPanel } from './control.tsx'
+import { writeModeClosed } from './write-mode-copy.ts'
 import type { MainSessionHostFacts } from './main-session.ts'
 // Re-exported for the client test bundle (state mapping + fallback behaviour).
 export { BoopCompanion3D }
@@ -38,6 +39,7 @@ export interface BoopBootstrap {
   }
   capabilities: Record<string, boolean>
   gates: Record<string, 'NOT_RUN' | 'PASS' | 'BLOCKED'>
+  writeMode?: { blockedByGates?: string[] }
   services: string[]
   storage?: {
     ok: boolean
@@ -300,7 +302,7 @@ export function BoopBoard({
           <div className="boop-row"><span>动效</span><span>遵循系统“减少动画”偏好</span></div>
           <div className="boop-row"><span>样式作用域</span><span>BOOP 自有 data-plugin-css，停用插件即移除</span></div>
           <div className="boop-row"><span>输入与队列</span><span>原生 Composer / 队列；BOOP 不接管输入根，不改普通 Session 配置</span></div>
-          <div className="boop-row"><span>写模式</span><span>{data ? (data.scope.writeModeEnabled ? '开启' : '关闭（G01–G06 通过前）') : '未知'}</span></div>
+          <div className="boop-row"><span>写模式</span><span>{data ? (data.scope.writeModeEnabled ? '开启' : writeModeClosed(data.writeMode?.blockedByGates)) : '未知'}</span></div>
         </div>
       </section>
 

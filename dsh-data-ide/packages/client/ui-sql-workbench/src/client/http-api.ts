@@ -16,6 +16,7 @@ import type { ExecutionResult } from '../execute/envelope.ts'
 import type { ScriptRequest, ScriptResponse } from '../execute/script.ts'
 import type { SchemaSnapshot } from '../host/metadata.ts'
 import { type TestResult, type WorkbenchApi } from './api.ts'
+import type { QueryHistoryEntry } from './state/history.ts'
 
 /** Wire paths; must match `src/host/web-routes.ts`. */
 export const HTTP_ROUTES = {
@@ -30,6 +31,9 @@ export const HTTP_ROUTES = {
   schema: '/dsh-data-ide/schema',
   executeScript: '/dsh-data-ide/execute-script',
   layout: '/dsh-data-ide/layout',
+  workspace: '/dsh-data-ide/workspace',
+  history: '/dsh-data-ide/history',
+  favorites: '/dsh-data-ide/favorites',
 } as const
 
 /** Minimal fetch surface, injectable for tests. */
@@ -158,6 +162,57 @@ export function createHttpApi(fetchImpl: FetchLike = (input, init) => fetch(inpu
         await post(HTTP_ROUTES.layout, { layout })
       } catch {
         // Layout is a convenience, not data.
+      }
+    },
+
+    async loadWorkspaceState() {
+      const payload = await unwrap<Envelope & { state?: unknown }>(
+        await fetchImpl(HTTP_ROUTES.workspace, { method: 'GET' }),
+        HTTP_ROUTES.workspace,
+      )
+      return payload.state ?? null
+    },
+
+    async saveWorkspaceState(state) {
+      // Best effort: losing the next restore is better than failing the query UI.
+      try {
+        await post(HTTP_ROUTES.workspace, { state })
+      } catch {
+        // The panel keeps the live tabs; only a reload loses them.
+      }
+    },
+
+    async loadHistory() {
+      const payload = await unwrap<Envelope & { history?: unknown }>(
+        await fetchImpl(HTTP_ROUTES.history, { method: 'GET' }),
+        HTTP_ROUTES.history,
+      )
+      return payload.history ?? null
+    },
+
+    async appendHistory(entry: QueryHistoryEntry) {
+      // Best effort: a missed history row must never fail the run that made it.
+      try {
+        await post(HTTP_ROUTES.history, { entry })
+      } catch {
+        // The panel's in-memory list still shows the row.
+      }
+    },
+
+    async loadFavorites() {
+      const payload = await unwrap<Envelope & { favorites?: unknown }>(
+        await fetchImpl(HTTP_ROUTES.favorites, { method: 'GET' }),
+        HTTP_ROUTES.favorites,
+      )
+      return payload.favorites ?? null
+    },
+
+    async saveFavorites(document) {
+      // Best effort, like the other two persistence documents.
+      try {
+        await post(HTTP_ROUTES.favorites, { favorites: document })
+      } catch {
+        // Favorites are a convenience; the in-memory list is still there.
       }
     },
 

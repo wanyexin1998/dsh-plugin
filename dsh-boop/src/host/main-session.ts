@@ -94,8 +94,8 @@ export interface InitPlanFacts {
   mode: InitMode
   label: string
   state: InitModePlanState
-  /** Always false until the E03-03 job store is composed: nothing was written. */
-  executed: false
+  /** False unless this call actually wrote the ledger. */
+  executed: boolean
   reason: string
   copy: string
   writeModeEnabled: boolean
@@ -420,7 +420,7 @@ function initReason(mode: InitMode, hasLedger: boolean, writable: boolean, write
 function initCopy(mode: InitMode, reason: string, discovered: number): string {
   if (reason === 'ledger-unavailable') return '记忆账本当前不可用，初始化不能开始。没有写入任何数据。'
   if (reason === 'read-only-ledger') return '另一个 BOOP 进程正在管理数据域，本次只能只读，不会写入任何数据。'
-  if (reason === 'write-mode-disabled') return '写模式在 G01–G06 全部通过前保持关闭，初始化不会写入任何数据。'
+  if (reason === 'write-mode-disabled') return '写模式在 G01–G06 与 G08、G09 通过前保持关闭，初始化不会写入任何数据。'
   if (mode === 'import_memory') return '导入校验/预览流水线尚未接通；本次不会读取任何文件，也没有写入任何数据。'
   if (mode === 'learn_history') {
     return `后台历史整理作业尚未接线；已发现 ${discovered} 个会话，但本次没有读取或写入任何历史。`
@@ -443,17 +443,26 @@ export async function initPlanFacts(ctx: any, modeInput: unknown): Promise<InitP
   const storageOk = Boolean(storage)
   const sources = await sourcesFacts(ctx)
   const discovered = sources.available ? sources.discovered : 0
-  const reason = initReason(mode, storageOk, writable, state.writeModeEnabled === true)
+  const writeModeEnabled = state.writeModeEnabled === true
+  const reason = initReason(mode, storageOk, writable, writeModeEnabled)
+  const importNeedsPreview = writeModeEnabled && writable && storageOk && mode === 'import_memory'
+  const ready = writeModeEnabled && writable && storageOk && mode !== 'import_memory'
+  const reportedReason = importNeedsPreview ? 'import-needs-preview' : ready ? 'ready' : reason
+  const copy = importNeedsPreview
+    ? '导入必须先给出已确认的预览。这一步没有读取任何文件，也没有写入任何数据。'
+    : ready
+      ? '写模式已打开。确认后才会写入水位或整理作业，这一步还没有执行。'
+      : initCopy(mode, reason, discovered)
 
   return {
     schemaVersion: 1,
     mode,
     label: INIT_MODE_LABELS[mode],
-    state: 'unavailable',
+    state: ready ? 'available' : 'unavailable',
     executed: false,
-    reason,
-    copy: initCopy(mode, reason, discovered),
-    writeModeEnabled: state.writeModeEnabled === true,
+    reason: reportedReason,
+    copy,
+    writeModeEnabled: writeModeEnabled,
     gates: { ...(state.gates ?? {}) },
     storage: storageFacts
       ? {

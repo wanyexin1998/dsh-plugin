@@ -77,6 +77,16 @@ describe('built client bundle', () => {
     ;(exports['apply'] as (ctx: ClientContext) => void)(ctx)
 
     expect(effects).toContain('dsh-data-ide: sidebar tab type')
-    expect(registrations.map(entry => entry.key)).toEqual(['dsh-data-ide.sql-workbench', 'dsh-data-ide.sql-workbench'])
+    expect(effects).toContain('dsh-data-ide: chat input bridge')
+    expect(registrations.map(entry => entry.name)).toEqual([
+      'conversation.input.dock',
+      'sidebar.right.pane.tab',
+      'sidebar.right.pane.tab.title',
+    ])
+    expect(registrations.map(entry => entry.key)).toEqual([
+      undefined,
+      'dsh-data-ide.sql-workbench',
+      'dsh-data-ide.sql-workbench',
+    ])
   })
 })

@@ -386,7 +386,7 @@ before(async () => {
   })
   fs.writeFileSync(path.join(HOME, 'profiles', PROFILE, 'cordis.patch.yml'), profilePatch())
   const bootstrap = await bootHost()
-  assert.equal(bootstrap.scope.writeModeEnabled, false, 'write mode is still driven by the gate ledger')
+  assert.equal(bootstrap.scope.writeModeEnabled, true, 'write mode is driven by the gate ledger')
   const dispatchSession = await ok('session/create', { request: { cwd: PROJECT } })
   sessionId = dispatchSession.sessionId
   const user = await ok('session/create', { request: { cwd: PROJECT } })
@@ -423,7 +423,7 @@ test('G03 the PoC reconcile harness is armed on the real Host with a writable le
   assert.ok(facts.boot !== null && typeof facts.boot.readyToRetry === 'number')
   assert.deepEqual(facts.boot.unknown, [], 'a fresh ledger has no unknown action')
   const bootstrap = await ok('boop/bootstrap')
-  assert.equal(bootstrap.scope.writeModeEnabled, false, 'reconciliation does not open write mode')
+  assert.equal(bootstrap.scope.writeModeEnabled, true, 'reconciliation does not close the gate-derived write mode')
   assert.equal(bootstrap.storage?.ok, true)
   // The G04 pre-step gate row is composed in this bundle; the PoC dispatch harness
   // must pass THROUGH it (explicit release), never around it.

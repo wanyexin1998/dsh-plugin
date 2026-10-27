@@ -148,7 +148,7 @@ describe('document tabs: AI history', () => {
     act(() => {
       entry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    const items = [...container.querySelectorAll('[data-sql-agent-history-menu] [role="menuitem"]')]
+    const items = [...document.querySelectorAll('[data-sql-agent-history-menu] [role="menuitem"]')]
     expect(items.map(node => node.textContent)).toEqual(['ai_月报', 'ai_订单排查'])
 
     act(() => {
@@ -156,7 +156,7 @@ describe('document tabs: AI history', () => {
     })
 
     expect(view.calls.restore).toEqual(['y'])
-    expect(container.querySelector('[data-sql-agent-history-menu]')).toBeNull()
+    expect(document.querySelector('[data-sql-agent-history-menu]')).toBeNull()
   })
 
   it('marks an unread agent console with a new-result dot', () => {
@@ -208,5 +208,29 @@ describe('document tabs: object browser toggle', () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(view.calls.toggle).toHaveLength(1)
+  })
+})
+
+describe('document tabs: trailing chrome', () => {
+  it('keeps the run control on the same row as the consoles', () => {
+    act(() => {
+      root.render(
+        <DocumentTabs
+          tabs={[tab('a', 'console_1', 'c1')]}
+          activeId="a"
+          connectionNames={{ c1: 'doris' }}
+          onSelect={() => undefined}
+          onClose={() => undefined}
+          onCreate={() => undefined}
+          canCreate
+          trailing={<button type="button" aria-label="执行">执行</button>}
+        />,
+      )
+    })
+
+    const strip = container.querySelector('[data-sql-documents]')
+    const run = container.querySelector('[aria-label="执行"]')
+    expect(strip?.contains(run)).toBe(true)
+    expect(run?.closest('[role="tablist"]')).toBeNull()
   })
 })

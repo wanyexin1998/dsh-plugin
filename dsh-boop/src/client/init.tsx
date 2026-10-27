@@ -9,10 +9,9 @@
  * (FE-01).
  *
  * What the three E03-03 modes do here: the card collects the choice, then asks
- * the host read-only `boop/initPlan` endpoint for the REAL state. The host has
- * not composed the E03-03 job store yet, so every mode reports `available:
- * false` with an explicit reason and `executed: false`. The card never shows a
- * success it cannot prove (03§14, G05/G06 NOT_RUN).
+ * `boop/initApply`. That call writes only when write mode and the writer lease
+ * are both held. Otherwise it returns the real refusal (`executed: false`).
+ * The card never shows a success the host did not report.
  */
 import React from 'react'
 import { BoopMark } from './brand.tsx'
@@ -32,7 +31,7 @@ export interface InitPlanFacts {
   mode: InitChoiceMode | string
   label?: string
   state: 'available' | 'unavailable'
-  executed: false
+  executed: boolean
   reason: string
   copy: string
   writeModeEnabled: boolean
@@ -52,7 +51,7 @@ type InitStatus =
 const REASON_COPY: Readonly<Record<string, string>> = {
   'ledger-unavailable': 'BOOP 记忆账本当前不可用，初始化不能开始；没有写入任何数据。',
   'read-only-ledger': '另一个 BOOP 进程正在管理数据域；本次只能只读，不会写入任何数据。',
-  'write-mode-disabled': '写模式在 G01–G06 全部通过前保持关闭；本次初始化不会写入任何数据。',
+  'write-mode-disabled': '写模式在 G01–G06 与 G08、G09 通过前保持关闭；本次初始化不会写入任何数据。',
   'import-pipeline-unavailable': '导入校验/预览流水线尚未接通；本次不会读取任何文件。',
   'init-jobs-not-wired': '后台初始化作业尚未接线；本次没有设置读取水位。',
 }
@@ -114,7 +113,7 @@ export function BoopInitDock({ sessionId, observer, call, onOpenBoard }: BoopIni
       return
     }
     setStatus({ kind: 'pending', mode })
-    void call('boop/initPlan', { mode }).then(
+    void call('boop/initApply', { mode }).then(
       (result) => {
         if (!mounted.current) return
         if (result?.ok && result.value && typeof (result.value as InitPlanFacts).reason === 'string') {
@@ -173,14 +172,17 @@ export function BoopInitDock({ sessionId, observer, call, onOpenBoard }: BoopIni
 
       {status.kind === 'result' ? (
         <div className="boop-dock-result" role="status" data-boop-init-state={status.facts.state}>
-          <p className="boop-dock-copy">{status.facts.copy}</p>
-          <p className="boop-dock-copy">{reasonCopy(status.facts)}</p>
+          <p className="boop-dock-copy">{status.facts.copy || reasonCopy(status.facts)}</p>
           <ul className="boop-dock-evidence">
             <li>{storageText(status.facts)}</li>
             <li>写模式：{status.facts.writeModeEnabled ? '开启' : '关闭'}</li>
             <li>{gateText(status.facts)}</li>
             {status.facts.sources ? <li>已发现会话：{status.facts.sources.discovered}</li> : null}
-            <li>已执行：否（0 写入）</li>
+            <li>
+              {status.facts.executed
+                ? `已执行：是（${status.facts.processed} 处写入）`
+                : '已执行：否（0 写入）'}
+            </li>
           </ul>
           <p className="boop-dock-reason">reason: {status.facts.reason}</p>
           <div className="boop-dock-actions">

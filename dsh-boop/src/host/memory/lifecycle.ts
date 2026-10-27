@@ -54,6 +54,10 @@ export interface InitStore {
   }): { id: string }
   rules(scopeId: string): Array<{ id: string; sourceFingerprint: string; selector: unknown; mode: string }>
   audit(scopeId: string, kind: string, objectId: string | null, actor: string, reason?: string | null): unknown
+  /** Present on the ledger store. In-memory tests omit it and only record ids. */
+  tombstoneFacts?(scopeId: string, factIds: string[]): string[]
+  factIdsForSession?(scopeId: string, sessionId: string): string[]
+  activeFactIds?(scopeId: string): string[]
 }
 
 const SUPPORTED_IMPORT_FORMATS = new Set(['boop-memory-v1', 'markdown-list', 'jsonl-facts'])
@@ -296,15 +300,17 @@ export class MemoryLifecycle {
       selector: input.selector ?? { mode: input.mode },
       mode: input.mode,
     })
-    const tombstoned: string[] = []
+    let requested: string[] = []
     if (input.mode === 'forget_fact') {
-      const ids = Array.isArray(input.selector) ? (input.selector as string[]) : []
-      for (const factId of ids) {
-        const facts = this.store.facts(input.scopeId, 'fact', 'any')
-        void facts
-        tombstoned.push(factId)
-      }
+      requested = Array.isArray(input.selector) ? (input.selector as unknown[]).map(String) : []
+    } else if (input.mode === 'exclude_source') {
+      requested = this.store.factIdsForSession?.(input.scopeId, input.sourceFingerprint) ?? []
+    } else if (input.mode === 'exclude_scope') {
+      requested = this.store.activeFactIds?.(input.scopeId) ?? []
     }
+    const tombstoned = this.store.tombstoneFacts
+      ? this.store.tombstoneFacts(input.scopeId, requested)
+      : requested
     this.store.audit(input.scopeId, 'memory/forgotten', rule.id, 'operator', `${input.mode}:${input.sourceFingerprint}`)
     return { ruleId: rule.id, tombstoned, scopeId: input.scopeId }
   }

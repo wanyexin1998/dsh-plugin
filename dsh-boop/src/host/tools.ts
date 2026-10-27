@@ -179,4 +179,70 @@ export function apply(ctx: any): void {
       /* never break activation from a tool row */
     }
   }
+
+  try {
+    ctx.tools.register(
+      defineTool({
+        name: 'boop_context',
+        description:
+          'Read-only lookup in the BOOP memory ledger for one question. ' +
+          'Tombstoned and superseded facts are omitted. It never dispatches work and never reads an arbitrary file.',
+        parameters: {
+          question: {
+            type: 'string',
+            required: true,
+            description: 'The question to match against remembered facts in this data domain.',
+          },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              available: { type: 'boolean' },
+              degraded: { type: 'boolean' },
+              hitCount: { type: 'number' },
+              body: { type: 'string' },
+            },
+          },
+          render: (_args, value) => [
+            {
+              type: 'text',
+              text: String((value as { body?: unknown }).body ?? ''),
+            },
+          ],
+        },
+        execute: async (args) => {
+          const storage = ctx.boop?.storage?.()
+          const question = typeof args.question === 'string' ? args.question.trim() : ''
+          if (!storage?.repo || question === '') {
+            return {
+              available: false,
+              degraded: true,
+              hitCount: 0,
+              body: '记忆账本不可用，或问题为空。没有检索，也没有写入。',
+            }
+          }
+          const hits = storage.repo.searchFacts(storage.identity.scopeId, question, 12)
+          const fts = storage.db?.fts === true
+          return {
+            available: true,
+            degraded: !fts,
+            hitCount: hits.length,
+            body:
+              hits.length === 0
+                ? '没有命中仍有效的记忆。被遗忘或已取代的事实不会出现在这里。'
+                : hits.map((hit) => `- ${hit.text}`).join('\n'),
+          }
+        },
+      }),
+    )
+    ctx.logger?.info?.('[boop] boop_context registered (read-only ledger lookup)')
+  } catch (error) {
+    try {
+      ctx.logger?.warn?.('[boop] boop_context registration failed; other tools stay registered', error)
+    } catch {
+      /* never break activation */
+    }
+  }
 }

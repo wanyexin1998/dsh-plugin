@@ -1,8 +1,8 @@
 import * as React from 'react'
-
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 import { connectionColor, isDirty } from '../state/documents.ts'
+import { OverflowMenu } from './OverflowMenu.tsx'
 import type { DocumentTab } from '../state/documents.ts'
 import { classes as styles } from '../styles.ts'
 
@@ -25,6 +25,8 @@ export interface DocumentTabsProps {
   readonly onClose: (id: string) => void
   readonly onCreate: () => void
   readonly canCreate: boolean
+  /** Connection identity and the run control. They share this row. */
+  readonly trailing?: ReactNode
 }
 
 const COLOR_CLASSES = [styles.tabColor0, styles.tabColor1, styles.tabColor2, styles.tabColor3] as const
@@ -48,8 +50,8 @@ export function DocumentTabs({
   onClose,
   onCreate,
   canCreate,
+  trailing,
 }: DocumentTabsProps): ReactElement {
-  const [historyOpen, setHistoryOpen] = React.useState(false)
   const closed = archived ?? []
 
   return (
@@ -129,40 +131,24 @@ export function DocumentTabs({
         +
       </button>
       {closed.length === 0 ? null : (
-        <div className={styles.agentHistory}>
-          <button
-            type="button"
-            className={styles.agentHistoryButton}
-            aria-haspopup="menu"
-            aria-expanded={historyOpen}
-            data-sql-agent-history=""
-            onClick={() => {
-              setHistoryOpen(open => !open)
-            }}
-          >
-            AI 历史 {closed.length}
-          </button>
-          {historyOpen ? (
-            <div className={styles.agentHistoryMenu} role="menu" data-sql-agent-history-menu="">
-              {closed.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="menuitem"
-                  className={styles.agentHistoryItem}
-                  title={tab.title}
-                  onClick={() => {
-                    setHistoryOpen(false)
-                    onRestore?.(tab.id)
-                  }}
-                >
-                  {tab.title}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <OverflowMenu label={`AI 历史 ${String(closed.length)}`} buttonClassName={styles.agentHistoryButton} marker="agent-history">
+          {closed.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              role="menuitem"
+              className={styles.agentHistoryItem}
+              title={tab.title}
+              onClick={() => {
+                onRestore?.(tab.id)
+              }}
+            >
+              {tab.title}
+            </button>
+          ))}
+        </OverflowMenu>
       )}
+      {trailing === undefined ? null : <div className={styles.documentTabsTrailing}>{trailing}</div>}
     </div>
   )
 }

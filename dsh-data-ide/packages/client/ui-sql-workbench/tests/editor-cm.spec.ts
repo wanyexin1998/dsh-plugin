@@ -1,8 +1,11 @@
+import { Compartment, EditorState } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
 import { describe, expect, it } from 'vitest'
 
 import type { SchemaIndex } from '../src/client/completion.ts'
-import { buildExtensions, readOnlyExtension, sqlExtension, templateCompletion, toSqlNamespace } from '../src/client/editor-cm.ts'
-import { Compartment } from '@codemirror/state'
+import { buildExtensions, readOnlyExtension, shortcutKeymap, sqlExtension, templateCompletion, toSqlNamespace } from '../src/client/editor-cm.ts'
+import type { EditorCallbacks } from '../src/client/editor-cm.ts'
+import { DEFAULT_SHORTCUTS } from '../src/client/shortcut-settings.ts'
 
 const schema: SchemaIndex = {
   tables: [
@@ -32,7 +35,29 @@ describe('toSqlNamespace', () => {
 })
 
 describe('editor extensions', () => {
-  const callbacks = { onChange: () => undefined, onRun: () => undefined, onCancel: () => undefined }
+  const callbacks = {
+    onChange: () => undefined,
+    onRun: () => undefined,
+    onRunAll: () => undefined,
+    onRerun: () => undefined,
+    onExplain: () => undefined,
+    onHistory: () => undefined,
+    onFormat: () => undefined,
+    onExpandStar: () => undefined,
+    onCancel: () => undefined,
+  }
+
+  /** Build the full stack the editor mounts, with fresh compartments. */
+  const extensions = (options: { readonly readOnly?: boolean; readonly placeholderText?: string } = {}) =>
+    buildExtensions({
+      ...callbacks,
+      readOnly: options.readOnly ?? false,
+      ...(options.placeholderText === undefined ? {} : { placeholderText: options.placeholderText }),
+      language: new Compartment(),
+      readOnlySlot: new Compartment(),
+      extrasSlot: new Compartment(),
+      shortcutsSlot: new Compartment(),
+    })
 
   it('builds a dialect for a schema and for none', () => {
     expect(sqlExtension(schema)).toBeDefined()
@@ -45,27 +70,64 @@ describe('editor extensions', () => {
   })
 
   it('assembles the full extension list, including compartments', () => {
-    const extensions = buildExtensions({
-      ...callbacks,
-      readOnly: false,
-      language: new Compartment(),
-      readOnlySlot: new Compartment(),
-    })
+    const list = extensions()
 
     // A rough shape check: the list is long and starts with the gutter.
-    expect(extensions.length).toBeGreaterThan(15)
+    expect(list.length).toBeGreaterThan(15)
   })
 
   it('accepts a custom placeholder', () => {
-    const extensions = buildExtensions({
+    expect(extensions({ readOnly: true, placeholderText: '-- 写点什么' }).length).toBeGreaterThan(15)
+  })
+
+  it('ships Alt+drag rectangular selection and its crosshair hint', () => {
+    const state = EditorState.create({ doc: '', extensions: extensions() })
+
+    // `rectangularSelection()` registers exactly one mouse-selection style and
+    // `crosshairCursor()` contributes a content attribute (the pointer style).
+    expect(state.facet(EditorView.mouseSelectionStyle)).toHaveLength(1)
+    expect(state.facet(EditorView.contentAttributes).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('builds a chord keymap from settings, including platform mirroring', () => {
+    const actions: string[] = []
+    const recording: EditorCallbacks = {
       ...callbacks,
-      readOnly: true,
-      placeholderText: '-- 写点什么',
-      language: new Compartment(),
-      readOnlySlot: new Compartment(),
+      onRun: () => {
+        actions.push('run')
+      },
+      onRunAll: () => {
+        actions.push('runAll')
+      },
+      onRerun: () => {
+        actions.push('rerun')
+      },
+      onExplain: () => {
+        actions.push('explain')
+      },
+      onHistory: () => {
+        actions.push('history')
+      },
+      onFormat: () => {
+        actions.push('format')
+      },
+      onExpandStar: () => {
+        actions.push('expandStar')
+      },
+      onCancel: () => {
+        actions.push('cancel')
+      },
+    }
+
+    const state = EditorState.create({
+      doc: 'SELECT 1',
+      extensions: shortcutKeymap(DEFAULT_SHORTCUTS, recording),
     })
 
-    expect(extensions.length).toBeGreaterThan(15)
+    // Two keymaps: the high-priority action chords and the plain cancel chord.
+    expect(state.facet(keymap)).toHaveLength(2)
+    // An unparseable combo silently contributes no binding instead of throwing.
+    expect(shortcutKeymap({ ...DEFAULT_SHORTCUTS, run: 'garbage' }, recording)).toBeDefined()
   })
 
   it('returns no template completion when there is no word at the cursor', () => {

@@ -5,9 +5,18 @@ import type { ReactElement, Ref } from 'react'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
-import { copyText } from '../clipboard.ts'
 import type { SchemaIndex } from '../completion.ts'
-import { buildExtensions, readOnlyExtension, sqlExtension } from '../editor-cm.ts'
+import {
+  buildExtensions,
+  readOnlyExtension,
+  shortcutKeymap,
+  showErrorLine as showEditorErrorLine,
+  sqlExtension,
+} from '../editor-cm.ts'
+import type { EditorAim, RunTarget } from '../editor-cm.ts'
+import { DEFAULT_SHORTCUTS } from '../shortcut-settings.ts'
+import type { ShortcutSettings } from '../shortcut-settings.ts'
+import { buildExtrasExtension } from '../sql-extras.ts'
 import { classes as styles } from '../styles.ts'
 
 export interface SqlEditorProps {
@@ -18,8 +27,26 @@ export interface SqlEditorProps {
   /** Tables and columns for completion; absent means keywords only. */
   readonly schema?: SchemaIndex
   readonly onChange: (sql: string) => void
-  readonly onRun: () => void
+  readonly onRun: (target: RunTarget) => void
+  /** Run the whole script (`Ctrl/Cmd+Shift+Enter`). */
+  readonly onRunAll: (target: RunTarget) => void
+  /** Repeat the previous run (`Ctrl/Cmd+Alt+Enter`). */
+  readonly onRerun: () => void
+  /** EXPLAIN the statement at the caret (`Ctrl/Cmd+Shift+E`). */
+  readonly onExplain: (target: RunTarget) => void
+  /** Open the query-history drawer (`Ctrl/Cmd+Shift+H`). */
+  readonly onHistory: () => void
+  /** Format the selection or the whole document (`Ctrl/Cmd+Alt+L`). */
+  readonly onFormat: (target: RunTarget) => void
+  /** Expand `*` into the column list (`Ctrl/Cmd+Alt+S`). */
+  readonly onExpandStar: (target: RunTarget) => void
+  /** Inline diagnostics on/off (SQL-309); default on. */
+  readonly lintEnabled?: boolean
+  /** User-editable chords (SQL-402); defaults keep the pre-settings bindings. */
+  readonly shortcuts?: ShortcutSettings
   readonly onCancel: () => void
+  /** Caret or selection moved. The panel uses this to name the run button. */
+  readonly onAim?: (aim: EditorAim) => void
 }
 
 /**
@@ -34,6 +61,16 @@ export interface SqlEditorHandle {
   insert(text: string): void
   /** Selected text; an empty string when the caret is collapsed (run-selection). */
   getSelection(): string
+  /** Highlight/scroll to the failing statement line (`null` clears it). */
+  showErrorLine(line: number | null): void
+  /** Caret offset, for actions that operate on the statement under it. */
+  getCursor(): number
+  /** Move the caret (restoring a persisted console position). */
+  setCursor(offset: number): void
+  /** Current selection offsets (equal when collapsed). */
+  getSelectionRange(): { readonly from: number; readonly to: number }
+  /** Replace `[from, to)` with text (formatting / star expansion). */
+  replaceRange(from: number, to: number, text: string): void
 }
 
 /**
@@ -47,13 +84,19 @@ export interface SqlEditorHandle {
  * schema-aware completion (table + column, including `alias.`), so the
  * hand-rolled engine is gone.
  *
- * The panel contract is unchanged on purpose: `SqlEditorHandle`, the toolbar and
- * the props are the same, so `SqlWorkbenchPanel` did not have to move.
+ * The run button lives on the console strip, not here: a 420px rail cannot spend
+ * a row on nine labelled actions. Chords still call the same callbacks.
  */
+/** Caret updates are not shown in the editor; the console strip owns the chrome. */
+function ignoreCursor(_info: unknown): void {
+  return undefined
+}
+
 function SqlEditorImpl(
-  { sql, running, disabled, schema, onChange, onRun, onCancel }: SqlEditorProps,
+  { sql, running, disabled, schema, onChange, onRun, onRunAll, onRerun, onExplain, onHistory, onFormat, onExpandStar, lintEnabled = true, shortcuts, onCancel, onAim }: SqlEditorProps,
   ref: Ref<SqlEditorHandle>,
 ): ReactElement {
+  const activeShortcuts = shortcuts ?? DEFAULT_SHORTCUTS
   const host = React.useRef<HTMLDivElement | null>(null)
   const view = React.useRef<EditorView | null>(null)
   /**
@@ -62,8 +105,8 @@ function SqlEditorImpl(
    * Rebuilding extensions on every prop change would reset undo history and the
    * selection, so the key handlers read through refs instead.
    */
-  const callbacks = React.useRef({ onChange, onRun, onCancel, schema })
-  callbacks.current = { onChange, onRun, onCancel, schema }
+  const callbacks = React.useRef({ onChange, onRun, onRunAll, onRerun, onExplain, onHistory, onFormat, onExpandStar, onCancel, onCursor: ignoreCursor, onAim, schema })
+  callbacks.current = { onChange, onRun, onRunAll, onRerun, onExplain, onHistory, onFormat, onExpandStar, onCancel, onCursor: ignoreCursor, onAim, schema }
 
   React.useImperativeHandle(ref, () => ({
     insert(text: string) {
@@ -84,10 +127,53 @@ function SqlEditorImpl(
       const { from, to } = instance.state.selection.main
       return instance.state.sliceDoc(from, to)
     },
+    showErrorLine(line: number | null) {
+      const instance = view.current
+      /* v8 ignore next -- the view exists for the life of the mounted editor */
+      if (instance === null) return
+      showEditorErrorLine(instance, line)
+    },
+    getCursor() {
+      const instance = view.current
+      /* v8 ignore next -- the view exists for the life of the mounted editor */
+      if (instance === null) return 0
+      return instance.state.selection.main.head
+    },
+    setCursor(offset: number) {
+      const instance = view.current
+      /* v8 ignore next -- the view exists for the life of the mounted editor */
+      if (instance === null) return
+      const position = Math.min(Math.max(0, Math.trunc(offset)), instance.state.doc.length)
+      instance.dispatch({ selection: { anchor: position } })
+    },
+    getSelectionRange() {
+      const instance = view.current
+      /* v8 ignore next -- the view exists for the life of the mounted editor */
+      if (instance === null) return { from: 0, to: 0 }
+      const range = instance.state.selection.main
+      return { from: range.from, to: range.to }
+    },
+    replaceRange(from: number, to: number, text: string) {
+      const instance = view.current
+      /* v8 ignore next -- the view exists for the life of the mounted editor */
+      if (instance === null) return
+      const start = Math.min(Math.max(0, from), instance.state.doc.length)
+      const end = Math.min(Math.max(start, to), instance.state.doc.length)
+      instance.dispatch({
+        changes: { from: start, to: end, insert: text },
+        selection: { anchor: start + text.length },
+      })
+      instance.focus()
+    },
   }), [])
 
-  // Compartments for the two things that change after mount.
-  const [slots] = React.useState(() => ({ language: new Compartment(), readOnlySlot: new Compartment() }))
+  // Compartments for the parts that change after mount.
+  const [slots] = React.useState(() => ({
+    language: new Compartment(),
+    readOnlySlot: new Compartment(),
+    extrasSlot: new Compartment(),
+    shortcutsSlot: new Compartment(),
+  }))
 
   // Mount once; later prop changes are applied as compartment reconfigurations,
   // so undo history and the selection survive a schema refresh.
@@ -109,11 +195,39 @@ function SqlEditorImpl(
           readOnly: false,
           language: slots.language,
           readOnlySlot: slots.readOnlySlot,
+          extrasSlot: slots.extrasSlot,
+          shortcutsSlot: slots.shortcutsSlot,
+          shortcuts: activeShortcuts,
+          extras: buildExtrasExtension({ schema, lint: lintEnabled }),
           onChange: doc => {
             callbacks.current.onChange(doc)
           },
-          onRun: () => {
-            callbacks.current.onRun()
+          onRun: target => {
+            callbacks.current.onRun(target)
+          },
+          onRunAll: target => {
+            callbacks.current.onRunAll(target)
+          },
+          onRerun: () => {
+            callbacks.current.onRerun()
+          },
+          onExplain: target => {
+            callbacks.current.onExplain(target)
+          },
+          onHistory: () => {
+            callbacks.current.onHistory()
+          },
+          onFormat: target => {
+            callbacks.current.onFormat(target)
+          },
+          onExpandStar: target => {
+            callbacks.current.onExpandStar(target)
+          },
+          onCursor: info => {
+            callbacks.current.onCursor(info)
+          },
+          onAim: aim => {
+            callbacks.current.onAim?.(aim)
           },
           onCancel: () => {
             callbacks.current.onCancel()
@@ -122,6 +236,13 @@ function SqlEditorImpl(
       }),
     })
     view.current = instance
+    const range = instance.state.selection.main
+    callbacks.current.onAim?.({
+      cursor: range.head,
+      from: range.from,
+      to: range.to,
+      doc: instance.state.doc.toString(),
+    })
     return () => {
       instance.destroy()
       view.current = null
@@ -143,14 +264,19 @@ function SqlEditorImpl(
     })
   }, [sql])
 
-  // Schema arrives asynchronously: swap the dialect (and its completion source)
-  // in place instead of remounting.
+  // Schema or the diagnostics switch arrived/changed: swap the dialect and the
+  // intelligence extras in place instead of remounting (undo history survives).
   React.useEffect(() => {
     const instance = view.current
     /* v8 ignore next -- the effect runs after mount */
     if (instance === null) return
-    instance.dispatch({ effects: slots.language.reconfigure(sqlExtension(schema)) })
-  }, [schema, slots])
+    instance.dispatch({
+      effects: [
+        slots.language.reconfigure(sqlExtension(schema)),
+        slots.extrasSlot.reconfigure(buildExtrasExtension({ schema, lint: lintEnabled })),
+      ],
+    })
+  }, [schema, lintEnabled, slots])
 
   // Read-only follows the panel's "no connection" state.
   React.useEffect(() => {
@@ -160,61 +286,25 @@ function SqlEditorImpl(
     instance.dispatch({ effects: slots.readOnlySlot.reconfigure(readOnlyExtension(disabled)) })
   }, [disabled, slots])
 
-  const lines = sql === '' ? 0 : sql.split('\n').length
+  // Shortcut settings changed after mount: swap only the chord keymap, so the
+  // document, undo history and selection are untouched. The first run is skipped
+  // because the mount effect already built the keymap from these settings.
+  const shortcutsReady = React.useRef(false)
+  React.useEffect(() => {
+    if (!shortcutsReady.current) {
+      shortcutsReady.current = true
+      return
+    }
+    const instance = view.current
+    /* v8 ignore next -- the effect runs while the editor is mounted */
+    if (instance === null) return
+    instance.dispatch({
+      effects: slots.shortcutsSlot.reconfigure(shortcutKeymap(activeShortcuts, callbacks.current)),
+    })
+  }, [shortcuts, slots])
 
   return (
-    <div className={styles.editor}>
-      {/* The query toolbar. DataGrip puts run/stop and the console actions on a
-          strip above the editor; the shortcuts live in the ⓘ hint so they stop
-          eating a line of code in a 200px pane. */}
-      <div className={styles.editorBar} role="toolbar" aria-label="查询工具栏" data-sql-editor-bar="">
-        <button
-          type="button"
-          className={styles.primaryButton}
-          disabled={disabled || running || sql.trim() === ''}
-          onClick={() => {
-            onRun()
-          }}
-          aria-label="执行"
-          title="执行（Ctrl/Cmd+Enter；有选中则只跑选段）"
-        >
-          执行
-        </button>
-        <button type="button" className={styles.button} disabled={!running} onClick={onCancel} aria-label="取消" title="取消正在执行的语句（Esc）">
-          取消
-        </button>
-        <span className={styles.editorBarDivider} aria-hidden="true" />
-        <button
-          type="button"
-          className={styles.button}
-          disabled={disabled || sql === ''}
-          onClick={() => {
-            copyText(sql)
-          }}
-          aria-label="复制全部"
-          title="复制整段 SQL"
-        >
-          复制
-        </button>
-        <button
-          type="button"
-          className={styles.button}
-          disabled={disabled || sql === ''}
-          onClick={() => {
-            onChange('')
-          }}
-          aria-label="清空"
-          title="清空当前 console"
-        >
-          清空
-        </button>
-        <span className={styles.editorBarMeta} data-sql-editor-meta="">
-          {lines} 行
-        </span>
-        <span className={styles.hintIcon} title="Ctrl/Cmd+Enter 执行（有选中则只跑选段） · Ctrl+Space 补全 · Ctrl+F 查找 · Ctrl+/ 注释 · Esc 取消" aria-label="快捷键说明">
-          ⓘ
-        </span>
-      </div>
+    <div className={styles.editor} data-sql-running={running ? '' : undefined}>
       <div
         className={styles.editorHost}
         ref={host}

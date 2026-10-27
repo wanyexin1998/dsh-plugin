@@ -1,5 +1,6 @@
 import { SqlWorkbenchArtwork } from './components/SqlWorkbenchArtwork.tsx'
 import { SqlWorkbenchPane } from './components/SqlWorkbenchPane.tsx'
+import { ChatInputBridge } from './chat-bridge.ts'
 import { workbenchApi } from './api.ts'
 import { createHttpApi } from './http-api.ts'
 import { SqlWorkbenchTitle } from './components/SqlWorkbenchTitle.tsx'
@@ -14,15 +15,26 @@ import { en, zh } from './locales.ts'
 export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs']
 
 /**
+ * Host slot carrying the composer action face per Session.
+ *
+ * The conversation plugin publishes `inputActions` as standard props to its
+ * Session-scoped slots; one hidden entry here is enough to hand that face to
+ * `chat-bridge.ts` for the "send to chat" actions.
+ */
+const CHAT_INPUT_DOCK = 'conversation.input.dock'
+
+/**
  * Browser half: register the SQL workbench as a right-sidebar page type.
  *
- * Two registrations, mirroring the shipped Browser tab and `dsh-chat`:
+ * Three registrations:
  *   1. `sidebarRightTabs.register` declares the page type (identity, copy, guide card);
  *   2. the two keyed seats under `rightbar.session` carry the body and the chip,
- *      both addressed by `key: TAB_ID` — the same id the definition declares.
+ *      both addressed by `key: TAB_ID` — the same id the definition declares;
+ *   3. a hidden composer-dock entry publishes the host composer actions to
+ *      `chat-bridge.ts` ("send to chat", SQL-405).
  *
  * Every registration is wrapped in `ctx.effect`, so unloading the plugin
- * releases the page type and both seats.
+ * releases the page type, both seats and the chat bridge.
  *
  * A throw here fails the whole client entry — the host renders "web boot: 1
  * entry did not activate" and the pane stays blank with the reason only in the
@@ -63,6 +75,17 @@ function reportRegistrationFailure(error: unknown): void {
 function register(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(TAB_NS, { zh, en }), 'dsh-data-ide: tab copy')
   const t = ctx.locale.bind(TAB_NS)
+
+  // "Send to chat" bridge (SQL-405). Chat and workbench are independent
+  // surfaces, so publish the composer face even on a host whose right sidebar
+  // is unavailable: the panel falls back to the clipboard there.
+  ctx.effect(
+    () =>
+      ctx.slots.inject(CHAT_INPUT_DOCK, () =>
+        ctx.slots.register({ name: CHAT_INPUT_DOCK, id: 'dsh-data-ide-chat-bridge', order: 80 }, ChatInputBridge),
+      ),
+    'dsh-data-ide: chat input bridge',
+  )
 
   if (!sidebarRightSupported(ctx)) {
     // Fail closed and loudly: a host without the right-sidebar face would

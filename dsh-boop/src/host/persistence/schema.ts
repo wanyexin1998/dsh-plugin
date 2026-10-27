@@ -123,11 +123,22 @@ CREATE TABLE IF NOT EXISTS memory_job (
   CHECK(from_seq IS NULL OR to_seq>=from_seq),
   FOREIGN KEY(scope_id) REFERENCES scopes(scope_id)
 );
+CREATE TABLE IF NOT EXISTS init_job (
+  id TEXT PRIMARY KEY, scope_id TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK(mode IN ('from_now','learn_history','import_memory')),
+  processed INTEGER NOT NULL DEFAULT 0,
+  total INTEGER,
+  state TEXT NOT NULL CHECK(state IN ('pending','running','paused','done','failed')),
+  failures_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(failures_json)),
+  created_at TEXT NOT NULL, finished_at TEXT,
+  FOREIGN KEY(scope_id) REFERENCES scopes(scope_id)
+);
 CREATE TABLE IF NOT EXISTS fact (
   id TEXT NOT NULL, scope_id TEXT NOT NULL, owner_type TEXT NOT NULL,
   owner_id TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('active','disputed','superseded','tombstoned')),
   authority TEXT NOT NULL CHECK(authority IN ('user_confirmed','user_exploration','agent_reported','tool_observed','import_unverified','inference')),
+  subject_key TEXT,
   valid_time TEXT, version INTEGER NOT NULL CHECK(version>0),
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(id,scope_id), FOREIGN KEY(scope_id) REFERENCES scopes(scope_id)

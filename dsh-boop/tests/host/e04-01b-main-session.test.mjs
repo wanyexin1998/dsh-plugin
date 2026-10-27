@@ -13,19 +13,21 @@
  *  - `boop/sources` reads the real Session query plane without writing cursors:
  *    a Session created after the first snapshot appears as `unseen`, not as a
  *    fake "covered" source and not as an empty list;
- *  - `boop/initPlan` reports all three E03-03 modes as unavailable with the real
- *    reason, `executed: false`, no success copy — NOT_RUN gates stay NOT_RUN;
+ *  - `boop/initPlan` and `boop/initApply` report all three E03-03 modes as
+ *    unavailable with `executed: false` while write mode is off, and initApply
+ *    writes no job or cursor rows;
  *  - the new endpoints are behind the authenticated connection like the rest of
  *    the BOOP API plane (anonymous access is rejected).
  *
- * NOT_RUN (stated, not simulated): real browser screenshots, Desktop window
- * chrome, and the E03-03 job execution itself (no job store is composed yet).
+ * NOT_RUN (stated, not simulated): real browser screenshots and Desktop window
+ * chrome. Job execution stays closed because write mode is off.
  *
  * Run: node --test --test-force-exit tests/host/e04-01b-main-session.test.mjs
  */
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { test, before, after } from 'node:test'
 import {
   PROJECT_ROOT,
@@ -124,26 +126,55 @@ test('E04-01 sources reads the real query plane without writing coverage', async
   assert.equal(second.available, true)
 })
 
-test('E04-01 the three initialization modes are honestly unavailable with real reasons', async () => {
+test('E04-01 the initialization plan is honest and does not write', async () => {
   const plans = {}
   for (const mode of ['from_now', 'learn_history', 'import_memory']) {
     const plan = await call('boop/initPlan', { mode })
     assert.equal(plan.mode, mode)
-    assert.equal(plan.state, 'unavailable', `${mode} must not claim availability`)
-    assert.equal(plan.executed, false, `${mode} must never claim it ran`)
-    assert.equal(plan.writeModeEnabled, false)
-    assert.equal(plan.gates.G05, 'NOT_RUN', 'the frozen gate ledger is reported truthfully')
+    assert.equal(plan.executed, false, `${mode} planning must not write`)
+    assert.equal(plan.writeModeEnabled, true)
+    assert.equal(plan.gates.G05, 'PASS', 'the frozen gate ledger is reported truthfully')
     assert.equal(plan.gates.G06, 'PASS', 'G06 is PASS on the current frozen ledger (memory host E2E)')
     assert.ok(plan.storage, 'real ledger facts are included')
     assert.equal(plan.storage.ok, true)
     assert.equal(plan.sources.discovered >= 1, true)
-    assert.match(plan.reason, /write-mode-disabled|read-only-ledger|ledger-unavailable/)
-    assert.doesNotMatch(plan.copy, /已从此刻开始记录|已开始整理|已新增|已完成/, 'no success copy before a real run')
     assert.equal(plan.processed, 0)
+    assert.doesNotMatch(plan.copy, /已从此刻开始记录|已开始整理|已新增|已完成/, 'the plan does not claim a run')
+    if (mode === 'import_memory') {
+      assert.equal(plan.state, 'unavailable')
+      assert.equal(plan.reason, 'import-needs-preview')
+    } else {
+      assert.equal(plan.state, 'available')
+      assert.equal(plan.reason, 'ready')
+    }
     plans[mode] = plan
   }
   assert.equal(plans.learn_history.total, plans.learn_history.sources.discovered, 'history total is the real processed-count denominator')
   assert.equal(plans.from_now.total, null)
+})
+
+test('E04-01 initApply on the real host runs the three modes under the open write mode', async () => {
+  const fromNow = await call('boop/initApply', { mode: 'from_now' })
+  assert.equal(fromNow.executed, true, JSON.stringify(fromNow))
+  assert.equal(fromNow.reason, 'watermarked')
+  assert.equal(fromNow.writeModeEnabled, true)
+
+  const learn = await call('boop/initApply', { mode: 'learn_history' })
+  assert.equal(learn.executed, true, JSON.stringify(learn))
+  assert.equal(learn.reason, 'learned')
+  assert.equal(learn.writeModeEnabled, true)
+
+  const imported = await call('boop/initApply', { mode: 'import_memory' })
+  assert.equal(imported.executed, false, 'import without a confirmed preview writes nothing')
+  assert.equal(imported.reason, 'import-needs-preview')
+
+  const db = new DatabaseSync(path.join(home, 'boop', 'boop.sqlite'))
+  db.exec('PRAGMA query_only = ON')
+  const jobs = db.prepare('SELECT mode, state FROM init_job ORDER BY created_at').all()
+  db.close()
+  assert.deepEqual(jobs.map((row) => row.mode).sort(), ['from_now', 'learn_history'])
+  assert.equal(jobs.find((row) => row.mode === 'from_now').state, 'done')
+  assert.equal(jobs.find((row) => row.mode === 'learn_history').state, 'done')
 })
 
 test('E04-01 an unknown initialization mode is rejected, not silently treated as a default', async () => {
@@ -166,7 +197,7 @@ test('E04-01 the identity binding survives a Host restart', async () => {
 })
 
 test('E04-01 the new API plane members reject anonymous callers', async () => {
-  for (const endpoint of ['boop/mainSession', 'boop/sources']) {
+  for (const endpoint of ['boop/mainSession', 'boop/sources', 'boop/initApply']) {
     const response = await anonymousRequest(`${base}/api/${endpoint}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

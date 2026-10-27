@@ -34,6 +34,29 @@ export function isOpenWorkbenchShortcut(event: KeyLike): boolean {
 }
 
 /**
+ * Whether one keydown target is a text-editing surface.
+ *
+ * The workbench shortcut must yield to anything the user is typing in: the
+ * CodeMirror editor binds `Ctrl+Shift+L` to "select all occurrences", and
+ * opening the tab on the same chord fired both actions at once (reported
+ * 2026-10-26). Inputs and contenteditable regions get the same deference.
+ */
+export function isEditingTarget(target: EventTarget | null): boolean {
+  if (target === null || typeof target !== 'object') return false
+  const node = target as { closest?: unknown; tagName?: unknown; isContentEditable?: unknown }
+  if (typeof node.closest === 'function') {
+    try {
+      if ((node.closest as (selector: string) => unknown)('.cm-editor') !== null) return true
+    } catch {
+      // A non-Element target (window, document) has no closest; treat as global.
+    }
+  }
+  const tag = typeof node.tagName === 'string' ? node.tagName.toUpperCase() : ''
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return true
+  return node.isContentEditable === true
+}
+
+/**
  * Wire the shortcut to `open`.
  *
  * Returns a disposer, and is a no-op outside a DOM: the client half is also
@@ -44,6 +67,7 @@ export function bindOpenShortcut(open: () => void): () => void {
   if (typeof window === 'undefined') return () => {}
   const onKeyDown = (event: KeyboardEvent): void => {
     if (!isOpenWorkbenchShortcut(event)) return
+    if (isEditingTarget(event.target)) return
     event.preventDefault()
     open()
   }

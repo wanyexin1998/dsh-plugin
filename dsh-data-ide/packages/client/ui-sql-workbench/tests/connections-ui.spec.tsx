@@ -35,7 +35,9 @@ describe('TestStateBadge', () => {
   })
 
   it('says untested before the first run', () => {
-    expect(renderToStaticMarkup(<TestStateBadge />)).toContain('未测试')
+    const html = renderToStaticMarkup(<TestStateBadge />)
+    expect(html).toContain('未测试')
+    expect(html).toContain('dotIdle')
   })
 
   it('shows product facts on success', () => {
@@ -81,10 +83,12 @@ describe('TestStateBadge', () => {
 describe('ConnectionBar', () => {
   it('offers an empty affordance before any connection exists', () => {
     const html = renderToStaticMarkup(
-      <ConnectionBar connections={[]} activeId={null} testingId={null} verdicts={{}} onSelect={noop} onTest={noop} onCreate={noop} onEdit={noop} />,
+      <ConnectionBar connections={[]} activeId={null} testingId={null} verdicts={{}} onSelect={noop} onTest={noop} onCreate={noop} onEdit={noop} onOpenShortcuts={noop} />,
     )
 
     expect(html).toContain('未选择连接')
+    expect(html).toContain('连接操作')
+    expect(html).toContain('data-test-state="idle"')
     expect(html).toContain('disabled')
   })
 
@@ -99,11 +103,57 @@ describe('ConnectionBar', () => {
         onTest={noop}
         onCreate={noop}
         onEdit={noop}
+        onOpenShortcuts={noop}
       />,
     )
 
     expect(html).toContain('doris.shcell.com（doris）')
     expect(html).toContain('连接成功')
+    expect(html).toContain('data-test-state="YES"')
+    expect(html).not.toContain('可写')
+  })
+
+  it('marks a connection that allows writes', () => {
+    const writable = createDataSource({
+      id: connId,
+      name: 'doris.shcell.com',
+      dbms: 'doris',
+      host: 'doris.shcell.com',
+      username: 'wanyexin',
+      writeEnabled: true,
+    })
+    const html = renderToStaticMarkup(
+      <ConnectionBar
+        connections={[writable]}
+        activeId={connId}
+        testingId={null}
+        verdicts={{}}
+        onSelect={noop}
+        onTest={noop}
+        onCreate={noop}
+        onEdit={noop}
+        onOpenShortcuts={noop}
+      />,
+    )
+
+    expect(html).toContain('可写')
+  })
+
+  it('marks the dot as testing while a probe is in flight', () => {
+    const html = renderToStaticMarkup(
+      <ConnectionBar
+        connections={[doris]}
+        activeId={connId}
+        testingId={connId}
+        verdicts={{}}
+        onSelect={noop}
+        onTest={noop}
+        onCreate={noop}
+        onEdit={noop}
+        onOpenShortcuts={noop}
+      />,
+    )
+    expect(html).toContain('data-test-state="testing"')
   })
 })
 

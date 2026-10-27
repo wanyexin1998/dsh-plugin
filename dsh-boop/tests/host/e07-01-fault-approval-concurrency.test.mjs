@@ -292,11 +292,11 @@ test('E07-01 a forged payloadHash/nonce is APPROVAL_STALE and does not destroy t
   }
 })
 
-test('E07-01 the decision plane never dispatches and write mode stays false (G05/TB09)', async () => {
+test('E07-01 the decision plane never dispatches while write mode follows the ledger (G05/TB09)', async () => {
   const bootstrap = await ok('boop/bootstrap')
-  assert.equal(bootstrap.scope?.writeModeEnabled, false, 'write mode stays false')
+  assert.equal(bootstrap.scope?.writeModeEnabled, true, 'write mode follows the open gate ledger')
   const controlState = await control('state')
-  assert.equal(controlState.writeMode.enabled, false)
+  assert.equal(controlState.writeMode.enabled, true)
   assert.equal(controlState.dispatch.available, false, 'the control plane itself never dispatches')
   assert.equal(controlState.dispatch.requiresModel, true)
 

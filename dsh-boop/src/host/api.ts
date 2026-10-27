@@ -14,7 +14,7 @@
  *  - the client half calls through `ctx.connection.rpc.call('/api', …)`.
  */
 
-import { BoopApi, configureApi, type BoopApiConfig } from './api-service.ts'
+import { BoopApi, configureApi, registerPocApiMethods, type BoopApiConfig } from './api-service.ts'
 
 export const name = 'boop-api'
 
@@ -24,6 +24,7 @@ export const inject = ['boop', 'typertGateway']
 export function apply(ctx: any, config?: BoopApiConfig): void {
   try {
     const effective = configureApi(config)
+    if (effective.pocEnabled) registerPocApiMethods()
     new BoopApi(ctx)
     ctx.logger?.info?.(
       `[boop] api plane armed: boop/bootstrap (read-only)${effective.pocEnabled ? ' + PoC endpoints' : ''}`,

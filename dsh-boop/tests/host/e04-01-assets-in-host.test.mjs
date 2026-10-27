@@ -121,6 +121,6 @@ test('E04-01 the client bundle ships the 3D player and the state mapping', async
 test('E04-01 bootstrapping still reports a consistent data domain with the asset row present', async () => {
   const { body } = await rpc(host.base, cookie, 'boop/bootstrap')
   assert.equal(body.result.ok, true, JSON.stringify(body.result))
-  assert.equal(body.result.value.scope.writeModeEnabled, false)
+  assert.equal(body.result.value.scope.writeModeEnabled, true)
   assert.ok(Array.isArray(body.result.value.services))
 })

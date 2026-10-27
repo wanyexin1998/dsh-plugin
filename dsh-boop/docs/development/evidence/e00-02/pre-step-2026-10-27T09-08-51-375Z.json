@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 1,
+  "task": "G04/E00-02",
+  "scenario": "agent-pre-step-runtime-gate",
+  "capturedAt": "2026-10-27T09:08:51.377Z",
+  "hook": {
+    "name": "agent/pre-step",
+    "mode": "waterfall",
+    "source": "@deepseek-ai/dsh-agent/README.md + installed payload api-catalog (rc.2.1)",
+    "decision": "{ kind: 'reject' } | { kind: 'enter', messages, startsRequestSeries? }",
+    "beforeModel": true,
+    "boundary": "turn/start + inbox claim happen before pre-step; a veto means no step/start, no user/message commit and no model request (durable turn/end reason blocked)"
+  },
+  "host": {
+    "profile": "boop-g04-pre-step",
+    "dshHome": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\g04-pre-step-1793092131376\\main-home",
+    "work": "E:\\dsh-plugin\\dsh-boop\\.work\\test-runs\\g04-pre-step-1793092131376",
+    "realModelOptIn": false
+  },
+  "composition": {
+    "rows": [
+      "dsh-boop",
+      "boop-api",
+      "boop-gate",
+      "boop-control",
+      "boop-tasks"
+    ],
+    "status": {
+      "schemaVersion": 1,
+      "product": "BOOP",
+      "row": "boop-gate",
+      "remoteService": "boopGate",
+      "hook": "agent/pre-step",
+      "mode": "waterfall",
+      "registered": true,
+      "gateAvailable": true,
+      "armed": true,
+      "entries": [
+        {
+          "messageId": "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+          "actionId": "act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+          "sessionId": "session-e154af20-8d1b-476d-aabd-05217ee90eb6",
+          "state": "blocked",
+          "reason": "command created in this process"
+        }
+      ],
+      "consumedMessageIds": [],
+      "waitTimeoutMs": 60000,
+      "counters": {
+        "batches": 1,
+        "boopMessages": 1,
+        "allowed": 0,
+        "blocked": 0,
+        "timeouts": 0,
+        "passThroughBatches": 0
+      },
+      "lastDecision": null,
+      "runtimeEnforcement": {
+        "composed": true,
+        "detail": "agent/pre-step waterfall 已注册（boop-gate）：BOOP 代理命令在 step/start 与模型调用之前拦截；只有人类显式 release 且仅一次放行；未跟踪/未释放/门禁不可用一律 fail-closed。已知边界：被拒绝的批次已被 inbox claim 取走（turn/start+turn/end 仍会落盘，无 step/model）。"
+      },
+      "generatedAt": "2026-10-27T09:08:58.415Z"
+    },
+    "controlRuntimeEnforcement": {
+      "composed": true,
+      "detail": "agent/pre-step waterfall 已注册（boop-gate）：BOOP 代理命令在 step/start 与模型调用之前拦截；只有人类显式 release 且仅一次放行；未跟踪/未释放/门禁不可用一律 fail-closed。已知边界：被拒绝的批次已被 inbox claim 取走（turn/start+turn/end 仍会落盘，无 step/model）。"
+    },
+    "blockedEntry": {
+      "messageId": "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+      "actionId": "act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+      "sessionId": "session-e154af20-8d1b-476d-aabd-05217ee90eb6",
+      "state": "blocked",
+      "reason": "command created in this process",
+      "releasable": true
+    }
+  },
+  "held": {
+    "events": [
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced"
+    ],
+    "counters": {
+      "batches": 1,
+      "boopMessages": 1,
+      "allowed": 0,
+      "blocked": 0,
+      "timeouts": 0,
+      "passThroughBatches": 0
+    },
+    "claims": [
+      {
+        "sessionId": "session-e154af20-8d1b-476d-aabd-05217ee90eb6",
+        "messageId": "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+        "sourceKind": "boop-command",
+        "actionId": "act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+        "turn": 1,
+        "at": "2026-10-27T09:08:57.084Z"
+      }
+    ],
+    "turnEnds": []
+  },
+  "released": {
+    "receipt": {
+      "schemaVersion": 1,
+      "product": "BOOP",
+      "scopeId": "boop-2557cc49f1bba064",
+      "writeMode": {
+        "enabled": true,
+        "source": "boop.isWriteModeEnabled()",
+        "blockedByGates": []
+      },
+      "ledger": {
+        "writable": true,
+        "auditSink": "ledger",
+        "durable": true
+      },
+      "dispatch": {
+        "available": false,
+        "reason": "dispatch-not-on-this-row",
+        "requiresModel": true,
+        "detail": "人工控制行只落人工结论，不派发；派发属于 gated dispatch 路径。"
+      },
+      "audit": {
+        "recorded": true,
+        "sink": "ledger",
+        "id": "b_payi3tb4bq",
+        "kind": "control/gate-released",
+        "note": null
+      },
+      "projectionSeq": 2,
+      "generatedAt": "2026-10-27T09:08:58.484Z",
+      "command": "release",
+      "accepted": true,
+      "requestedMessageIds": [
+        "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745"
+      ],
+      "released": [
+        {
+          "messageId": "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+          "actionId": "act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+          "sessionId": "session-e154af20-8d1b-476d-aabd-05217ee90eb6",
+          "state": "released",
+          "reason": "command created in this process",
+          "releasable": false
+        }
+      ],
+      "ignored": [],
+      "requiresExplicitSelection": true,
+      "bulkDefault": false,
+      "code": null,
+      "message": "已显式释放 1 条命令；0 条未知/已释放被忽略。运行时 agent/pre-step 门控已注册：这些唯一 messageId 会在下一次准入时被放行一次，不会放行其他命令。"
+    },
+    "turnEvents": [
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "step/start",
+      "system/message",
+      "user/message",
+      "user/message",
+      "user/message",
+      "user/message",
+      "request/header",
+      "request/context",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "step/end",
+      "turn/end"
+    ],
+    "ownMessages": [
+      {
+        "seq": 8,
+        "type": "user/message",
+        "time": 1793092138643,
+        "messageId": "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+        "sourceKind": "boop-command",
+        "actionId": "act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745",
+        "provider": null,
+        "model": null,
+        "text": "G04: this BOOP command is held until a human release.\n{\"boop\":{\"scopeId\":\"boop-2557cc49f1bba064\",\"taskId\":\"task-e02-03-real\",\"taskVersion\":1,\"actionId\":\"act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745\",\"policyEpoch\":1}}",
+        "turnEnd": null,
+        "turn": null,
+        "spliceTarget": null,
+        "insertedIds": null,
+        "removedCount": null
+      }
+    ],
+    "counters": {
+      "batches": 1,
+      "boopMessages": 1,
+      "allowed": 1,
+      "blocked": 0,
+      "timeouts": 0,
+      "passThroughBatches": 0
+    },
+    "consumedMessageIds": [
+      "msg_act_1c1296bd-ae2d-4bee-9009-ded4b7f2b745"
+    ],
+    "secondWake": {
+      "headSeq": 56,
+      "ownMessageCount": 1,
+      "claimsForCommand": 1,
+      "turnStarts": 2
+    }
+  },
+  "userMessage": {
+    "events": [
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "step/start",
+      "system/message",
+      "user/message",
+      "user/message",
+      "user/message",
+      "user/message",
+      "request/header",
+      "request/context",
+      "session/title",
+      "session/title-llm-request",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "llm/retry",
+      "llm/retry-started",
+      "assistant/attempt",
+      "step/end",
+      "turn/end"
+    ],
+    "committed": [
+      {
+        "seq": 8,
+        "type": "user/message",
+        "time": 1793092171497,
+        "messageId": "277049d3-4b69-455e-8bd5-acd3e78977fa",
+        "sourceKind": "user",
+        "actionId": null,
+        "provider": null,
+        "model": null,
+        "text": "G04: this is a normal human message; it must not be blocked.",
+        "turnEnd": null,
+        "turn": null,
+        "spliceTarget": null,
+        "insertedIds": null,
+        "removedCount": null
+      }
+    ],
+    "beforeCounters": {
+      "batches": 2,
+      "boopMessages": 1,
+      "allowed": 1,
+      "blocked": 0,
+      "timeouts": 0,
+      "passThroughBatches": 1
+    },
+    "afterCounters": {
+      "batches": 3,
+      "boopMessages": 1,
+      "allowed": 1,
+      "blocked": 0,
+      "timeouts": 0,
+      "passThroughBatches": 2
+    }
+  },
+  "timeoutScenario": {
+    "turnEnd": {
+      "seq": 6,
+      "type": "turn/end",
+      "time": 1793092192637,
+      "messageId": null,
+      "sourceKind": null,
+      "actionId": null,
+      "provider": null,
+      "model": null,
+      "text": null,
+      "turnEnd": "blocked",
+      "turn": 1,
+      "spliceTarget": null,
+      "insertedIds": null,
+      "removedCount": null
+    },
+    "blockedEvents": [
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "turn/end"
+    ],
+    "counters": {
+      "batches": 1,
+      "boopMessages": 1,
+      "allowed": 0,
+      "blocked": 1,
+      "timeouts": 1,
+      "passThroughBatches": 0
+    },
+    "lastDecision": {
+      "at": "2026-10-27T09:09:52.636Z",
+      "decision": "reject",
+      "reason": "msg_act_593ec35e-13fe-41d2-877d-b34e5ff82afe:release-timeout",
+      "sessionId": "session-d6717222-1e1a-444b-9326-c01833d94be4",
+      "turn": 1,
+      "step": 1,
+      "messageIds": [
+        "msg_act_593ec35e-13fe-41d2-877d-b34e5ff82afe"
+      ]
+    },
+    "afterWakeOwnMessageCount": 0,
+    "userMessageAdmitted": true
+  },
+  "unavailableScenario": {
+    "turnEnd": {
+      "seq": 6,
+      "type": "turn/end",
+      "time": 1793092230670,
+      "messageId": null,
+      "sourceKind": null,
+      "actionId": null,
+      "provider": null,
+      "model": null,
+      "text": null,
+      "turnEnd": "blocked",
+      "turn": 1,
+      "spliceTarget": null,
+      "insertedIds": null,
+      "removedCount": null
+    },
+    "blockedEvents": [
+      "permission/preset",
+      "sandbox/mode",
+      "approval/policy",
+      "agent/inbox/spliced",
+      "turn/start",
+      "agent/inbox/spliced",
+      "turn/end"
+    ],
+    "status": {
+      "schemaVersion": 1,
+      "product": "BOOP",
+      "row": "boop-gate",
+      "remoteService": "boopGate",
+      "hook": "agent/pre-step",
+      "mode": "waterfall",
+      "registered": true,
+      "gateAvailable": false,
+      "armed": false,
+      "entries": [],
+      "consumedMessageIds": [],
+      "waitTimeoutMs": 5000,
+      "counters": {
+        "batches": 1,
+        "boopMessages": 1,
+        "allowed": 0,
+        "blocked": 1,
+        "timeouts": 0,
+        "passThroughBatches": 0
+      },
+      "lastDecision": {
+        "at": "2026-10-27T09:10:30.670Z",
+        "decision": "reject",
+        "reason": "msg_act_c9723a6b-442d-4b14-a34b-392d3786d7a0:gate-unavailable",
+        "sessionId": "session-6c26ac4e-f59a-4e09-87b5-85e72d934fb6",
+        "turn": 1,
+        "step": 1,
+        "messageIds": [
+          "msg_act_c9723a6b-442d-4b14-a34b-392d3786d7a0"
+        ]
+      },
+      "runtimeEnforcement": {
+        "composed": true,
+        "detail": "agent/pre-step waterfall 已注册（boop-gate）：BOOP 代理命令在 step/start 与模型调用之前拦截；只有人类显式 release 且仅一次放行；未跟踪/未释放/门禁不可用一律 fail-closed。已知边界：被拒绝的批次已被 inbox claim 取走（turn/start+turn/end 仍会落盘，无 step/model）。"
+      },
+      "generatedAt": "2026-10-27T09:10:30.880Z"
+    },
+    "userMessageAdmitted": true,
+    "unreleasedMessageId": "msg_act_c9723a6b-442d-4b14-a34b-392d3786d7a0"
+  },
+  "writeMode": {
+    "bootstrap": true,
+    "control": true,
+    "dispatch": {
+      "available": false,
+      "reason": "dispatch-not-on-this-row"
+    }
+  }
+}

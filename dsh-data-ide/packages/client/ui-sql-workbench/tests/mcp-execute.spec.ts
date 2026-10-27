@@ -457,6 +457,21 @@ describe('column filters (server-side)', () => {
     expect(filterClause([{ column: 'c', op: 'notNull' }])).toBe(' WHERE `c` IS NOT NULL')
   })
 
+  it('never emits a dangling WHERE for an operator this host does not know', () => {
+    // Reproduces a stale node half receiving the newer client's `in` filter:
+    // before the guard the wrapper became `) AS t WHERE  LIMIT 5001 OFFSET 0`.
+    const unknown = [{ column: 'c', op: 'futureOp' as unknown as 'eq', values: ['a'] }]
+    expect(filterClause(unknown)).toBe('')
+    expect(buildPagedQuery('SELECT * FROM t', { limit: 5000, offset: 0, filters: unknown }))
+      .toBe('SELECT * FROM (\nSELECT * FROM t\n) AS t LIMIT 5000 OFFSET 0')
+    // A known condition next to the unknown one survives; the unknown one drops.
+    expect(filterClause([{ column: 'c', op: 'eq', value: 'x' }, ...unknown])).toBe(" WHERE `c` = 'x'")
+  })
+
+  it('keeps an empty value-list selection as a valid never-matching predicate', () => {
+    expect(filterClause([{ column: 'c', op: 'in', values: [] }])).toBe(' WHERE 1=0')
+  })
+
   it('escapes quotes and backslashes instead of breaking out of the literal', () => {
     expect(filterClause([{ column: 'c', op: 'eq', value: "O'Brien" }])).toBe(" WHERE `c` = 'O''Brien'")
     expect(filterClause([{ column: 'c', op: 'eq', value: 'a\\b' }])).toBe(" WHERE `c` = 'a\\\\b'")
@@ -484,5 +499,49 @@ describe('column filters (server-side)', () => {
     expect(filterClause(undefined)).toBe('')
     expect(filterClause([])).toBe('')
     expect(buildPagedQuery('SELECT 1', { limit: 5, offset: 0 })).not.toContain('WHERE')
+  })
+})
+
+describe('value-list IN filters', () => {
+  it('quotes and escapes every string literal in the list', () => {
+    expect(filterClause([{ column: 'c', op: 'in', values: ['Alice', "O'Brien"] }]))
+      .toBe(" WHERE `c` IN ('Alice', 'O''Brien')")
+    expect(filterClause([{ column: 'c', op: 'in', values: ['a\\b'] }])).toBe(" WHERE `c` IN ('a\\\\b')")
+  })
+
+  it('emits numeric columns raw and only for real numbers', () => {
+    expect(filterClause([{ column: 'n', op: 'in', values: ['1', '2.5', '-3'], numeric: true }]))
+      .toBe(' WHERE `n` IN (1, 2.5, -3)')
+    // A value list is built from display text; a non-numeric item must not be
+    // pasted into the SQL unquoted even when the column is numeric.
+    expect(filterClause([{ column: 'n', op: 'in', values: ['abc'], numeric: true }]))
+      .toBe(" WHERE `n` IN ('abc')")
+    expect(filterClause([{ column: 'n', op: 'in', values: [' 42 '], numeric: true }]))
+      .toBe(' WHERE `n` IN (42)')
+  })
+
+  it('matches nothing for an empty selection, including a missing values array', () => {
+    expect(filterClause([{ column: 'c', op: 'in', values: [] }])).toBe(' WHERE 1=0')
+    expect(filterClause([{ column: 'c', op: 'in' }])).toBe(' WHERE 1=0')
+  })
+
+  it('ANDs an IN list with the other conditions in page and count queries', () => {
+    const filters = [
+      { column: 'customer', op: 'eq' as const, value: 'Alice' },
+      { column: 'order_id', op: 'in' as const, values: ['1', '2'], numeric: true },
+    ]
+    expect(filterClause(filters)).toBe(" WHERE `customer` = 'Alice' AND `order_id` IN (1, 2)")
+    expect(buildCountQuery('SELECT * FROM t', filters)).toContain("WHERE `customer` = 'Alice' AND `order_id` IN (1, 2)")
+    expect(buildPagedQuery('SELECT * FROM t', { limit: 10, offset: 0, filters }))
+      .toContain("WHERE `customer` = 'Alice' AND `order_id` IN (1, 2)")
+  })
+
+  it('runs the IN column name through the same identifier gate', () => {
+    expect(() => filterClause([{ column: 'c; DROP TABLE t', op: 'in', values: ['x'] }])).toThrow('非法排序列名')
+  })
+
+  it('truncates an over-long list item instead of sending a megabyte of WHERE', () => {
+    const clause = filterClause([{ column: 'c', op: 'in', values: ['x'.repeat(500)] }])
+    expect(clause.length).toBeLessThan(230)
   })
 })

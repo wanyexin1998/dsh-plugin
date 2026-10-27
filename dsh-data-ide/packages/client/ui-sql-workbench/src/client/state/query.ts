@@ -7,7 +7,8 @@
  */
 
 import type { ExecuteRequest, ExecuteResponse, FilterSpec, SortSpec } from '../../execute/core.ts'
-import { readableDbError } from '../db-error.ts'
+import { canWrapStatement } from '../../execute/core.ts'
+import { readableDbError, userErrorLine } from '../db-error.ts'
 import type { WorkbenchApi } from '../api.ts'
 
 /** Page sizes the pager offers (docs/03 §6.4). */
@@ -16,12 +17,20 @@ export const DEFAULT_PAGE_SIZE = 500
 
 export type QueryStatus = 'idle' | 'running' | 'done' | 'error'
 
+/** How a run reaches the server: authored-as-written (`direct`) or browsable page. */
+export type QueryMode = 'direct' | 'paged'
+
 export interface QueryState {
   readonly sql: string
   readonly status: QueryStatus
+  /**
+   * Default is `direct`: hand-written SQL runs as authored, with a probe limit
+   * and no COUNT. Paging/sorting/filtering switches the same console to `paged`.
+   */
+  readonly mode: QueryMode
   /** Last successful page, kept while the next one loads so the grid does not blink. */
   readonly result: ExecuteResponse | null
-  readonly error: { readonly code: string; readonly message: string } | null
+  readonly error: { readonly code: string; readonly message: string; readonly line?: number } | null
   readonly pageSize: number
   readonly sort: SortSpec | null
   /** Server-side column filters (ANDed); applied to the wrapped statement. */
@@ -35,6 +44,7 @@ export interface QueryState {
 export const INITIAL_QUERY: QueryState = {
   sql: '',
   status: 'idle',
+  mode: 'direct',
   result: null,
   error: null,
   pageSize: DEFAULT_PAGE_SIZE,
@@ -68,7 +78,12 @@ export function setSql(state: QueryState, sql: string): QueryState {
 
 /** Change the page size; a new size only takes effect on the next run/page turn. */
 export function setPageSize(state: QueryState, pageSize: number): QueryState {
-  return { ...state, pageSize }
+  return { ...state, pageSize, mode: 'paged' }
+}
+
+/** Switch an existing console between authored-as-written and browsable modes. */
+export function setMode(state: QueryState, mode: QueryMode): QueryState {
+  return { ...state, mode }
 }
 
 /** The request every execute/fetch call shares. */
@@ -78,37 +93,58 @@ function request(state: QueryState, connId: string, statementId: string, offset?
     sql: state.sql,
     pageSize: state.pageSize,
     statementId,
+    mode: state.mode,
     ...(state.sort === null ? {} : { sort: state.sort }),
     ...(state.filters.length === 0 ? {} : { filters: state.filters }),
     ...(offset === undefined ? {} : { offset }),
   }
 }
 
-/** Run the editor contents against the active connection. */
-/** Run the editor contents against the active connection. */
+/** Run the editor contents (or `requestSql`) against the active connection. */
 export async function run(
   api: WorkbenchApi,
   state: QueryState,
   connId: string,
   onStart?: (running: QueryState) => void,
+  /** SQL actually executed when it differs from the editor text (run-at-cursor). */
+  requestSql?: string,
 ): Promise<QueryState> {
   const statementId = state.statementId ?? nextStatementId()
   const running: QueryState = { ...state, status: 'running', statementId, error: null }
   // Publish before awaiting: the grid shows "正在执行…" and cancel has a target.
   onStart?.(running)
   try {
-    const outcome = await api.execute(request(state, connId, statementId))
+    const outcome = await api.execute({
+      ...request(state, connId, statementId),
+      ...(requestSql === undefined ? {} : { sql: requestSql }),
+    })
     // Nothing is in flight once the answer arrives, so cancel has no target.
-    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error), result: null, total: null, statementId: null }
+    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error, running, requestSql), result: null, total: null, statementId: null }
     return { ...running, status: 'done', result: outcome, total: outcome.total, statementId: null }
   } catch (error) {
-    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: readableDbError({ message: describe(error) }) }, result: null, total: null, statementId: null }
+    return { ...running, status: 'error', error: thrownFailure(error, running, requestSql), result: null, total: null, statementId: null }
   }
 }
 
 /** A refusal, in words the reader can act on. */
-function failure(error: { readonly code: string; readonly message: string }): { readonly code: string; readonly message: string } {
-  return { code: error.code, message: readableDbError(error) }
+function failure(
+  error: { readonly code: string; readonly message: string },
+  state: QueryState,
+  overrideSql?: string,
+): { readonly code: string; readonly message: string; readonly line?: number } {
+  const message = readableDbError(error)
+  const sql = overrideSql ?? state.sql
+  const offset = state.mode === 'paged' ? 1 : canWrapStatement(sql) ? 1 : 0
+  const line = userErrorLine(error.message, offset)
+  return { code: error.code, message, ...(line === null ? {} : { line }) }
+}
+
+/** A thrown transport failure carries no refusal code; still try to locate a line. */
+function thrownFailure(error: unknown, state: QueryState, overrideSql?: string): { readonly code: string; readonly message: string; readonly line?: number } {
+  const raw = describe(error)
+  const offset = state.mode === 'paged' ? 1 : canWrapStatement(overrideSql ?? state.sql) ? 1 : 0
+  const line = userErrorLine(raw, offset)
+  return { code: 'UNKNOWN', message: readableDbError({ message: raw }), ...(line === null ? {} : { line }) }
 }
 
 /** Jump to another page of the same statement; the cached total survives. */
@@ -120,15 +156,17 @@ export async function goPage(
   onStart?: (running: QueryState) => void,
 ): Promise<QueryState> {
   if (offset < 0 || state.result === null) return state
-  const statementId = state.statementId ?? nextStatementId()
-  const running: QueryState = { ...state, status: 'running', statementId, error: null }
+  // Turning a page needs the real wrapper (OFFSET/ORDER BY/COUNT).
+  const paged: QueryState = { ...state, mode: 'paged' }
+  const statementId = paged.statementId ?? nextStatementId()
+  const running: QueryState = { ...paged, status: 'running', statementId, error: null }
   onStart?.(running)
   try {
-    const outcome = await api.fetchPage(request(state, connId, statementId, offset))
-    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error), statementId: null }
+    const outcome = await api.fetchPage(request(paged, connId, statementId, offset))
+    if (!outcome.ok) return { ...running, status: 'error', error: failure(outcome.error, running), statementId: null }
     return { ...running, status: 'done', result: outcome, statementId: null }
   } catch (error) {
-    return { ...running, status: 'error', error: { code: 'UNKNOWN', message: readableDbError({ message: describe(error) }) }, statementId: null }
+    return { ...running, status: 'error', error: thrownFailure(error, running), statementId: null }
   }
 }
 

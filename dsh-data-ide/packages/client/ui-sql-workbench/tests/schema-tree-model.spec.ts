@@ -11,7 +11,10 @@ import {
   groupBySchema,
   groupKey,
   menuPosition,
+  nullRateText,
   openDataSql,
+  overviewSampleSql,
+  overviewStatsSql,
   qualifiedName,
   quoteIdent,
   schemaKey,
@@ -162,5 +165,50 @@ describe('menuPosition', () => {
 
   it('never leaves a negative coordinate', () => {
     expect(menuPosition({ x: 2, y: 2 }, { width: 2000, height: 2000 }, viewport)).toEqual({ left: 4, top: 4 })
+  })
+})
+
+describe('overview helpers', () => {
+  it('asks for the total plus one COUNT per column in a single statement', () => {
+    expect(overviewStatsSql(order)).toBe(
+      'SELECT COUNT(*) AS `总行数`,\n  COUNT(`order_id`) AS `n1`\nFROM `dwd`.`dwd_order`',
+    )
+    expect(
+      overviewStatsSql({
+        schema: 'dwd',
+        name: 'wide',
+        columns: [{ name: 'a', type: 'INT' }, { name: 'b', type: 'INT' }],
+      }),
+    ).toBe('SELECT COUNT(*) AS `总行数`,\n  COUNT(`a`) AS `n1`,\n  COUNT(`b`) AS `n2`\nFROM `dwd`.`wide`')
+  })
+
+  it('degrades to a bare COUNT when the object has no column metadata', () => {
+    expect(overviewStatsSql({ name: 'empty', columns: [] })).toBe('SELECT COUNT(*) AS `总行数`\nFROM `empty`')
+  })
+
+  it('asks for a small sample page, clamped into a sane band', () => {
+    expect(overviewSampleSql(order)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 20')
+    expect(overviewSampleSql(order, 5)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 5')
+    expect(overviewSampleSql(order, 0)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 1')
+    expect(overviewSampleSql(order, 12.9)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 12')
+    expect(overviewSampleSql(order, 5000)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 1000')
+    expect(overviewSampleSql(order, Number.NaN)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 20')
+    expect(overviewSampleSql(order, Number.POSITIVE_INFINITY)).toBe('SELECT * FROM `dwd`.`dwd_order` LIMIT 20')
+  })
+
+  it('renders a null rate with one decimal, folding the exact ends', () => {
+    expect(nullRateText(100, 100)).toBe('0%')
+    expect(nullRateText(0, 100)).toBe('100%')
+    expect(nullRateText(90, 100)).toBe('10.0%')
+    expect(nullRateText(1, 3)).toBe('66.7%')
+    expect(nullRateText(150, 100)).toBe('0%')
+    expect(nullRateText(-5, 100)).toBe('100%')
+  })
+
+  it('reports unknown null rates instead of inventing one', () => {
+    expect(nullRateText(0, 0)).toBe('—')
+    expect(nullRateText(10, 0)).toBe('—')
+    expect(nullRateText(Number.NaN, 10)).toBe('—')
+    expect(nullRateText(5, Number.NaN)).toBe('—')
   })
 })

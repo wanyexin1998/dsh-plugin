@@ -31,6 +31,7 @@
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 
 import { remote } from './remote.ts'
+import { pocRequested } from './poc-switch.ts'
 import { MemoryCommitter } from './memory/committer.ts'
 import { MemoryExtractor } from './memory/extractor.ts'
 import { LedgerCursorStore } from './observe/observer.ts'
@@ -751,7 +752,7 @@ class BoopSchedulerApi extends TypertRemoteService {
       patrol: this.runtime.lastPatrol,
       native: this.runtime.binding.status(),
       endpoints: SCHEDULER_ENDPOINTS,
-      pocEndpoints: SCHEDULER_POC_ENDPOINTS,
+      pocEndpoints: this.config.pocEnabled === true ? SCHEDULER_POC_ENDPOINTS : [],
       controlEndpoints: ['pause', 'resume', 'cancel'],
       readEndpoints: SCHEDULER_READ_ENDPOINTS,
     }
@@ -939,8 +940,17 @@ class BoopSchedulerApi extends TypertRemoteService {
   }
 }
 
-for (const method of ['status', 'pause', 'resume', 'cancel', 'patrolNow', 'automation', 'pocRunBackground']) {
+for (const method of ['status', 'pause', 'resume', 'cancel', 'patrolNow', 'automation']) {
   remote(method)(BoopSchedulerApi.prototype)
+}
+
+let pocSchedulerRegistered = false
+
+/** Publish the background PoC method. A normal install never calls this. */
+export function registerPocSchedulerMethods(): void {
+  if (pocSchedulerRegistered) return
+  remote('pocRunBackground')(BoopSchedulerApi.prototype)
+  pocSchedulerRegistered = true
 }
 
 /* ── in-process facade (future controllers / tests) ──────────────────── */
@@ -969,6 +979,7 @@ export function apply(ctx: any, config: BoopSchedulerConfig = {}): void {
     return
   }
   try {
+    config = { ...config, pocEnabled: pocRequested(config.pocEnabled) }
     const auditSink = new SchedulerAuditSink(ctx)
     const permits = new ModelPermits({
       softTimeoutMs: config.softTimeoutMs ?? SCHEDULER_DEFAULTS.softTimeoutMs,
@@ -985,6 +996,7 @@ export function apply(ctx: any, config: BoopSchedulerConfig = {}): void {
       modelRoute,
     }
     scheduler.setAuditSink(auditSink.sink())
+    if (config.pocEnabled === true) registerPocSchedulerMethods()
     new BoopSchedulerApi(ctx, runtime)
 
     // P1 wiring: a real user message arms foreground; the end of the turn

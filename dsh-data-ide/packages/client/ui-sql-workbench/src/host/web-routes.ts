@@ -35,9 +35,38 @@ export const ROUTES = {
   cancel: `${ROUTE_PREFIX}/cancel`,
   /** Layout document: split sizes and object-browser state (docs/09 B3). */
   layout: `${ROUTE_PREFIX}/layout`,
+  /** Console tabs + active tab + page size (SQL-201/202); never result sets. */
+  workspace: `${ROUTE_PREFIX}/workspace`,
+  /** Whole query-history document; POST appends one run (SQL-203/204). */
+  history: `${ROUTE_PREFIX}/history`,
+  /** Named pinned queries (SQL-205). */
+  favorites: `${ROUTE_PREFIX}/favorites`,
   /** The browser half reports its own activation failures here. */
   clientError: `${ROUTE_PREFIX}/client-error`,
 } as const
+
+/**
+ * Optional persistence half of the panel API (SQL-201/202/203/205).
+ *
+ * Every method is optional so older host builds and the repo's API doubles keep
+ * type-checking; the routes below answer exactly like the layout document when a
+ * method is absent (GET returns `null`, POST is a no-op). The values cross the
+ * wire unvalidated on read and are normalised by the client parsers
+ * (`client/state/history.ts`); the host only guarantees that it stores JSON
+ * objects.
+ */
+export interface PersistenceApi {
+  /** Console tabs + active tab + page size from the last session. */
+  loadWorkspaceState?(): Promise<unknown>
+  saveWorkspaceState?(state: unknown): Promise<void>
+  /** History document, `{ schemaVersion, byConn }`. */
+  loadHistory?(): Promise<unknown>
+  /** Append one run; the host owns the per-connection ring buffer. */
+  appendHistory?(entry: unknown): Promise<void>
+  /** Favorites document, `{ schemaVersion, entries }`. */
+  loadFavorites?(): Promise<unknown>
+  saveFavorites?(document: unknown): Promise<void>
+}
 
 /** Ceiling for a request body: a statement is text, not a payload. */
 export const MAX_BODY_BYTES = 256 * 1024
@@ -127,6 +156,67 @@ export function registerPanelRoutes(carrier: RouteCarrier, api: PanelApi, fence?
       },
     })
 
+  /**
+   * Optional persistence half of the API (SQL-201/202/203/205).
+   *
+   * `PanelApi` predates these documents and every test double implements only a
+   * subset, so the methods are read opportunistically instead of by widening the
+   * shared interface; absent means "this host does not persist it".
+   */
+  const persistence = api as PanelApi & PersistenceApi
+
+  /**
+   * One GET/POST registration for a persisted JSON document.
+   *
+   * A single registration per path is mandatory: the host's route table keeps
+   * one handler per path, so a second registration shadows the first (the layout
+   * route learned that the hard way on 2026-10-21).
+   *
+   * @param path - route path.
+   * @param readField - response field carrying the document on GET.
+   * @param writeField - request field carrying the value on POST.
+   * @param read - optional host reader; absent answers `null`.
+   * @param write - optional host writer; absent makes POST a no-op.
+   */
+  const documentRoute = (
+    path: string,
+    readField: string,
+    writeField: string,
+    read: (() => Promise<unknown>) | undefined,
+    write: ((value: unknown) => Promise<void>) | undefined,
+  ): (() => void) =>
+    carrier.register({
+      kind: 'exact',
+      path,
+      handler: async (req, res) => {
+        const refused = fence?.(req)
+        if (refused !== undefined) {
+          sendJson(res, refused, { ok: false, error: { code: 'UNTRUSTED', message: '调用方未通过连接信任校验' } })
+          return
+        }
+        if (req.method === 'GET') {
+          const document = read === undefined ? null : await read()
+          sendJson(res, 200, { ok: true, [readField]: document })
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: '仅支持 GET / POST' } })
+          return
+        }
+        try {
+          const body = await readJsonBody(req)
+          if (write !== undefined) await write(body[writeField])
+          sendJson(res, 200, { ok: true })
+        } catch (error) {
+          const refusal = error instanceof PanelError ? error : new PanelError('INTERNAL', (error as Error).message)
+          sendJson(res, statusFor(refusal), {
+            ok: false,
+            error: { code: refusal.code, message: refusal.message, field: refusal.field },
+          })
+        }
+      },
+    })
+
   const disposers = [
     // Read-only state: the panel asks for both halves in one round trip.
     carrier.register({
@@ -182,6 +272,37 @@ export function registerPanelRoutes(carrier: RouteCarrier, api: PanelApi, fence?
         }
       },
     }),
+
+    /**
+     * Console workspace, query history and favorites (SQL-201/202/203/205).
+     *
+     * Same GET/POST contract as the layout document: GET hands back whatever the
+     * host stored (`null` when this host build does not persist it), POST stores
+     * one document or appends one history entry. Shapes are documented in
+     * `client/state/history.ts`; the client parses defensively, so the host never
+     * has to know about tabs or search filters.
+     */
+    documentRoute(
+      ROUTES.workspace,
+      'state',
+      'state',
+      persistence.loadWorkspaceState?.bind(persistence),
+      persistence.saveWorkspaceState?.bind(persistence),
+    ),
+    documentRoute(
+      ROUTES.history,
+      'history',
+      'entry',
+      persistence.loadHistory?.bind(persistence),
+      persistence.appendHistory?.bind(persistence),
+    ),
+    documentRoute(
+      ROUTES.favorites,
+      'favorites',
+      'favorites',
+      persistence.loadFavorites?.bind(persistence),
+      persistence.saveFavorites?.bind(persistence),
+    ),
 
     post(ROUTES.save, async (body, res) => {      const draft = body['draft'] as ConnectionDraft | undefined
       if (draft === undefined) throw new PanelError('BAD_BODY', '缺少字段 draft')

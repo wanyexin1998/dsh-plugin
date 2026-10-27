@@ -16,10 +16,12 @@ import { type ExecutionResult, cancelStatement, runExecuteSql, runFetchPage } fr
 import { createMysqlExecutor } from '../execute/mysql.ts'
 import { probeMysql } from '../../mcp/probe-mysql.ts'
 import type { ConnectionProbe } from '../../mcp/probe.ts'
-import { type PanelApi, LAYOUT_KEY, createExecution, createPanelApi } from './panel-service.ts'
+import { type PanelApi, LAYOUT_KEY, PanelError, createExecution, createPanelApi } from './panel-service.ts'
 import { createSchemaReader } from './metadata.ts'
 import { type KvStore } from './kv.ts'
 import { type CredentialStore, createCredentialStore } from './credentials.ts'
+import type { PersistenceApi } from './web-routes.ts'
+import type { QueryHistoryEntry } from '../client/state/history.ts'
 import type { CredentialsService, Domain, DomainSpec, NodeHostContext } from './contract.ts'
 import { buildRuntimeSpecs, removeRuntimeSpecs, runtimeSpecPath, writeRuntimeSpecs } from './runtime-specs.ts'
 import { resolveSpec } from '../../mcp/runtime-specs.ts'
@@ -38,6 +40,28 @@ export const DOMAIN_NAME = 'dsh_data_ide'
 
 /** Table holding the three documents (`datasources`, `active`, later history/layout). */
 export const DOCUMENTS_TABLE = 'documents'
+
+/**
+ * Document keys the panel persists through the same table (SQL-201/202/203/205).
+ *
+ * Keys are session-independent on purpose: the right sidebar instantiates one
+ * panel per session, but the user's consoles and history are one person's
+ * working memory, not a conversation's.
+ */
+export const WORKSPACE_KEY = 'workspace'
+/** Per-connection query history (04 §3 reserved this key). */
+export const HISTORY_KEY = 'history'
+/** Named pinned queries (SQL-205). */
+export const FAVORITES_KEY = 'favorites'
+
+/**
+ * Per-connection ring-buffer ceiling (04 §5).
+ *
+ * Mirrors `MAX_HISTORY` in `client/state/history.ts`; the host trims again on
+ * append so a hand-edited document cannot grow without bound. Kept as a literal
+ * (rather than an import) so the node bundle never pulls client React code in.
+ */
+export const HISTORY_LIMIT = 200
 
 /**
  * Domain declaration.
@@ -63,6 +87,95 @@ export function createKvStore(domain: Domain): KvStore {
     },
     delete: async key => table.delete(key),
     entries: async () => [...table.entries()].map(([key, value]) => ({ key, value })),
+  }
+}
+
+/** Persisted history document; mirrors `HistoryDocument` in `client/state/history.ts`. */
+export interface StoredHistoryDocument {
+  readonly schemaVersion: 1
+  readonly byConn: Readonly<Record<string, readonly QueryHistoryEntry[]>>
+}
+
+/** True for a plain JSON object; arrays and `null` are never documents. */
+function isDocument(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Narrow one reported run; a broken body is a readable 400, not stored junk. */
+function normalizeHistoryEntry(value: unknown): QueryHistoryEntry {
+  if (!isDocument(value)) throw new PanelError('BAD_HISTORY', '历史记录必须是 JSON 对象')
+  const id = value['id']
+  const connId = value['connId']
+  const sql = value['sql']
+  if (typeof id !== 'string' || id === '') throw new PanelError('BAD_HISTORY', '历史记录缺少 id')
+  if (typeof connId !== 'string' || connId === '') throw new PanelError('BAD_HISTORY', '历史记录缺少 connId')
+  if (typeof sql !== 'string') throw new PanelError('BAD_HISTORY', '历史记录缺少 sql')
+  const errorCode = value['errorCode']
+  return {
+    id,
+    connId,
+    sql,
+    at: typeof value['at'] === 'number' ? value['at'] : 0,
+    durationMs: typeof value['durationMs'] === 'number' ? value['durationMs'] : 0,
+    rowCount: typeof value['rowCount'] === 'number' ? value['rowCount'] : null,
+    ok: value['ok'] === true,
+    ...(typeof errorCode === 'string' ? { errorCode } : {}),
+  }
+}
+
+/** Read the stored history document, tolerating a missing or corrupt one. */
+function readHistoryDocument(stored: unknown): Record<string, readonly QueryHistoryEntry[]> {
+  if (!isDocument(stored)) return {}
+  const byConn = stored['byConn']
+  if (!isDocument(byConn)) return {}
+  const grouped: Record<string, readonly QueryHistoryEntry[]> = {}
+  for (const [connId, entries] of Object.entries(byConn)) {
+    if (Array.isArray(entries)) {
+      grouped[connId] = entries.filter(entry => isDocument(entry)) as unknown as readonly QueryHistoryEntry[]
+    }
+  }
+  return grouped
+}
+
+/**
+ * Add one run to the persisted history document.
+ *
+ * Pure so the ring buffer and the corrupt-document tolerance are unit-testable
+ * without a storage backend. A repeated id replaces the old row (re-running a
+ * statement updates it), and the per-connection list is trimmed to
+ * {@link HISTORY_LIMIT}; other connections are untouched.
+ */
+export function appendHistoryEntry(stored: unknown, entry: unknown): StoredHistoryDocument {
+  const byConn = readHistoryDocument(stored)
+  const normalized = normalizeHistoryEntry(entry)
+  const previous = byConn[normalized.connId] ?? []
+  const next = [normalized, ...previous.filter(item => item.id !== normalized.id)].slice(0, HISTORY_LIMIT)
+  return { schemaVersion: 1, byConn: { ...byConn, [normalized.connId]: next } }
+}
+
+/** Store one JSON document, refusing non-objects with a readable code. */
+async function writeDocument(kv: KvStore, key: string, value: unknown, label: string): Promise<void> {
+  if (!isDocument(value)) throw new PanelError('BAD_DOCUMENT', `${label} 必须是 JSON 对象`)
+  await kv.put(key, value)
+}
+
+/**
+ * Build the persistence half attached to the panel API (SQL-201/202/203/205).
+ *
+ * The host is the single writer (docs/02 §3): the browser posts documents and
+ * the host validates + stores them; nothing is read back from the browser during
+ * a save, so two sessions cannot interleave a document write.
+ */
+export function createPersistenceStore(kv: KvStore): Required<PersistenceApi> {
+  return {
+    loadWorkspaceState: async () => (await kv.get(WORKSPACE_KEY)) ?? null,
+    saveWorkspaceState: state => writeDocument(kv, WORKSPACE_KEY, state, 'workspace'),
+    loadHistory: async () => (await kv.get(HISTORY_KEY)) ?? null,
+    appendHistory: async entry => {
+      await kv.put(HISTORY_KEY, appendHistoryEntry(await kv.get(HISTORY_KEY), entry))
+    },
+    loadFavorites: async () => (await kv.get(FAVORITES_KEY)) ?? null,
+    saveFavorites: document => writeDocument(kv, FAVORITES_KEY, document, 'favorites'),
   }
 }
 
@@ -225,18 +338,24 @@ export async function startHostServices(
     },
   }
 
-  const api = createPanelApi({
-    dataSources,
-    credentials,
-    kv,
-    execution: createExecution(execution),
-    probe: options.probe ?? probeMysql,
-    scriptDeps: execution,
-    schemaReader: createSchemaReader({
-      resolve: createConnectionResolver({ specs: execution.specs, dataSources, credentials }),
-      executor: execution.executor,
+  // Persistence (SQL-201/202/203/205) rides the same panel API object the route
+  // layer already receives: the methods are optional on `PanelApi`, so attaching
+  // them here keeps `index.ts` and every existing API double unchanged.
+  const api: PanelApi = Object.assign(
+    createPanelApi({
+      dataSources,
+      credentials,
+      kv,
+      execution: createExecution(execution),
+      probe: options.probe ?? probeMysql,
+      scriptDeps: execution,
+      schemaReader: createSchemaReader({
+        resolve: createConnectionResolver({ specs: execution.specs, dataSources, credentials }),
+        executor: execution.executor,
+      }),
     }),
-  })
+    createPersistenceStore(kv),
+  )
 
   await publish()
   ctx.reflect.provide('sqlWorkbench', service)

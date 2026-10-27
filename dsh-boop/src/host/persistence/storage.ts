@@ -83,6 +83,9 @@ export class BoopStorage {
    * may take over (AT-02 takeover is only for EXPIRED leases).
    */
   heartbeat: ReturnType<typeof setInterval> | null = null
+  /** True only when the previous process set the marker on a graceful close. */
+  previousShutdownClean = false
+  bootReconcile: { unknown: string[]; retryable: number } | null = null
 
   constructor(options: { dshHome: string; directoryName?: string; holder?: string; leaseTtlMs?: number }) {
     this.identity = deriveScopeIdentity(options.dshHome)
@@ -91,7 +94,7 @@ export class BoopStorage {
     // The ledger directory is BOOP's own state under $DSH_HOME; create it once.
     mkdirSync(dir, { recursive: true })
     const file = path.join(dir, 'boop.sqlite')
-    this.db = new BoopDatabase({ path: file })
+    this.db = new BoopDatabase({ path: file, fts: true })
     this.db.bootstrap()
     this.migration = null
     this.repo = new BoopRepository(this.db, undefined, () => `b_${Math.random().toString(36).slice(2, 12)}`)
@@ -138,6 +141,19 @@ export class BoopStorage {
       this.ownsLease = true
       this.fencingToken = acquired.lease.fencingToken
       this.startHeartbeat()
+      // Production boot reconciliation (G03): a crashed `sending` row becomes
+      // outcome_unknown and is never auto-retried. The clean-shutdown marker
+      // is cleared now and written back only from close().
+      this.previousShutdownClean = this.repo.getMeta('clean_shutdown') === '1'
+      this.bootReconcile = this.repo.reconcileOutbox(this.identity.scopeId)
+      this.repo.setMeta('clean_shutdown', '0')
+      this.repo.audit(
+        this.identity.scopeId,
+        'boot/reconciled',
+        null,
+        'system',
+        `clean=${this.previousShutdownClean} unknown=${this.bootReconcile.unknown.length}`,
+      )
     }
     return this.facts(acquired.kind === 'acquired')
   }
@@ -193,6 +209,13 @@ export class BoopStorage {
     if (this.heartbeat !== null) {
       clearInterval(this.heartbeat)
       this.heartbeat = null
+    }
+    if (this.ownsLease) {
+      try {
+        this.repo.setMeta('clean_shutdown', '1')
+      } catch {
+        /* a marker failure must not skip releasing the lease */
+      }
     }
     this.release()
     this.db.close()

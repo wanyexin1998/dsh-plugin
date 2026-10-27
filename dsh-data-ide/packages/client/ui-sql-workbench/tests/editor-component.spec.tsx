@@ -4,10 +4,13 @@ import { act } from 'react-dom/test-utils'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { currentCompletions } from '@codemirror/autocomplete'
+
 import { SqlEditor } from '../src/client/components/SqlEditor.tsx'
 import type { SqlEditorHandle } from '../src/client/components/SqlEditor.tsx'
 import type { SchemaIndex } from '../src/client/completion.ts'
-import { pressKey, readSql, setSql } from './support/editor.ts'
+import { DEFAULT_SHORTCUTS } from '../src/client/shortcut-settings.ts'
+import { contentDom, editorView, pressKey, readSql, setSql } from './support/editor.ts'
 
 const schema: SchemaIndex = {
   tables: [{ schema: 'dwd', kind: 'table', name: 'dwd_order', columns: [{ name: 'order_id', type: 'BIGINT' }] }],
@@ -39,6 +42,12 @@ function render(props: Partial<React.ComponentProps<typeof SqlEditor>> = {}): vo
     disabled: false,
     onChange: vi.fn(),
     onRun: vi.fn(),
+    onRunAll: vi.fn(),
+    onRerun: vi.fn(),
+    onExplain: vi.fn(),
+    onHistory: vi.fn(),
+    onFormat: vi.fn(),
+    onExpandStar: vi.fn(),
     onCancel: vi.fn(),
     ...props,
   }
@@ -90,12 +99,37 @@ describe('sql editor (CodeMirror)', () => {
           disabled={false}
           onChange={vi.fn()}
           onRun={vi.fn()}
+          onRunAll={vi.fn()}
+          onRerun={vi.fn()}
+          onExplain={vi.fn()}
+          onHistory={vi.fn()}
+          onFormat={vi.fn()}
+          onExpandStar={vi.fn()}
           onCancel={vi.fn()}
         />,
       )
     })
 
     expect(readSql(container)).toBe('SELECT changed')
+  })
+
+  it('marks and clears the failing driver line', () => {
+    render({ sql: 'SELECT 1\nFROM t\nWHERE' })
+
+    act(() => {
+      handle?.showErrorLine(3)
+    })
+    expect(container.querySelector('.cm-sql-error-line')).not.toBeNull()
+
+    act(() => {
+      handle?.showErrorLine(null)
+    })
+    expect(container.querySelector('.cm-sql-error-line')).toBeNull()
+  })
+
+  it('exposes the caret offset for statement-scoped actions', () => {
+    render({ sql: 'SELECT 1' })
+    expect(handle?.getCursor()).toBeGreaterThan(0)
   })
 
   it('inserts text at the caret and reads the selection back', () => {
@@ -137,50 +171,97 @@ describe('sql editor (CodeMirror)', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  it('has a query toolbar: 执行 / 取消 / 复制 / 清空 / 行数 / 快捷键说明', () => {
+  it('keeps the editor free of a query toolbar', () => {
     render({ sql: 'SELECT 1\nFROM t' })
 
-    const bar = container.querySelector('[data-sql-editor-bar]')
-    expect(bar?.getAttribute('role')).toBe('toolbar')
-    const labels = [...(bar?.querySelectorAll('button') ?? [])].map(node => node.getAttribute('aria-label'))
-    expect(labels).toEqual(['执行', '取消', '复制全部', '清空'])
-    // Line count replaces the old always-visible shortcut paragraph.
-    expect(container.querySelector('[data-sql-editor-meta]')?.textContent).toBe('2 行')
-    expect(container.querySelector('[aria-label="快捷键说明"]')?.getAttribute('title')).toContain('Ctrl/Cmd+Enter')
+    expect(container.querySelector('[data-sql-editor-bar]')).toBeNull()
+    expect(container.querySelector('[data-sql-editor]')).not.toBeNull()
+    expect(container.querySelectorAll('button')).toHaveLength(0)
   })
 
-  it('copies the whole statement and clears the console', () => {
-    const writeText = vi.fn(async () => undefined)
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    const onChange = vi.fn()
-    render({ sql: 'SELECT 42', onChange })
+  it('binds run-all and rerun to their own chords', () => {
+    const onRun = vi.fn()
+    const onRunAll = vi.fn()
+    const onRerun = vi.fn()
+    const onExplain = vi.fn()
+    render({ onRun, onRunAll, onRerun, onExplain })
 
-    const copy = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '复制全部')
     act(() => {
-      copy?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pressKey(container, { key: 'Enter', ctrlKey: true, shiftKey: true })
     })
-    expect(writeText).toHaveBeenCalledWith('SELECT 42')
+    expect(onRunAll).toHaveBeenCalledTimes(1)
+    expect(onRun).not.toHaveBeenCalled()
 
-    const clear = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '清空')
     act(() => {
-      clear?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pressKey(container, { key: 'Enter', ctrlKey: true, altKey: true })
     })
-    expect(onChange).toHaveBeenCalledWith('')
+    expect(onRerun).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      pressKey(container, { key: 'e', ctrlKey: true, shiftKey: true })
+    })
+    expect(onExplain).toHaveBeenCalledTimes(1)
   })
 
-  it('disables the run button and marks the editor read-only without a connection', () => {
+  it('binds format and star-expansion to their chords', () => {
+    const onFormat = vi.fn()
+    const onExpandStar = vi.fn()
+    render({ onFormat, onExpandStar, sql: 'SELECT * FROM t' })
+
+    act(() => {
+      pressKey(container, { key: 'l', ctrlKey: true, altKey: true })
+    })
+    expect(onFormat).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      pressKey(container, { key: 's', ctrlKey: true, altKey: true })
+    })
+    expect(onExpandStar).toHaveBeenCalledTimes(1)
+  })
+
+  it('binds Ctrl+Shift+H to the history drawer', () => {
+    const onHistory = vi.fn()
+    render({ onHistory })
+
+    act(() => {
+      pressKey(container, { key: 'h', ctrlKey: true, shiftKey: true })
+    })
+    expect(onHistory).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes the current selection range to the panel', () => {
+    render({ sql: 'SELECT 1' })
+    act(() => {
+      handle?.replaceRange(0, 0, 'X')
+    })
+    const range = handle?.getSelectionRange()
+    expect(range?.from).toBe(1)
+    expect(range?.to).toBe(1)
+  })
+
+  it('marks the editor read-only without a connection and flags a running query', () => {
     render({ disabled: true, sql: 'SELECT 1' })
-
-    const run = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '执行')
-    expect((run as HTMLButtonElement).disabled).toBe(true)
     expect(container.querySelector('[data-sql-editor]')?.getAttribute('aria-readonly')).toBe('true')
-  })
 
-  it('shows the cancel button only while running', () => {
-    render({ running: true })
-
-    const cancel = [...container.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '取消')
-    expect((cancel as HTMLButtonElement).disabled).toBe(false)
+    act(() => {
+      root.render(
+        <SqlEditor
+          sql="SELECT 1"
+          running
+          disabled={false}
+          onChange={vi.fn()}
+          onRun={vi.fn()}
+          onRunAll={vi.fn()}
+          onRerun={vi.fn()}
+          onExplain={vi.fn()}
+          onHistory={vi.fn()}
+          onFormat={vi.fn()}
+          onExpandStar={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      )
+    })
+    expect(container.querySelector('[data-sql-running]')).not.toBeNull()
   })
 
   it('accepts a schema for completion without remounting the view', () => {
@@ -199,6 +280,12 @@ describe('sql editor (CodeMirror)', () => {
           schema={schema}
           onChange={vi.fn()}
           onRun={vi.fn()}
+          onRunAll={vi.fn()}
+          onRerun={vi.fn()}
+          onExplain={vi.fn()}
+          onHistory={vi.fn()}
+          onFormat={vi.fn()}
+          onExpandStar={vi.fn()}
           onCancel={vi.fn()}
         />,
       )
@@ -207,5 +294,125 @@ describe('sql editor (CodeMirror)', () => {
     // Same view instance: the dialect is swapped through a compartment.
     expect(container.querySelector('.cm-editor')).toBe(before)
     expect(readSql(container)).toBe('SELECT 1')
+  })
+
+  it('honours custom shortcut settings on mount', () => {
+    const onRun = vi.fn()
+    render({ onRun, shortcuts: { ...DEFAULT_SHORTCUTS, run: 'Alt+R' } })
+
+    act(() => {
+      pressKey(container, { key: 'r', altKey: true })
+    })
+    expect(onRun).toHaveBeenCalledTimes(1)
+  })
+
+  it('reconfigures the keymap in place when the settings change', () => {
+    const onRun = vi.fn()
+    const onCancel = vi.fn()
+    render({ onRun, onCancel })
+    const editor = container.querySelector('.cm-editor')
+
+    act(() => {
+      pressKey(container, { key: 'Enter', ctrlKey: true })
+    })
+    expect(onRun).toHaveBeenCalledTimes(1)
+
+    render({ onRun, onCancel, shortcuts: { ...DEFAULT_SHORTCUTS, run: 'Alt+R', cancel: 'Ctrl+.' } })
+    // Same CodeMirror view: only the chord compartment was reconfigured.
+    expect(container.querySelector('.cm-editor')).toBe(editor)
+
+    act(() => {
+      pressKey(container, { key: 'Enter', ctrlKey: true })
+    })
+    expect(onRun).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      pressKey(container, { key: 'r', altKey: true })
+    })
+    expect(onRun).toHaveBeenCalledTimes(2)
+
+    act(() => {
+      pressKey(container, { key: '.', ctrlKey: true })
+    })
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the Alt crosshair while Alt is held, the column-selection affordance', () => {
+    render()
+    const content = contentDom(container)
+
+    act(() => {
+      content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Alt', keyCode: 18, altKey: true, bubbles: true }))
+    })
+    expect(content.style.cursor).toBe('crosshair')
+
+    act(() => {
+      content.dispatchEvent(new KeyboardEvent('keyup', { key: 'Alt', keyCode: 18, bubbles: true }))
+    })
+    expect(content.style.cursor).toBe('')
+  })
+
+  it('keeps the pre-settings chords working when no settings are passed', () => {
+    const onRun = vi.fn()
+    render({ onRun })
+
+    act(() => {
+      pressKey(container, { key: 'Enter', metaKey: true })
+    })
+
+    expect(onRun).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens completion from a custom chord and accepts it with the configured key', async () => {
+    const shortcuts = { ...DEFAULT_SHORTCUTS, complete: 'Alt+C', acceptCompletion: 'Alt+A' }
+    render({ sql: 'SEL', shortcuts })
+
+    act(() => {
+      pressKey(container, { key: 'c', altKey: true })
+    })
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 300))
+    })
+    expect(currentCompletions(editorView(container).state).length).toBeGreaterThan(0)
+    // The library refuses to accept a completion within `interactionDelay`
+    // (75ms) of the popup opening; let that window pass deterministically.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 120))
+    })
+
+    act(() => {
+      pressKey(container, { key: 'a', altKey: true })
+    })
+
+    expect(readSql(container)).toMatch(/^SELECT/i)
+  })
+
+  it('accepts completion with Enter, and keeps Enter as a newline when no popup is open', async () => {
+    render({ sql: 'SEL' })
+
+    act(() => {
+      pressKey(container, { key: ' ', ctrlKey: true })
+    })
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 300))
+    })
+    expect(currentCompletions(editorView(container).state).length).toBeGreaterThan(0)
+    // Let the library's 75ms interaction delay pass before accepting.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 120))
+    })
+
+    act(() => {
+      pressKey(container, { key: 'Enter' })
+    })
+    expect(readSql(container)).toMatch(/^SELECT/i)
+
+    // With no popup open the accept handler returns false, so Enter reaches the
+    // editor's default newline binding instead of being swallowed.
+    const lines = readSql(container).split('\n').length
+    act(() => {
+      pressKey(container, { key: 'Enter' })
+    })
+    expect(readSql(container).split('\n').length).toBe(lines + 1)
   })
 })

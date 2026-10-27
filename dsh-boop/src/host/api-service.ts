@@ -21,6 +21,8 @@ import { DshAdapter } from './transport/dsh-adapter.ts'
 import { PROXY_SOURCE_KIND, type CommandEnvelope } from './transport/command-envelope.ts'
 import { Dispatcher, type DispatchOutcome, type ReconcileReport } from './dispatch/dispatcher.ts'
 import { GATE_LEDGER, type GateEntry, type GateState, type WriteModeStatus } from './gates.ts'
+import { applyInitialization, collectInitHeads } from './memory/host-init.ts'
+import { pocRequested } from './poc-switch.ts'
 
 /* ── PoC-only raw ledger reads for reconciliation (no writes here) ────── */
 
@@ -224,7 +226,9 @@ export interface RecordFacts {
 }
 
 export function configureApi(config?: BoopApiConfig): BoopApiConfig {
-  if (config) apiConfig = { ...apiConfig, ...config }
+  if (config) {
+    apiConfig = { ...apiConfig, ...config, pocEnabled: pocRequested(config.pocEnabled) }
+  }
   return apiConfig
 }
 
@@ -377,6 +381,15 @@ export class BoopApi extends TypertRemoteService {
    */
   async initPlan(mode: string): Promise<InitPlanFacts> {
     return await initPlanFacts(this.ctx, mode)
+  }
+
+  /**
+   * Apply one initialization mode. Writes only when write mode and the writer
+   * lease are both held; otherwise the result matches the read-only plan.
+   */
+  async initApply(mode: string): Promise<InitPlanFacts> {
+    const heads = await collectInitHeads(this.ctx)
+    return await applyInitialization(this.ctx, mode, heads)
   }
 
   /**
@@ -1037,12 +1050,16 @@ function summarizeEvent(event: Record<string, unknown>): DurableEventFacts {
   }
 }
 
-for (const method of [
+export const PRODUCTION_API_METHODS = [
   'bootstrap',
   'mainSession',
   'sources',
   'initPlan',
+  'initApply',
   'observeSources',
+] as const
+
+export const POC_API_METHODS = [
   'pocSeedInbox',
   'pocInbox',
   'pocGateDecision',
@@ -1053,6 +1070,19 @@ for (const method of [
   'pocReconcile',
   'pocSessionRecord',
   'pocClaimFeed',
-]) {
+] as const
+
+const registeredPocApiMethods = new Set<string>()
+
+/** Publish the PoC remote methods. A normal install never calls this. */
+export function registerPocApiMethods(): void {
+  for (const method of POC_API_METHODS) {
+    if (registeredPocApiMethods.has(method)) continue
+    remote(method)(BoopApi.prototype)
+    registeredPocApiMethods.add(method)
+  }
+}
+
+for (const method of PRODUCTION_API_METHODS) {
   remote(method)(BoopApi.prototype)
 }

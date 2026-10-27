@@ -15,7 +15,9 @@ import {
   menuPosition,
   openDataSql,
   qualifiedName,
+  columnListSql,
   schemaKey,
+  selectFromTableSql,
   tableKey,
 } from '../schema-tree.ts'
 import { classes as styles } from '../styles.ts'
@@ -40,6 +42,12 @@ export interface SchemaTreeProps {
   readonly onShowDdl: (target: DdlTarget) => void
   readonly onCopy: (text: string) => void
   readonly onRefresh: () => void
+  /** Insert generated SQL at the editor caret (`生成 SELECT` / `添加全部列`). */
+  readonly onInsertSql?: (sql: string) => void
+  /** Open the table overview dialog (row count, null rate, sample, DDL). */
+  readonly onOverview?: (table: SchemaTable) => void
+  /** Pick a second table for a JOIN skeleton (SQL-212). */
+  readonly onJoin?: (table: SchemaTable) => void
   /**
    * Keep the tree's own refresh button.
    *
@@ -55,6 +63,30 @@ interface OpenMenu {
   readonly title: string
   readonly items: readonly MenuItem[]
 }
+
+/**
+ * Hierarchy tints (需求2): inline, so the depth is legible without editing the
+ * stylesheet (the grid work owns it) and without a single literal colour — every
+ * value is a semantic `--dsw-alias-*` token, which is what keeps light/dark
+ * switching honest (AC-7).
+ *
+ * Read top-down: data source (primary, weightier) → schema row (secondary on a
+ * raised strip) → Tables/Views folder (secondary) → object (primary) → column
+ * name (secondary) → column type (tertiary). Deliberately three steps and no
+ * more: at 300px wide, more contrast would look like decoration, not structure.
+ */
+const tint = {
+  root: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600 },
+  schemaRow: {
+    color: 'var(--dsw-alias-label-secondary)',
+    backgroundColor: 'var(--dsw-alias-bg-layer-2)',
+  },
+  schemaName: { color: 'var(--dsw-alias-label-secondary)' },
+  folder: { color: 'var(--dsw-alias-label-secondary)' },
+  objectName: { color: 'var(--dsw-alias-label-primary)' },
+  columnName: { color: 'var(--dsw-alias-label-secondary)' },
+  columnType: { color: 'var(--dsw-alias-label-tertiary)' },
+} satisfies Record<string, React.CSSProperties>
 
 
 /**
@@ -80,6 +112,9 @@ export function SchemaTree({
   onShowDdl,
   onCopy,
   onRefresh,
+  onInsertSql,
+  onOverview,
+  onJoin,
   showRefresh = true,
 }: SchemaTreeProps): ReactElement {
   const [filter, setFilter] = React.useState('')
@@ -163,6 +198,10 @@ export function SchemaTree({
   const objectItems = (table: SchemaTable): readonly MenuItem[] => [
     { id: 'data', label: '打开数据', hint: 'F4', run: () => { onOpenData(openDataSql(table)) } },
     { id: 'insert', label: '插入名称', hint: 'Enter', run: () => { onInsert(table.name) } },
+    { id: 'generate', label: '生成 SELECT', run: () => { onInsertSql?.(selectFromTableSql(table)) } },
+    { id: 'columns', label: '添加全部列', run: () => { onInsertSql?.(columnListSql(table)) } },
+    { id: 'overview', label: '表概览', run: () => { onOverview?.(table) } },
+    { id: 'join', label: 'JOIN 另一张表…', run: () => { onJoin?.(table) } },
     { id: 'copy', label: '复制引用', run: () => { onCopy(qualifiedName(table)) } },
     { id: 'ddl', label: '查看 DDL', hint: 'Ctrl+B', run: () => { onShowDdl({ schema: table.schema ?? '', table: table.name, ...(table.kind === undefined ? {} : { kind: table.kind }) }) } },
     { id: 'refresh', label: '刷新表结构', run: onRefresh },
@@ -193,6 +232,7 @@ export function SchemaTree({
           <button
             type="button"
             className={styles.schemaName}
+            style={tint.objectName}
             onClick={() => {
               onInsert(table.name)
             }}
@@ -200,6 +240,19 @@ export function SchemaTree({
               onOpenData(openDataSql(table))
             }}
             title={`插入 ${table.name}（右键更多操作）`}
+            onKeyDown={event => {
+              // The menu's hint column promised F4 / Ctrl+B; make them real
+              // (Enter already activates the button natively).
+              if (event.key === 'F4') {
+                event.preventDefault()
+                onOpenData(openDataSql(table))
+                return
+              }
+              if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+                event.preventDefault()
+                onShowDdl({ schema: table.schema ?? '', table: table.name, ...(table.kind === undefined ? {} : { kind: table.kind }) })
+              }
+            }}
           >
             {table.name}
             <span className={styles.schemaCount}>{table.columns.length}</span>
@@ -226,10 +279,10 @@ export function SchemaTree({
                       { id: 'copy', label: '复制列名', run: () => { onCopy(column.name) } },
                     ])
                   }}
-                  title={`插入 ${column.name}（右键复制）`}
+                  title={`插入 ${column.name}（${column.type}；右键复制）`}
                 >
-                  <span className={styles.schemaColumnName}>{column.name}</span>
-                  <span className={styles.schemaColumnType}>{column.type}</span>
+                  <span className={styles.schemaColumnName} style={tint.columnName}>{column.name}</span>
+                  <span className={styles.schemaColumnType} style={tint.columnType}>{column.type}</span>
                 </button>
               </li>
             ))}
@@ -256,7 +309,7 @@ export function SchemaTree({
           >
             {expanded ? '▾' : '▸'}
           </button>
-          <span className={styles.schemaFolder}>
+          <span className={styles.schemaFolder} style={tint.folder}>
             {kind === 'view' ? '视图' : '表'}
             <span className={styles.schemaCount}>{list.length}</span>
           </span>
@@ -274,6 +327,7 @@ export function SchemaTree({
       <li key={key} className={styles.schemaItem}>
         <div
           className={styles.schemaRow}
+          style={tint.schemaRow}
           data-sql-schema={group.schema}
           onContextMenu={event => {
             openMenu(event, group.schema, () => [
@@ -293,7 +347,7 @@ export function SchemaTree({
           >
             {expanded ? '▾' : '▸'}
           </button>
-          <span className={styles.schemaDatabase}>{group.schema}</span>
+          <span className={styles.schemaDatabase} style={tint.schemaName}>{group.schema}</span>
           <span className={styles.schemaCount}>{total}</span>
         </div>
         {expanded ? (
@@ -323,6 +377,12 @@ export function SchemaTree({
           onChange={event => {
             setFilter(event.target.value)
           }}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setFilter('')
+            }
+          }}
         />
         {showRefresh ? (
           <button type="button" className={styles.button} onClick={onRefresh} disabled={loading} aria-label="刷新表结构">
@@ -332,7 +392,7 @@ export function SchemaTree({
       </div>
 
       {connectionName === undefined ? null : (
-        <p className={styles.schemaRoot} data-sql-schema-root="">
+        <p className={styles.schemaRoot} style={tint.root} data-sql-schema-root="">
           数据源 · {connectionName}
         </p>
       )}

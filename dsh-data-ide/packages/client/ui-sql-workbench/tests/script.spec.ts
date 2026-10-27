@@ -141,6 +141,27 @@ describe('executeScript', () => {
 
     expect(seen.some(sql => sql.includes('LIMIT 101'))).toBe(true)
   })
+
+  it('forwards client-owned statement ids so a script can be cancelled (SQL-107)', async () => {
+    const ids: string[] = []
+    const executor: QueryExecutor = {
+      query: vi.fn(async (_spec, _sql, statementId) => {
+        ids.push(statementId)
+        return { fields: [{ name: 'v', typeName: 'INT' }], rows: [[1]] }
+      }),
+      cancel: vi.fn(async () => undefined),
+    }
+    const deps: ExecutionDeps = {
+      specs: async () => document,
+      executor,
+      registry: { next: () => 'st', forget: () => {}, register: () => {}, get: () => undefined } as unknown as ExecutionDeps['registry'],
+    }
+
+    await executeScript(deps, { connId: 'conn-1', sql: 'SELECT 1; SELECT 2', statementIds: ['a', 'b'] })
+
+    expect(ids).toContain('a')
+    expect(ids).toContain('b')
+  })
 })
 
 describe('splitStatements: end-of-input comment', () => {

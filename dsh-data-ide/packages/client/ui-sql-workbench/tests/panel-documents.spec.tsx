@@ -8,6 +8,7 @@ import { SqlWorkbenchPanel } from '../src/client/components/SqlWorkbenchPanel.ts
 import type { WorkbenchApi } from '../src/client/api.ts'
 import { createDataSource } from '../src/datasource/model.ts'
 import { readSql, setSql } from './support/editor.ts'
+import { findLabeled } from './support/labeled.ts'
 
 const connA = 'f02da6e0-4a1b-4c2d-9f3e-77c1b2a9d0e5'
 const connB = '9c1b8b7a-1111-4222-8333-944455556666'
@@ -101,6 +102,10 @@ describe('panel: server-side filters', () => {
     act(() => {
       container.querySelector('[aria-label="筛选 order_id"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    // The funnel opens on the value list; this test drives the operator editor.
+    act(() => {
+      container.querySelector('[aria-label="筛选模式 条件"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
     const input = container.querySelector('[aria-label="筛选值 order_id"]') as HTMLInputElement
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -176,6 +181,10 @@ describe('panel: removing one column filter', () => {
     act(() => {
       container.querySelector('[aria-label="筛选 order_id"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    // The funnel opens on the value list; this test drives the operator editor.
+    act(() => {
+      container.querySelector('[aria-label="筛选模式 条件"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
     const input = container.querySelector('[aria-label="筛选值 order_id"]') as HTMLInputElement
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -223,7 +232,7 @@ describe('panel: clipboard failures', () => {
     Object.defineProperty(document, 'execCommand', { value: vi.fn(() => false), configurable: true })
 
     act(() => {
-      container.querySelector('[aria-label="复制全部"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      findLabeled('复制全部')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
       await Promise.resolve()

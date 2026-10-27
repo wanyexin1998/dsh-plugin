@@ -38,8 +38,18 @@ function click(element: Element | undefined | null): void {
   })
 }
 
-const byText = (selector: string, text: string): HTMLElement | undefined =>
-  [...container.querySelectorAll(selector)].find(node => node.textContent?.includes(text) === true) as HTMLElement | undefined
+const byText = (selector: string, text: string): HTMLElement | undefined => {
+  const match = (root: ParentNode): HTMLElement | undefined =>
+    [...root.querySelectorAll(selector)].find(node => node.textContent?.includes(text) === true) as HTMLElement | undefined
+  const direct = match(document)
+  if (direct !== undefined) return direct
+  const opener = document.querySelector('[aria-label="连接操作"]')
+  if (opener === null || opener.getAttribute('aria-expanded') === 'true') return undefined
+  act(() => {
+    opener.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  return match(document)
+}
 
 function apiDouble(overrides: Partial<WorkbenchApi> = {}) {
   return {

@@ -29,11 +29,13 @@ Get-FileHash .\dist\dsh-boop-0.1.0.tgz -Algorithm SHA256
 `checks.requiredComplete` / `checks.forbiddenAbsent` 均为 `true`。**只安装经过校验的 tarball。**
 插件代码在 DSH Host 进程内运行（与普通插件同权限），不要安装来源不明的副本。
 
+安装包的普通接口不注册 PoC 方法。只有隔离测试同时写了 `pocEnabled: true` 并且进程设了 `BOOP_ALLOW_POC=1` 时，这些方法才会挂上。安装步骤两样都不做。
+
 ## 2. 前置条件
 
 | 项 | 要求 |
 |---|---|
-| DSH | `0.2.1-rc.2`（插件 `engines.dsh` 精确声明；不兼容宿主会拒绝加载） |
+| DSH | `0.2.1-rc.2` 或 `0.2.1-rc.3`（`engines.dsh` 只声明这两个已核对版本；不兼容宿主会拒绝加载，不使用 `compatibility.json` 豁免） |
 | Node | `^22.19.0 || >=24.0.0`（由 DSH 自带运行时提供） |
 | 平台 | 仅 Windows 已验证；macOS/Linux 为 `NOT_RUN`（见 `support-matrix.md`） |
 | 模型服务 | 用户自有的 OpenAI 兼容服务，配置在 DSH 模型设置里；BOOP 不内置密钥 |

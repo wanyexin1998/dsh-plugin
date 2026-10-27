@@ -28,6 +28,7 @@ vi.mock('../src/client/agent-stream.ts', () => ({
 
 import type { WorkbenchApi } from '../src/client/api.ts'
 import { SqlWorkbenchPanel } from '../src/client/components/SqlWorkbenchPanel.tsx'
+import { findLabeled } from './support/labeled.ts'
 import { createDataSource } from '../src/datasource/model.ts'
 
 const connId = 'f02da6e0-4a1b-4c2d-9f3e-77c1b2a9d0e5'
@@ -143,7 +144,7 @@ describe('panel agent deliveries', () => {
     const history = container.querySelector('[data-sql-agent-history]')
     expect(history?.textContent).toContain('AI 历史 1')
     click(history)
-    const archived = container.querySelector('[data-sql-agent-history-menu] [role="menuitem"]')
+    const archived = document.querySelector('[data-sql-agent-history-menu] [role="menuitem"]')
     const restoredTitle = archived?.textContent
     click(archived)
 
@@ -203,10 +204,12 @@ describe('panel agent deliveries', () => {
 
     click(container.querySelector('th button'))
     await flush()
-    click(container.querySelector('[aria-label="刷新结果"]'))
+    click(findLabeled('刷新结果') ?? null)
     await flush()
 
     click(container.querySelector('[aria-label="筛选 v"]'))
+    // The funnel opens on the local value list; this test drives the operator editor.
+    click(container.querySelector('[aria-label="筛选模式 条件"]'))
     const input = container.querySelector('[aria-label="筛选值 v"]') as HTMLInputElement
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '7')

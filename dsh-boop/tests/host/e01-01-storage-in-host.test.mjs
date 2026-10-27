@@ -64,6 +64,27 @@ test('E01-01 exactly one ledger file exists under the host DSH_HOME', () => {
   assert.equal(scope.dshHomeFingerprint.length, 32)
 })
 
+test('E01-02 a second Host stays read-only while the first Host is still heartbeating', async () => {
+  const second = await bootWeb({ home, profile: 'boop-ledger', port: await freePort() })
+  try {
+    const cookie2 = await authorize(second.base, second.token)
+    const { body } = await rpc(second.base, cookie2, 'boop/bootstrap')
+    const value = body.result.value
+    const storage = value.storage
+    assert.equal(storage.scope.scopeId, bootstrap.storage.scope.scopeId, 'one data domain per installation')
+    assert.equal(storage.lease.held, false, 'a live heartbeat keeps the first Host as the only writer')
+    assert.equal(
+      storage.lease.fencingToken,
+      bootstrap.storage.lease.fencingToken,
+      'the second Host must not mint a new fencing token',
+    )
+    assert.equal(storage.lease.holder, bootstrap.storage.lease.holder)
+    assert.equal(value.scope.writeModeEnabled, false, 'the read-only Host cannot enter write mode')
+  } finally {
+    await second.stop()
+  }
+})
+
 test('E01-02 the scope id is stable across a restart of the same installation', async () => {
   // Restart for real: the previous Host must be down before the next one boots.
   // (On rc.2.0 booting the second Host while the first was alive happened to be
@@ -72,10 +93,8 @@ test('E01-02 the scope id is stable across a restart of the same installation', 
   // "expired lease may be taken over and the takeover mints a greater token"
   // (AT-02), so a clean restart is the honest way to test scope identity.)
   await host.stop()
-  // Release-on-shutdown is best-effort: a process kill can skip the disposal
-  // effect that clears the lease, and BOOP has no heartbeat yet (known G08 gap).
-  // The durable bound is the lease TTL, so wait it out to make the restart
-  // takeover deterministic instead of depending on shutdown timing.
+  // close() releases the lease on a graceful stop. If the process dies before
+  // that effect runs, the heartbeat stops with it and the 15s TTL expires.
   await new Promise((resolve) => setTimeout(resolve, 16_000))
   const restarted = await bootWeb({ home, profile: 'boop-ledger', port: await freePort() })
   try {
@@ -102,18 +121,15 @@ test('E01-02 a second live Host shares the ledger but never enables write manage
     const value = body.result.value
     const storage = value.storage
     assert.equal(storage.scope.scopeId, bootstrap.storage.scope.scopeId, 'one data domain per installation')
-    // rc.2.1's boot is slower than the 15s lease TTL, so a concurrently booted
-    // Host can legitimately either see a live lease (read-only) or take over an
-    // EXPIRED one (AT-02 mints a greater token). The host composition has no
-    // heartbeat yet — a known G08 gap for E07-01. What is deterministic is the
-    // monotonic fence: the observed token never moves backwards, and write
-    // management stays off in every process.
+    // The first Host has already stopped in the previous test. This boot is a
+    // sole owner of an expired or released lease, so the token must not move
+    // backwards. The concurrent read-only case is the heartbeat test above.
     const lease = storage.lease
     assert.ok(
       lease.fencingToken >= observedFencingToken,
       `fencing token must not go backwards (${lease.fencingToken} < ${observedFencingToken})`,
     )
-    assert.equal(value.scope.writeModeEnabled, false, 'write mode stays off in both processes')
+    assert.equal(value.scope.writeModeEnabled, true, 'the sole Host holds the lease, so write mode follows the open gate ledger')
   } finally {
     await second.stop()
   }

@@ -25,6 +25,12 @@ export interface ScriptTab {
   readonly filters?: readonly FilterSpec[]
   readonly pageSize?: number
   readonly total?: number | null
+  /** `direct` shows the "authored as written" bar instead of the pager. */
+  readonly mode?: 'direct' | 'paged'
+  /** Tab override: the main table name(s) parsed from the statement (SQL-314). */
+  readonly title?: string
+  /** Pinned tabs survive the next script run (SQL-314). */
+  readonly pinned?: boolean
 }
 
 /** One line of the console-level output tab. */
@@ -62,6 +68,20 @@ export interface ScriptResultsProps {
   /** Providing these turns on the server-side filter funnel for each tab. */
   readonly onFilter?: (index: number, column: string, filter: FilterSpec | null) => void
   readonly onClearFilters?: (index: number) => void
+  /** Switch this tab to the paged mode and count its rows (direct results only). */
+  readonly onCount?: (index: number) => void
+  /** Next steps shown on a failed tab (SQL-310); absent on tabs without a failure. */
+  readonly errorActions?: (index: number) => {
+    readonly line?: number | null
+    readonly onLocate?: (line: number) => void
+    readonly onExplain?: () => void
+  }
+  /** Rename a result tab (double-click); absent disables renaming. */
+  readonly onRenameTab?: (index: number, title: string) => void
+  /** Toggle pin (right-click a tab); pinned tabs survive the next run. */
+  readonly onPinTab?: (index: number) => void
+  /** Send the failed statement to the chat composer (SQL-405). */
+  readonly onSendChat?: (index: number) => void
 }
 
 /** Short label for the tab: "语句 3 · 500 行 · 87ms", or the failure. */
@@ -79,6 +99,7 @@ function describe(tab: ScriptTab): string {
  * get a ` (2)` suffix — a title is the only handle the user has on a result.
  */
 function titleOf(tab: ScriptTab, index: number, running: boolean): string {
+  if (tab.title !== undefined) return tab.title
   if (tab.error !== undefined) return '错误'
   if (tab.result === null) return running ? '执行中' : '—'
   const column = tab.result.columns[0]
@@ -116,15 +137,46 @@ export function ScriptResults({
   onRefresh,
   onFilter,
   onClearFilters,
+  onCount,
+  errorActions,
+  onRenameTab,
+  onPinTab,
+  onSendChat,
 }: ScriptResultsProps): ReactElement {
   const current = tabs[active] ?? tabs[0]
   /** The index callbacks must name; mirrors the `?? tabs[0]` fallback above. */
   const activeIndex = tabs[active] === undefined ? 0 : active
   const titles = tabTitles(tabs, running)
   const lines = outputLines(tabs)
+  // SQL-310: the failure card gets the same next steps the console offers.
+  const steps = current?.error === undefined ? undefined : errorActions?.(activeIndex)
+  const errorProps = steps === undefined
+    ? {}
+    : {
+        ...(steps.line === undefined || steps.line === null || steps.onLocate === undefined
+          ? {}
+          : { errorLine: steps.line, onLocateLine: steps.onLocate }),
+        ...(steps.onExplain === undefined ? {} : { onExplainError: steps.onExplain }),
+      }
   // Local, so callers keep using result indices; 输出 is a sibling of the result
   // tabs rather than +1 on every index.
   const [showOutput, setShowOutput] = React.useState(false)
+  const [editing, setEditing] = React.useState<number | null>(null)
+  const [draft, setDraft] = React.useState('')
+
+  const beginRename = (index: number): void => {
+    if (onRenameTab === undefined) return
+    setEditing(index)
+    setDraft(titles[index] as string)
+  }
+
+  const commitRename = (): void => {
+    /* v8 ignore next -- blur can race the unmount after Enter */
+    if (editing === null) return
+    const name = draft.trim()
+    if (name !== '') onRenameTab?.(editing, name)
+    setEditing(null)
+  }
 
   return (
     <div className={styles.scriptResults} data-sql-script="">
@@ -144,7 +196,27 @@ export function ScriptResults({
             <span className={styles.scriptTabMeta}> · {lines.length} 个错误</span>
           )}
         </button>
-        {tabs.map((tab, index) => (
+        {tabs.map((tab, index) => editing === index ? (
+          <input
+            key={`rename:${String(index)}`}
+            autoFocus
+            aria-label="重命名结果标签"
+            className={styles.scriptTabInput}
+            value={draft}
+            onChange={event => {
+              setDraft(event.target.value)
+            }}
+            onBlur={commitRename}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitRename()
+                return
+              }
+              if (event.key === 'Escape') setEditing(null)
+            }}
+          />
+        ) : (
           <button
             key={`${index}:${tab.sql.slice(0, 16)}`}
             type="button"
@@ -155,9 +227,18 @@ export function ScriptResults({
               setShowOutput(false)
               onActive(index)
             }}
-            title={tab.sql}
+            onDoubleClick={() => {
+              beginRename(index)
+            }}
+            onContextMenu={event => {
+              if (onPinTab === undefined) return
+              event.preventDefault()
+              onPinTab(index)
+            }}
+            title={`${tab.sql}${onPinTab === undefined ? '' : '（右键固定/取消固定）'}`}
           >
             {titles[index]}
+            {tab.pinned === true ? <span data-sql-tab-pinned=""> 📌</span> : null}
             <span className={styles.scriptTabMeta}>{describe(tab)}</span>
           </button>
         ))}
@@ -210,19 +291,42 @@ export function ScriptResults({
                   },
                 })}
             filterEnabled={onFilter !== undefined}
+            {...errorProps}
+            {...(current.error === undefined || onSendChat === undefined
+              ? {}
+              : { onSendChat: () => onSendChat(activeIndex) })}
           />
-          <Pager
-            result={current.result}
-            total={current.total ?? current.result?.total ?? null}
-            pageSize={current.pageSize ?? pageSize}
-            running={running}
-            onPage={offset => {
-              onPage(activeIndex, offset)
-            }}
-            onPageSize={size => {
-              onPageSize(activeIndex, size)
-            }}
-          />
+          {current.mode === 'direct' ? (
+            <div className={styles.directBar} data-sql-direct-bar="">
+              <span className={styles.pagerRange}>
+                前 {current.result?.rows.length ?? 0} 行 · 未统计总数
+              </span>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => {
+                  onCount?.(activeIndex)
+                }}
+                aria-label="统计总数"
+                title="切换为分页模式重新执行，并统计总行数"
+              >
+                统计总数
+              </button>
+            </div>
+          ) : (
+            <Pager
+              result={current.result}
+              total={current.total ?? current.result?.total ?? null}
+              pageSize={current.pageSize ?? pageSize}
+              running={running}
+              onPage={offset => {
+                onPage(activeIndex, offset)
+              }}
+              onPageSize={size => {
+                onPageSize(activeIndex, size)
+              }}
+            />
+          )}
         </>
       )}
     </div>

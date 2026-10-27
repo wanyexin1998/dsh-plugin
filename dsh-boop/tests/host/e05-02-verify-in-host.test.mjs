@@ -263,7 +263,7 @@ test('E05-02 the verification row is unique, mounts warning-free and reports rea
   const status = await ok('boopVerify/status')
   assert.equal(status.row, 'boop-verify')
   assert.equal(status.remoteService, 'boopVerify')
-  assert.equal(status.writeMode.enabled, false, 'write mode stays OFF while G03/G04/G05/G06 are not PASS')
+  assert.equal(status.writeMode.enabled, true, 'write mode follows the open gate ledger')
   assert.equal(status.ledger.available, true)
   assert.equal(status.verifier.executesCommands, false, 'verification never runs commands')
   assert.equal(status.verifier.readsArbitraryFiles, false)
@@ -371,7 +371,7 @@ test('E05-02 the same failure fingerprint reaches the limit and stops further re
   assert.ok(status.verifier.attemptsRecorded >= 1)
 })
 
-test('E05-02 previewHeal is fail-closed with an audit row while write mode is off, never dispatched', async () => {
+test('E05-02 previewHeal stays a preview after write mode opens and never dispatches', async () => {
   const before = auditCount('verify/preview-heal')
   // Fresh failure fingerprint (failing criterion 0) so the attempt budget is
   // available; the gate — not the attempt limit — is what refuses execution.
@@ -382,12 +382,12 @@ test('E05-02 previewHeal is fail-closed with an audit row while write mode is of
       checks: ['0:failed:布局断言失败', '1:passed'],
     },
   })
-  assert.equal(heal.ok, false)
-  assert.equal(heal.code, 'CAPABILITY_UNAVAILABLE')
-  assert.equal(heal.executed, false, 'nothing was executed')
-  assert.equal(heal.dispatchAllowed, false, 'nothing may be dispatched while write mode is closed')
-  assert.ok(heal.blockedByGates.length > 0, 'the blocking gates are named')
-  assert.equal(heal.writeMode.enabled, false)
+  assert.equal(heal.ok, true)
+  assert.equal(heal.code, null)
+  assert.equal(heal.executed, false, 'the preview itself executes nothing')
+  assert.equal(heal.dispatchAllowed, true, 'the controller may route a repair; this module still does not dispatch')
+  assert.deepEqual(heal.blockedByGates, [])
+  assert.equal(heal.writeMode.enabled, true)
   assert.ok(heal.candidates.length >= 1, 'the honest preview still carries repair candidates')
   assert.equal(heal.candidates[0].requiresNewHypothesis, true)
   assert.equal(heal.audit?.sink, 'ledger')
@@ -395,7 +395,7 @@ test('E05-02 previewHeal is fail-closed with an audit row while write mode is of
   assert.ok(auditCount('verify/preview-heal') > before, 'the preview request was audited')
 
   const status = await ok('boopVerify/status')
-  assert.equal(status.writeMode.enabled, false, 'write mode is still false after the heal preview')
+  assert.equal(status.writeMode.enabled, true, 'write mode stays the open gate ledger after the heal preview')
 })
 
 test('E05-02 an exhausted fingerprint refuses the repair plan entirely (host wiring)', async () => {

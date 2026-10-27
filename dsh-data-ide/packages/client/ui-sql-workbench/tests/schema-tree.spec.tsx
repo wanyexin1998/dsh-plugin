@@ -2,11 +2,12 @@
 import * as React from 'react'
 import { act } from 'react-dom/test-utils'
 import { createRoot } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SchemaTree } from '../src/client/components/SchemaTree.tsx'
 import type { SchemaTable } from '../src/client/completion.ts'
-import type { DdlTarget } from '../src/client/schema-tree.ts'
+import { type DdlTarget, columnListSql, joinSql, overviewSql, searchObjects, selectFromTableSql } from '../src/client/schema-tree.ts'
 
 /**
  * Two schemas, a view, and a table name that repeats across namespaces.
@@ -67,6 +68,9 @@ type Rendered = {
   readonly copied: string[]
   readonly refreshed: number[]
   readonly ddlRequests: DdlTarget[]
+  readonly generated: string[]
+  readonly overviews: SchemaTable[]
+  readonly joins: SchemaTable[]
   readonly buttons: () => HTMLButtonElement[]
 }
 
@@ -76,12 +80,16 @@ function render(options: {
   note?: string
   loading?: boolean
   connectionName?: string
+  showRefresh?: boolean
 } = {}): Rendered {
   const inserted: string[] = []
   const opened: string[] = []
   const copied: string[] = []
   const refreshed: number[] = []
   const ddlRequests: DdlTarget[] = []
+  const generated: string[] = []
+  const overviews: SchemaTable[] = []
+  const joins: SchemaTable[] = []
   act(() => {
     root.render(
       <SchemaTree
@@ -89,6 +97,16 @@ function render(options: {
         {...(options.note === undefined ? {} : { note: options.note })}
         loading={options.loading ?? false}
         {...(options.connectionName === undefined ? {} : { connectionName: options.connectionName })}
+        {...(options.showRefresh === undefined ? {} : { showRefresh: options.showRefresh })}
+        onInsertSql={sql => {
+          generated.push(sql)
+        }}
+        onOverview={table => {
+          overviews.push(table)
+        }}
+        onJoin={table => {
+          joins.push(table)
+        }}
         onInsert={name => {
           inserted.push(name)
         }}
@@ -115,6 +133,9 @@ function render(options: {
     copied,
     refreshed,
     ddlRequests,
+    generated,
+    overviews,
+    joins,
     buttons: () => [...container.querySelectorAll('button')] as HTMLButtonElement[],
   }
 }
@@ -144,7 +165,6 @@ const typeFilter = (value: string): void => {
 describe('schema tree: hierarchy', () => {
   it('nests 库 → 表/视图 分组 → 对象 → 列 and opens the first tables folder', () => {
     const view = render()
-
     const text = container.textContent ?? ''
     // Both schemas are top-level rows; only the first one is open by default.
     expect(container.querySelector('[data-sql-schema="ads"]')).not.toBeNull()
@@ -188,6 +208,76 @@ describe('schema tree: hierarchy', () => {
     render()
     // dwd is open; ads is closed, so exactly one dwd_order row is rendered.
     expect(container.querySelectorAll('[data-sql-schema-object="dwd_order"]')).toHaveLength(1)
+  })
+})
+
+describe('schema tree: hierarchy tints (需求2)', () => {
+  /**
+   * The `style` prop React rendered onto one element.
+   *
+   * jsdom's `CSSStyleDeclaration` validates colours and therefore rejects
+   * `var(--dsw-…)`, so the semantic token disappears from `element.style` (a
+   * literal `rgb(...)` would survive — which is exactly why the component must
+   * use tokens). React keeps the rendered props on the node under
+   * `__reactProps$…`; reading them is how a jsdom test can assert what reached
+   * the inline style.
+   */
+  const styleOf = (element: Element): Record<string, unknown> => {
+    const key = Object.keys(element).find(name => name.startsWith('__reactProps$'))
+    const props = key === undefined
+      ? undefined
+      : (element as unknown as Record<string, { style?: Record<string, unknown> }>)[key]
+    return props?.style ?? {}
+  }
+
+  it('builds every level from semantic tokens in the rendered HTML', () => {
+    // Static markup keeps the `var()` text jsdom would drop, so this reads the
+    // real inline style instead of a parsed colour.
+    const html = renderToStaticMarkup(
+      <SchemaTree
+        tables={tables}
+        loading={false}
+        connectionName="doris"
+        onInsert={() => undefined}
+        onOpenData={() => undefined}
+        onShowDdl={() => undefined}
+        onCopy={() => undefined}
+        onRefresh={() => undefined}
+      />,
+    )
+
+    // Root: primary + weightier.
+    expect(html).toContain('color:var(--dsw-alias-label-primary);font-weight:600')
+    // Schema row: secondary on a raised strip (layer-2, not a new colour).
+    expect(html).toContain('color:var(--dsw-alias-label-secondary);background-color:var(--dsw-alias-bg-layer-2)')
+    // Folder: secondary.
+    expect(html).toContain('color:var(--dsw-alias-label-secondary)')
+    // No literal colour anywhere in the inline styles (AC-7).
+    expect(html).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i)
+  })
+
+  it('tints the object name primary and the column name/type subdued', () => {
+    const view = render({ connectionName: 'doris' })
+
+    const rootCaption = container.querySelector('[data-sql-schema-root]') as Element
+    expect(styleOf(rootCaption)).toEqual({ color: 'var(--dsw-alias-label-primary)', fontWeight: 600 })
+
+    act(() => {
+      buttonByLabel(view, '展开 dwd_order')?.click()
+    })
+
+    const objectRow = container.querySelector('[data-sql-schema-object="dwd_order"]') as HTMLElement
+    const objectName = objectRow.querySelector('[class*=schemaName]') as Element
+    expect(styleOf(objectName).color).toBe('var(--dsw-alias-label-primary)')
+
+    const columnName = container.querySelector('[class*=schemaColumnName]') as Element
+    const columnType = container.querySelector('[class*=schemaColumnType]') as Element
+    expect(styleOf(columnName).color).toBe('var(--dsw-alias-label-secondary)')
+    expect(styleOf(columnType).color).toBe('var(--dsw-alias-label-tertiary)')
+
+    // Same DOM contract as before: hierarchy, aria and test selectors untouched.
+    expect(container.querySelector('[data-sql-schema-tree]')).not.toBeNull()
+    expect(buttonByLabel(view, '折叠 dwd_order')).toBeDefined()
   })
 })
 
@@ -520,6 +610,17 @@ describe('schema tree: empty and loading states', () => {
     expect(view.refreshed).toHaveLength(1)
   })
 
+  it('hides its own refresh button when the caller already has one', () => {
+    // Callers that draw refresh elsewhere pass `showRefresh={false}` so the
+    // tree toolbar keeps only the filter.
+    const embedded = render({ showRefresh: false })
+    expect(buttonByLabel(embedded, '刷新表结构')).toBeUndefined()
+    expect(container.querySelector('input[aria-label="筛选库、表或字段"]')).not.toBeNull()
+
+    const standalone = render()
+    expect(buttonByLabel(standalone, '刷新表结构')).toBeDefined()
+  })
+
   it('says so when there is nothing at all', () => {
     render({ tables: [] })
     expect(container.textContent).toContain('没有可见的表')
@@ -596,5 +697,136 @@ describe('schema tree: spies are optional', () => {
     expect(vi.isMockFunction(vi.fn())).toBe(true)
     expect(container.querySelector('[data-sql-schema-root]')).toBeNull()
     expect(container.querySelector('[data-sql-schema-note]')).toBeNull()
+  })
+})
+
+describe('schema tree: handfeel shortcuts (SQL-212/217)', () => {
+  const objectNameButton = (): HTMLButtonElement | null =>
+    container.querySelector('[data-sql-schema-object="dwd_order"] button[title^="插入"]') as HTMLButtonElement | null
+
+  const press = (element: Element, init: KeyboardEventInit): void => {
+    act(() => {
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...init }))
+    })
+  }
+
+  it('runs 打开数据 on F4 and 查看 DDL on Ctrl+B', () => {
+    const view = render()
+    const name = objectNameButton()
+    expect(name).not.toBeNull()
+    press(name!, { key: 'F4' })
+    expect(view.opened[0]).toContain('SELECT * FROM')
+
+    press(name!, { key: 'b', ctrlKey: true })
+    expect(view.ddlRequests[0]?.table).toBe('dwd_order')
+
+    // Unrelated keys are left to the browser/editor.
+    press(name!, { key: 'x' })
+    expect(view.opened).toHaveLength(1)
+    expect(view.ddlRequests).toHaveLength(1)
+  })
+
+  it('generates SELECT and column-list SQL from the context menu', () => {
+    const view = render()
+    const row = container.querySelector('[data-sql-schema-object="dwd_order"]')
+    rightClick(row)
+    act(() => {
+      menuItem('generate')?.click()
+    })
+    expect(view.generated[0]).toContain('SELECT')
+
+    rightClick(row)
+    act(() => {
+      menuItem('columns')?.click()
+    })
+    expect(view.generated[1]).toContain('order_id')
+
+    rightClick(row)
+    act(() => {
+      menuItem('overview')?.click()
+    })
+    expect(view.overviews[0]?.name).toBe('dwd_order')
+  })
+
+  it('clears the tree filter on Escape', () => {
+    render()
+    typeFilter('dwd')
+    const input = container.querySelector('input[aria-label="筛选库、表或字段"]') as HTMLInputElement
+    expect(input.value).toBe('dwd')
+    press(input, { key: 'Escape' })
+    expect(input.value).toBe('')
+  })
+
+  it('opens DDL for a snapshot entry without schema or kind', () => {
+    const view = render({ tables: flat })
+    const name = container.querySelector('[data-sql-schema-object="dwd_order"] button[title^="插入"]')
+    expect(name).not.toBeNull()
+    press(name!, { key: 'b', ctrlKey: true })
+    expect(view.ddlRequests[0]).toEqual({ schema: '', table: 'dwd_order' })
+  })
+
+  it('quotes columns in the generated SQL', () => {
+    expect(selectFromTableSql(tables[2] as SchemaTable)).toBe(
+      'SELECT `order_id`,\n  `amount`\nFROM `dwd`.`dwd_order`',
+    )
+    expect(columnListSql(tables[2] as SchemaTable)).toBe('`order_id`, `amount`')
+    expect(selectFromTableSql({ name: 'empty', columns: [] })).toBe('SELECT *\nFROM `empty`')
+  })
+
+  it('generates a JOIN skeleton from a shared column (SQL-212)', () => {
+    const left: SchemaTable = { schema: 'dwd', name: 'a', columns: [{ name: 'id', type: 'INT' }, { name: 'x', type: 'INT' }] }
+    const right: SchemaTable = { schema: 'dwd', name: 'b', columns: [{ name: 'id', type: 'INT' }] }
+    const sql = joinSql(left, right)
+    expect(sql).toContain('JOIN `dwd`.`b`')
+    expect(sql).toContain('ON `dwd`.`a`.`id` = `dwd`.`b`.`id`')
+
+    const unrelated = joinSql(left, { name: 'c', columns: [{ name: 'y', type: 'INT' }] })
+    expect(unrelated).toContain('TODO')
+  })
+
+  it('hands the JOIN pick to the panel from the context menu', () => {
+    const view = render()
+    const row = container.querySelector('[data-sql-schema-object="dwd_order"]')
+    rightClick(row)
+    act(() => {
+      menuItem('join')?.click()
+    })
+    expect(view.joins[0]?.name).toBe('dwd_order')
+  })
+
+  it('generates a row/non-null overview statement (SQL-404)', () => {
+    expect(overviewSql(tables[2] as SchemaTable)).toBe(
+      'SELECT COUNT(*) AS `总行数`,\n  COUNT(`order_id`) AS `order_id_非空`,\n  COUNT(`amount`) AS `amount_非空`\nFROM `dwd`.`dwd_order`',
+    )
+    expect(overviewSql({ name: 'empty', columns: [] })).toBe('SELECT COUNT(*) AS `总行数`\nFROM `empty`')
+  })
+})
+
+describe('schema tree: global object search (SQL-214)', () => {
+  it('returns nothing for an empty or unmatched query', () => {
+    expect(searchObjects(tables, '')).toEqual([])
+    expect(searchObjects(tables, 'zzz')).toEqual([])
+  })
+
+  it('ranks table matches before column matches, then caps the list', () => {
+    const orderHits = searchObjects(tables, 'order')
+    expect(orderHits[0]?.table.name).toBe('dwd_order')
+    expect(orderHits[0]?.column).toBeUndefined()
+    // `order_id` also matches, but only after every table hit.
+    const firstColumnHit = orderHits.findIndex(match => match.column !== undefined)
+    const lastTableHit = orderHits.map(match => match.column === undefined).lastIndexOf(true)
+    expect(firstColumnHit).toBeGreaterThan(lastTableHit)
+
+    const columnHits = searchObjects(tables, 'amount')
+    expect(columnHits[0]?.column?.name).toBe('amount')
+
+    expect(searchObjects(tables, 'order', 1)).toHaveLength(1)
+  })
+
+  it('caps column matches too', () => {
+    const wide: SchemaTable[] = [
+      { name: 'wide', columns: Array.from({ length: 10 }, (_value, index) => ({ name: `c${String(index)}`, type: 'INT' })) },
+    ]
+    expect(searchObjects(wide, 'c', 3)).toHaveLength(3)
   })
 })

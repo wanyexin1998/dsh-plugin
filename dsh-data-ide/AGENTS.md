@@ -5,13 +5,13 @@
 
 ## 0. 项目一句话
 
-dsh（DeepSeek Harness，**0.2.1-rc.2**）右栏的**新页面类型 tab**——轻量 SQL 工作台（连接 / SQL 编辑 / 结果网格 / git），同包附带 MCP server（serverName `sql`），人与 agent 共用同一套能力。
+dsh（DeepSeek Harness，**0.2.1-rc.3**）右栏的**新页面类型 tab**——轻量 SQL 工作台（连接 / SQL 编辑 / 结果网格 / git），同包附带 MCP server（serverName `sql`），人与 agent 共用同一套能力。
 
 ## 1. 宿主与仓库
 
 | 项 | 值 |
 |---|---|
-| 目标宿主 | **dsh 0.2.1-rc.2**（桌面端 `E:/deepseek-harness`，代码在 `resources/app.asar`）。**2026-10-18 基线切换**：原 0.1.7-rc.2（`E:/wyx_code/dsh-official-v0.1.7-rc.2`）仅留作只读参照——用户最终要装的就是桌面端这一版 |
+| 目标宿主 | **dsh 0.2.1-rc.3**（桌面端 `E:/deepseek-harness`，代码在 `resources/app.asar`；2026-10-27 实测 `package.json` 版本为 rc.3，旧写的 rc.2 是低一个 RC 的笔误）。**2026-10-18 基线切换**：原 0.1.7-rc.2（`E:/wyx_code/dsh-official-v0.1.7-rc.2`）仅留作只读参照——用户最终要装的就是桌面端这一版 |
 | 桌面端启动（0.2.1） | **桌面应用 = `E:/deepseek-harness/DeepSeek Harness.exe`**（Electron，桌面快捷方式指向它）。它默认使用 **`desktop` profile**，且该 profile **由 Electron 独占**：`dsh.cmd --profile desktop …` 会直接报 `profile "desktop" is managed exclusively by the Electron application`，连 `--dump-config` 都不行 |
 | profile 三分（2026-10-20 实测更正） | ① **`desktop`** = 桌面应用默认用，Electron 独占，装插件要 `dsh.cmd plugin --profile desktop add link:<包目录>`；② **`dev-sql-021`** = 本项目的开发验证 profile，CLI 可自由启停，`dsh.cmd --profile dev-sql-021 --port <n>`；③ `web` = 另一套手工环境，与桌面应用无关（此前文档误写「桌面端跑 web profile」，2026-10-20 更正） |
 | 开发验证 profile | **`dev-sql-021`**（0.2.1 上新建，`dsh.cmd plugin --profile dev-sql-021 add link:<包目录>` 自动创建）；旧的 `dev-sql` 属于 0.1.7。改 `web` / `desktop` 前需用户明确批准 |

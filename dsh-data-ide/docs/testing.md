@@ -175,3 +175,100 @@ dev-sql profile 需要模型配置才能跑 agent 对话（把 `llm-pi-ai` + `ag
 | 提示 `EMPTY_RESPONSE: /dsh-data-ide/xxx 返回了空响应（HTTP n）` | 该路由没挂上或方法不对：确认 `lib/index.js` 是新构建、**完全退出 dsh 后重启**；`405` 表示同路径被注册了别的方法（见 08 R22） |
 | 提示 `BAD_RESPONSE: … 不是 JSON` | 请求打到了别的服务（端口被另一个实例占用）或反代插入了 HTML 错误页 |
 | pnpm 报 `ERR_PNPM_EPERM` / vitest 报 EPERM | `NODE_OPTIONS` 未清，见 §1 |
+
+## 7. 2026-10-27 夜间批次：人工 smoke（SQL 手写流畅度）
+
+> 自动化：`node node_modules/vitest/vitest.mjs run`（79 文件 / 1134 用例）、`node tools/run-coverage.mjs`（per-file 100%）、`node node_modules/typescript/bin/tsc -b packages/client/ui-sql-workbench/tsconfig.json`、`node packages/client/ui-sql-workbench/build.mjs`。
+
+| # | 步骤 | 期望 |
+|---|---|---|
+| S73 | 写 3 条语句；光标放第 2 条按 Ctrl/Cmd+Enter | 只执行第 2 条（结果区只更新该条） |
+| S74 | 选中第 2 条整句按 Ctrl/Cmd+Enter | 执行选区（不再是第 1 条） |
+| S75 | 按 Ctrl/Cmd+Shift+Enter | 逐条执行全部，每语句一个结果 tab |
+| S76 | 按 Ctrl/Cmd+Alt+Enter | 重跑上一次执行的语句 |
+| S77 | 执行 SELECT，观察结果区 | 显示「前 N 行 · 未统计总数」且无 COUNT 等待；点「统计总数」出现分页条与总数 |
+| S78 | 执行 `SHOW TABLES` / `DESC t` / `EXPLAIN SELECT …` | 原样执行成功（不再被分页包裹报语法错） |
+| S79 | 故意写语法错（第 3 行） | 错误提示出现，编辑器第 3 行高亮并滚动到该行 |
+| S80 | 刷新页面 | console 的 SQL/标题/连接/活动 tab/页大小/光标恢复 |
+| S81 | Ctrl/Cmd+Shift+H 打开历史，双击一条 | 插入到编辑器；「替换」替换当前 SQL；收藏可保存/删除 |
+| S82 | Ctrl/Cmd+Alt+L 或「格式」 | 选区/全文格式化，一次 Ctrl+Z 可撤销 |
+| S83 | 选中 `*` 按 Ctrl/Cmd+Alt+S 或「展开*」 | 展开为列清单（含反引号/缩进） |
+| S84 | 输入 `FROM dwd_o` / `WHERE ` | 出现表/列候选；函数名如 `date_f` 出现函数与签名 |
+| S85 | 写 `SELEC 1` / `FROM no_such_table` | 编辑器出现波浪线；hover 有说明 |
+| S86 | 对象树按 F4 / Ctrl+B | 新 console 打开数据 / 查看 DDL；原草稿不丢 |
+| S87 | 对象树右键「生成 SELECT」「添加全部列」 | 生成语句插入光标处 |
+| S88 | 按 Ctrl/Cmd+Shift+E 或「计划」 | 新建 explain_N console 显示执行计划 |
+| S89 | 执行中连按两次 Ctrl/Cmd+Enter | 只发一个请求；取消后不出现结果覆盖 |
+| S90 | 窄面板（~400px）观察工具栏 | 按钮可横向滚动，不裁切；历史/格式可点 |
+
+## 8. 2026-10-27 第二轮 smoke（结果区 / 命令面板 / 对象搜索）
+
+| # | 步骤 | 期望 |
+|---|---|---|
+| S91 | 结果网格聚焦按 Ctrl/Cmd+F，输入  | 出现查找条，命中高亮，1/N 计数；Enter/Shift+Enter 跳转；Esc 关闭 |
+| S92 | 「列」菜单取消勾选一列 | 该列从表头/单元格/导出中消失；只剩一列时无法再隐藏；重置恢复 |
+| S93 | 选中两行一列，按「IN」 | 剪贴板为 `WHERE col IN (…)`，去重且截断有注释 |
+| S94 | 选中多行多列，按「INSERT」 | 剪贴板为 INSERT INTO esult (…) VALUES … 骨架 |
+| S95 | 导出格式选 INSERT / JSON 并导出 | 下载 .sql / .json；JSON 中日期为 ISO、二进制为 0x、bigint 为字符串；隐藏列不出现 |
+| S96 | Ctrl/Cmd+Shift+P 输入「格式」回车 | 面板弹出命令面板，过滤后执行格式化并关闭 |
+| S97 | Ctrl/Cmd+Shift+O 输入表名/列名回车 | 对象搜索插入限定表名或列名；Esc 关闭 |
+| S98 | 在普通输入框里按 Ctrl+Shift+P | 不弹命令面板（表单保留自己的按键） |
+
+| S99 | 按 ? 或命令面板「快捷键说明」 | 打开分组快捷键清单；Esc/关闭按钮关闭 |
+| S100 | 键盘 Tab 遍历工具栏/结果条 | 当前焦点有主色描边，鼠标点击不显示描边 |
+| S101 | 未执行任何查询时看结果区 | 提示「执行查询查看结果（Ctrl/Cmd+Enter）」 |
+
+## 9. 2026-10-27 第四轮 smoke（表概览 / 参数 / AI 结对）
+
+| # | 步骤 | 期望 |
+|---|---|---|
+| S102 | 对象树右键表 →「表概览」 | 新建 overview_N console，SQL 为「总行数 + 每列非空数」，结果返回一行 |
+| S103 | 执行 SELECT * FROM t WHERE id = :id | 弹出参数表单，仅列出 id；填 42 回车后按 id=42 执行 |
+| S104 | 参数填 Bob | 替换为 'Bob'（单引号）；填 NULL 或留空 → NULL |
+| S105 | 参数表单按 Esc / 取消 | 不执行、不报错，表单关闭 |
+| S106 | 命令面板 →「AI 结对：解释当前语句」 | 剪贴板得到完整 prompt；提示已复制；粘贴到对话可用 |
+
+| S107 | 故意写语法错并执行 | 错误卡出现「复制错误 / 定位到第 N 行 / EXPLAIN / 问 agent」 |
+| S108 | 点「定位到第 N 行」 | 编辑器滚动并高亮该行 |
+| S109 | 点「EXPLAIN」 | 新 console 显示失败语句的执行计划 |
+| S110 | 点「问 agent」再粘贴 | 剪贴板含错误信息与失败 SQL 的完整 prompt |
+
+| S111 | 命令面板「切换格式化关键字大小写」后格式化 | 连续三次切换提示 小写→保持原样→大写；格式化结果跟随 |
+| S112 | 执行 `SELECT * FROM dwd_order` 与 JOIN | 结果 tab 标题分别为 dwd_order、a+b；无 FROM 时仍是「首列:类型」 |
+
+| S113 | 双击结果 tab 改名并回车 | 标题变为新名字；Esc 取消；空名不生效 |
+| S114 | 右键结果 tab → 注入 📌 后再执行全部 | 被 pin 的 tab 保留在最前，新结果 tab 追加在后面 |
+
+| S115 | 执行多语句脚本，运行中按「取消」 | 当前语句被取消，后续语句不再执行；已完成 tab 保留 |
+
+## 10. 2026-10-27 上午批次 smoke（8 项反馈）
+
+| # | 步骤 | 期望 |
+|---|---|---|
+| S116 | 点右上角 ⌨ | 打开快捷键设置；改一个键位后提示保存；新键位立即生效，旧键位失效 |
+| S117 | 重启页面 | 自定义键位仍生效（localStorage） |
+| S118 | Alt+拖动编辑器 | 出现矩形/列选择（多光标列对齐） |
+| S119 | 对象树查看层级 | 数据源/库/表/列颜色有克制区分，无刺眼高亮 |
+| S120 | 结果有 DATETIME 列 / 打开历史 | 时间均为 `yyyy-mm-dd hh:mm:ss`（本地时区） |
+| S121 | 结果含超长文本列 | 单元格不被撑长，省略号+横向滚动；拖列宽仍有效 |
+| S122 | 结果每列表头 | 有独立漏斗按钮，点击弹出筛选条件；生效列高亮；隐藏列后按钮消失 |
+| S123 | 选中 SQL / 出错后点「发到聊天」 | 文本进入对话输入框；无 composer 时提示已复制 |
+| S124 | 复制 agent SQL 提案 → 命令面板「粘贴 Agent 提案」→ 接受 | 显示 +N/-M diff；接受后编辑器替换；拒绝/Esc 不改动 |
+| S125 | 对象树右键「表概览」 | 弹窗显示总行数/非空/空值/空值率、前 20 行样例、DDL；窗口不超 78vh 且有滚动条，Esc 关闭 |
+
+## 11. 2026-10-27 下午批次 smoke（列头筛选/排序、补全键位、表宽）
+
+| # | 步骤 | 期望 |
+|---|---|---|
+| S126 | 打开快捷键设置 | editor 组出现「唤起代码补全 Ctrl+Space」「接受补全（回车）Enter」两行；可录制改成别的键并持久化 |
+| S127 | 编辑器输入 `SEL` 按 Ctrl+Space 再按 Enter | 补全弹层出现并接受候选；无弹层时 Enter 正常换行 |
+| S128 | 结果区单列（如 `SUM(x)`） | 列宽仅默认宽（数字 120/文本 160），右侧留背景，选中行不再横跨整个面板 |
+| S129 | 点列名/排序图标 | 排序循环：无 ⇅ → 升 ↑ → 降 ↓ → 无；图标与 aria-sort 同步 |
+| S130 | 点列左侧漏斗 → 值列表搜索/勾选多个值 → 应用 | 弹层显示每值「本页计数」；应用后结果按所选值过滤（服务端 IN），提示文案明确；重开弹层保持勾选；「条件」模式仍可用 10 种操作符 |
+
+## 12. 故障对照：`) AS t WHERE  LIMIT 5001 OFFSET 0`
+
+- **现象**：执行带列筛选的分页查询报 `Syntax error ... Encountered: LIMIT / Expected: LIMIT is keyword`，wrapper 里 `WHERE` 后为空。
+- **原因**：浏览器半（client）已是新版、发 `in` 筛选；宿主 node 半仍是旧 bundle，`conditionSql` 不认识 `in`，返回 undefined，`join` 后形成空白 `WHERE`。node 半不热更新。
+- **立即处理**：完全退出并重启桌面端（或重启对应 dev profile 的 dsh 进程），让 `lib/index.js` 重新加载。
+- **代码防御**：2026-10-27 起 `filterClause` 会丢弃无法表达的条件、绝不输出悬空 `WHERE`（`tests/mcp-execute.spec.ts` 有回归用例）。

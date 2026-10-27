@@ -1,11 +1,37 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { bindOpenShortcut, isOpenWorkbenchShortcut } from '../src/client/entry.ts'
+import { bindOpenShortcut, isEditingTarget, isOpenWorkbenchShortcut } from '../src/client/entry.ts'
 
 const press = (init: KeyboardEventInit): void => {
   window.dispatchEvent(new KeyboardEvent('keydown', init))
 }
+
+describe('isEditingTarget', () => {
+  it('ignores keys aimed at the editor, inputs and contenteditable nodes', () => {
+    const editor = document.createElement('div')
+    editor.className = 'cm-editor'
+    const inner = document.createElement('div')
+    editor.append(inner)
+    document.body.append(editor)
+
+    const input = document.createElement('input')
+    const area = document.createElement('textarea')
+    const editable = document.createElement('div')
+    Object.defineProperty(editable, 'isContentEditable', { value: true })
+
+    expect(isEditingTarget(inner)).toBe(true)
+    expect(isEditingTarget(input)).toBe(true)
+    expect(isEditingTarget(area)).toBe(true)
+    expect(isEditingTarget(editable)).toBe(true)
+    expect(isEditingTarget(document.body)).toBe(false)
+    expect(isEditingTarget(null)).toBe(false)
+    expect(isEditingTarget(window)).toBe(false)
+    // A hostile non-Element (closest throws) is treated as a global target.
+    expect(isEditingTarget({ closest: () => { throw new Error('nope') } } as unknown as EventTarget)).toBe(false)
+    editor.remove()
+  })
+})
 
 describe('isOpenWorkbenchShortcut', () => {
   it('accepts Ctrl+Shift+L and Cmd+Shift+L, any letter case', () => {
@@ -53,6 +79,21 @@ describe('bindOpenShortcut', () => {
     press({ key: 'k', ctrlKey: true, shiftKey: true })
 
     expect(open).not.toHaveBeenCalled()
+  })
+
+  it('yields the same chord to the editor when focus is inside it', () => {
+    const open = vi.fn()
+    dispose = bindOpenShortcut(open)
+    const editor = document.createElement('div')
+    editor.className = 'cm-editor'
+    document.body.append(editor)
+
+    const event = new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true })
+    editor.dispatchEvent(event)
+
+    expect(open).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+    editor.remove()
   })
 
   it('stops listening once disposed', () => {

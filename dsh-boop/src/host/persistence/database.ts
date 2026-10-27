@@ -45,7 +45,7 @@ export function isUnsupportedStoragePath(path: string): boolean {
 export class BoopDatabase {
   readonly db: DatabaseSync
   readonly path: string
-  readonly fts: boolean
+  fts: boolean
   private readonly now: () => number
   /** Single write queue: every write transaction is chained onto this promise. */
   private writeChain: Promise<unknown> = Promise.resolve()
@@ -74,11 +74,31 @@ export class BoopDatabase {
     return row.journal_mode
   }
 
+  /**
+   * Older ledgers created before `subject_key` existed still open. The column
+   * is nullable and does not change schema_version; a missing column only
+   * forces the conservative conflict rule, so we add it in place.
+   */
+  private ensureSubjectKey(): void {
+    const columns = this.db.prepare('PRAGMA table_info(fact)').all() as Array<{ name: string }>
+    if (columns.some((column) => column.name === 'subject_key')) return
+    this.db.exec('ALTER TABLE fact ADD COLUMN subject_key TEXT')
+  }
+
   /** Apply the frozen core schema and record the schema version. */
   bootstrap(): BootstrapReport {
     const before = this.schemaVersion()
     this.db.exec(CORE_DDL)
-    if (this.fts) this.db.exec(FTS_DDL)
+    this.ensureSubjectKey()
+    if (this.fts) {
+      try {
+        this.db.exec(FTS_DDL)
+      } catch {
+        // FTS is derived. A build without FTS5 keeps the ledger and degrades
+        // retrieval to exact match; it never weakens forget or authority rules.
+        this.fts = false
+      }
+    }
     this.db.exec('BEGIN')
     try {
       this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(

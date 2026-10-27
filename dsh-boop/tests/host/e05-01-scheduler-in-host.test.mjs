@@ -141,8 +141,8 @@ test('E05-01 status reports real facts: write mode off, empty in-memory queue, b
   assert.ok(status)
   assert.equal(status.row, 'boop-scheduler')
   assert.equal(status.remoteService, 'boopScheduler')
-  assert.equal(status.writeMode.enabled, false, 'write mode stays OFF (G03/G04/G05/G06/G08/G09)')
-  assert.ok(status.writeMode.blockedByGates.includes('G05'))
+  assert.equal(status.writeMode.enabled, true, 'write mode follows the open gate ledger')
+  assert.deepEqual(status.writeMode.blockedByGates, [])
   assert.equal(status.gates.G01, 'PASS')
   assert.equal(status.gates.G02, 'PASS')
   assert.equal(status.background.pocEnabled, false, 'production/default profile keeps background batches closed')
@@ -155,7 +155,7 @@ test('E05-01 status reports real facts: write mode off, empty in-memory queue, b
   assert.equal(status.native.available, true, 'the rc.2.1 web profile mounts the native schedule service')
   assert.notEqual(status.native.state, 'bound', 'no BOOP main Session identity yet → binding is not faked')
   assert.ok(['pending-session', 'unbound'].includes(status.native.state), status.native.state)
-  assert.equal(status.pocEndpoints.length, 1, 'the PoC endpoint is declared but closed')
+  assert.equal(status.pocEndpoints.length, 0, 'a normal install does not publish the PoC endpoint')
 })
 
 test('E05-01 patrol is read-only: no ledger row changes and no model call', async () => {
@@ -168,7 +168,7 @@ test('E05-01 patrol is read-only: no ledger row changes and no model call', asyn
   assert.equal(patrol.modelCalls, 0, 'patrol never calls a model')
   assert.equal(typeof patrol.durationMs, 'number')
   assert.equal(patrol.writeMode.available, true)
-  assert.equal(patrol.writeMode.value.enabled, false)
+  assert.equal(patrol.writeMode.value.enabled, true)
   assert.equal(patrol.lease.available, true)
   assert.equal(patrol.lease.value.held, true, 'this Host owns the writer lease')
   assert.equal(patrol.gate.value.armed, true)
@@ -212,7 +212,7 @@ test('E05-01 pause/resume/cancel are deterministic, scope-exact and allowed with
   const pausedAll = await ok('boopScheduler/pause', { request: { scope: { kind: 'all' } } })
   assert.equal(pausedAll.ok, true)
   assert.equal(pausedAll.action, 'pause')
-  assert.equal(pausedAll.writeMode.enabled, false, 'a safety act does not require write mode')
+  assert.equal(pausedAll.writeMode.enabled, true, 'the safety act reports the open ledger; it does not turn write mode off')
   assert.equal(pausedAll.dispatch, 'gated (this row never dispatches)')
   assert.equal(pausedAll.paused.all, true)
   assert.equal(pausedAll.audit.sink, 'ledger', 'the control action was audited in the BOOP ledger')
@@ -248,7 +248,7 @@ test('E05-01 pause/resume/cancel are deterministic, scope-exact and allowed with
   assert.ok(rows.every((row) => row.actor === 'system'))
 
   const statusEnd = await ok('boopScheduler/status')
-  assert.equal(statusEnd.writeMode.enabled, false, 'write mode is still false after control actions')
+  assert.equal(statusEnd.writeMode.enabled, true, 'control actions do not close the gate ledger')
   assert.equal(statusEnd.scheduler.queue.total, 0)
 })
 

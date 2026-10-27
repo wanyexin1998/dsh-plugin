@@ -81,7 +81,9 @@ export class ContextAssembler {
   }): { body: string; hits: RetrievalHit[]; truncated: boolean; degraded: boolean } {
     const options = input.options ?? DEFAULT_RETRIEVAL_OPTIONS
     const excluded = input.excludedFactIds ?? new Set<string>()
-    const usable = input.facts.filter((fact) => !excluded.has(fact.factId) && fact.status !== 'superseded')
+    const usable = input.facts.filter(
+      (fact) => !excluded.has(fact.factId) && fact.status !== 'superseded' && fact.status !== 'tombstoned',
+    )
 
     // Rank with the derived index when present; otherwise fall back to an exact
     // substring match and SAY so (degraded), never pretend it was ranked.

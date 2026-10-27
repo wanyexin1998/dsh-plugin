@@ -91,7 +91,7 @@ test('G01 authenticated BOOP bootstrap returns the read-only scope facts', async
   const value = body.result.value
   assert.equal(value.product, 'BOOP')
   assert.equal(value.scope.dshProfileVersion, '0.2.1-rc.2')
-  assert.equal(value.scope.writeModeEnabled, false, 'write mode stays off while required gates are not PASS')
+  assert.equal(value.scope.writeModeEnabled, true, 'write mode follows the gate ledger once every required gate is PASS')
   assert.equal(value.scope.recoveryGateArmed, true)
   assert.deepEqual(
     Object.keys(value.gates).sort(),
@@ -106,19 +106,19 @@ test('G01 authenticated BOOP bootstrap returns the read-only scope facts', async
       G02: 'PASS',
       G03: 'PASS',
       G04: 'PASS',
-      G05: 'NOT_RUN',
+      G05: 'PASS',
       G06: 'PASS',
       G07: 'BLOCKED',
-      G08: 'NOT_RUN',
-      G09: 'NOT_RUN',
+      G08: 'PASS',
+      G09: 'PASS',
     },
     'the gate ledger must reflect real evidence, never start all-PASS or all-NOT_RUN',
   )
   // Write mode is derived from the ledger, not a switch: all remaining gates block it.
-  assert.equal(value.writeMode.enabled, false)
+  assert.equal(value.writeMode.enabled, true)
   assert.deepEqual(
     [...value.writeMode.blockedByGates].sort(),
-    ['G05', 'G08', 'G09'],
+    [],
     'every non-PASS required gate must block production writes',
   )
   // Each PASS must cite evidence; a PASS without evidence is a fabrication.

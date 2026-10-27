@@ -33,6 +33,34 @@ function qualifiedName(raw: string): string {
 }
 
 /**
+ * Line number reported by the driver, if the message carries one.
+ *
+ * Doris's `Syntax error in line 2` and MySQL's `... at line 3` both end up in
+ * the statement error string; the editor uses this to mark the offending line.
+ */
+export function driverErrorLine(message: string): number | null {
+  const match = /(?:\bin\s+)?\bline\s+(\d+)\b/i.exec(detailOf(message))
+  if (match === null) return null
+  const line = Number(match[1])
+  return Number.isFinite(line) && line >= 1 ? Math.trunc(line) : null
+}
+
+/**
+ * Driver line → the user's own line.
+ *
+ * `lineOffset` is what the server prepended to the user's SQL (1 for the paging
+ * or direct wrapper, 0 for verbatim metadata). The result is clamped to 1.
+ *
+ * @param message - Raw driver message.
+ * @param lineOffset - Lines added before the user's SQL on the server.
+ */
+export function userErrorLine(message: string, lineOffset: number): number | null {
+  const line = driverErrorLine(message)
+  if (line === null) return null
+  return Math.max(1, line - Math.max(0, lineOffset))
+}
+
+/**
  * Readable text for a failed statement.
  *
  * Falls back to the driver's own words (without the wrapper) when the shape is

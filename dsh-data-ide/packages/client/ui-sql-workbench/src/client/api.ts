@@ -12,6 +12,7 @@ import type { ExecuteRequest } from '../execute/core.ts'
 import type { ExecutionResult } from '../execute/envelope.ts'
 import type { ScriptRequest, ScriptResponse } from '../execute/script.ts'
 import type { SchemaSnapshot } from '../host/metadata.ts'
+import type { QueryHistoryEntry } from './state/history.ts'
 
 /** Re-export so panel code keeps importing its draft type from one place. */
 export type { ConnectionDraft } from '../datasource/model.ts'
@@ -50,6 +51,23 @@ export interface WorkbenchApi {
   layout?(): Promise<unknown>
   /** Persist the layout; absent on hosts that do not store it. */
   saveLayout?(layout: unknown): Promise<void>
+  /**
+   * Console tabs + active tab + page size from the last session (SQL-201/202).
+   *
+   * Unvalidated on purpose, like the layout: only the browser knows which tabs
+   * can still be rebuilt, so `parseWorkspaceState` clamps it client-side.
+   */
+  loadWorkspaceState?(): Promise<unknown>
+  /** Persist the console workspace; result sets are never part of it. */
+  saveWorkspaceState?(state: unknown): Promise<void>
+  /** Whole query-history document, `{ schemaVersion, byConn }` (SQL-203). */
+  loadHistory?(): Promise<unknown>
+  /** Append one run to the host-owned per-connection ring buffer. */
+  appendHistory?(entry: QueryHistoryEntry): Promise<void>
+  /** Saved favorites document, `{ schemaVersion, entries }` (SQL-205). */
+  loadFavorites?(): Promise<unknown>
+  /** Persist the favorites list. */
+  saveFavorites?(document: unknown): Promise<void>
 }
 
 /** Service name published by the node half (only reachable in-process). */

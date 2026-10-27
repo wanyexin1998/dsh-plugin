@@ -131,6 +131,104 @@ export function ddlSql(target: DdlTarget): string {
 }
 
 /**
+ * `SELECT <columns> FROM <object>` for the object-tree generator.
+ *
+ * Columns are quoted the same way as the object name, so Chinese or otherwise
+ * label-like column names survive the insertion.
+ *
+ * @param table - One table or view from the schema snapshot.
+ */
+export function selectFromTableSql(table: SchemaTable): string {
+  const columns = table.columns.length === 0
+    ? '*'
+    : table.columns.map(column => quoteIdent(column.name)).join(',\n  ')
+  return `SELECT ${columns}\nFROM ${qualifiedName(table)}`
+}
+
+/** Bare, quoted column list for templates and hand-written INSERTs. */
+export function columnListSql(table: SchemaTable): string {
+  return table.columns.map(column => quoteIdent(column.name)).join(', ')
+}
+
+/**
+ * `SELECT` that summarises a table: total rows plus per-column non-null counts
+ * (SQL-404, the lightweight "表概览").
+ *
+ * Row counts on huge tables are expensive but this is user-triggered and explicit;
+ * an empty column list degrades to a bare COUNT so views without column metadata
+ * still answer the headline number.
+ *
+ * @param table - Object to summarise.
+ */
+export function overviewSql(table: SchemaTable): string {
+  const counts = table.columns.map(column => `  COUNT(${quoteIdent(column.name)}) AS ${quoteIdent(`${column.name}_非空`)}`)
+  return `SELECT COUNT(*) AS ${quoteIdent('总行数')}${counts.length === 0 ? '' : `,\n${counts.join(',\n')}`}\nFROM ${qualifiedName(table)}`
+}
+
+/**
+ * JOIN skeleton between two objects (SQL-212).
+ *
+ * Guesses ON from the first column name the two tables share (the common
+ * `id`/`order_id` convention); without a shared name the ON clause is left as a
+ * TODO so the generated statement is honest about needing a join key.
+ *
+ * @param left - Table already chosen in the tree.
+ * @param right - Table picked for the join.
+ */
+export function joinSql(left: SchemaTable, right: SchemaTable): string {
+  const rightNames = new Set(right.columns.map(column => column.name))
+  const shared = left.columns.find(column => rightNames.has(column.name))
+  const on = shared === undefined
+    ? 'ON /* TODO: 没有同名列，请补 ON 条件 */'
+    : `ON ${qualifiedName(left)}.${quoteIdent(shared.name)} = ${qualifiedName(right)}.${quoteIdent(shared.name)}`
+  return `SELECT *\nFROM ${qualifiedName(left)}\nJOIN ${qualifiedName(right)} ${on}`
+}
+
+/** One hit of the global object search: a table, or one column of it. */
+export interface ObjectMatch {
+  readonly table: SchemaTable
+  /** Present when the query matched a column name rather than the table. */
+  readonly column?: { readonly name: string; readonly type: string }
+}
+
+/**
+ * Fuzzy object search across every table and column (SQL-214).
+ *
+ * Table-name matches rank before column matches, and each kind keeps snapshot
+ * order so repeated searches are deterministic. Case-insensitive substring
+ * matching is enough here: identifiers are short and the list is capped.
+ *
+ * @param tables - Whole schema snapshot.
+ * @param query - Search text; empty means "nothing to show" (the palette shows
+ *   recent/all entries only when the caller passes an empty query).
+ * @param limit - Safety cap (default 50).
+ */
+export function searchObjects(
+  tables: readonly SchemaTable[],
+  query: string,
+  limit = 50,
+): readonly ObjectMatch[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return []
+  const matches: ObjectMatch[] = []
+  for (const table of tables) {
+    if (table.name.toLowerCase().includes(needle)) {
+      matches.push({ table })
+      if (matches.length >= limit) return matches
+    }
+  }
+  for (const table of tables) {
+    for (const column of table.columns) {
+      if (column.name.toLowerCase().includes(needle)) {
+        matches.push({ table, column })
+        if (matches.length >= limit) return matches
+      }
+    }
+  }
+  return matches
+}
+
+/**
  * Pick the DDL out of a `SHOW CREATE …` row.
  *
  * MySQL returns `[table, ddl]`, Doris `[View, Create View, character_set_client,
@@ -177,3 +275,63 @@ export interface MenuItem {
 
 /** Width/height the menu is laid out at; only used for edge flipping. */
 export const MENU_SIZE = { width: 208, height: 232 } as const
+
+/**
+ * One statement that summarises a table: total rows plus one COUNT per column
+ * (the statistics half of the table-overview dialog, SQL-404).
+ *
+ * The aliases (`n1`, `n2`, …) are read back by index, so the component does not
+ * depend on the driver echoing Chinese aliases. Objects without column metadata
+ * (Doris reports no columns for views) degrade to a bare COUNT — the dialog then
+ * shows the headline number and says why the rest is missing.
+ *
+ * @param table - Object to summarise.
+ */
+export function overviewStatsSql(table: SchemaTable): string {
+  const total = `SELECT COUNT(*) AS ${quoteIdent('总行数')}`
+  const counts = table.columns.map((column, index) =>
+    `  COUNT(${quoteIdent(column.name)}) AS ${quoteIdent(`n${String(index + 1)}`)}`,
+  )
+  const select = counts.length === 0 ? total : `${total},\n${counts.join(',\n')}`
+  return `${select}\nFROM ${qualifiedName(table)}`
+}
+
+/** Default sample size of the table-overview dialog. */
+export const OVERVIEW_SAMPLE_LIMIT = 20
+
+/** Ceiling for the sample size; a hand-written call may not ask for the table. */
+export const OVERVIEW_SAMPLE_LIMIT_MAX = 1000
+
+/**
+ * `SELECT * FROM <object> LIMIT n` — the sample half of the overview dialog.
+ *
+ * The limit is clamped into `[1, OVERVIEW_SAMPLE_LIMIT_MAX]`; a non-finite value
+ * falls back to the default so a caller cannot accidentally ask for everything.
+ *
+ * @param table - Object to sample.
+ * @param limit - Requested row count (default 20).
+ */
+export function overviewSampleSql(table: SchemaTable, limit: number = OVERVIEW_SAMPLE_LIMIT): string {
+  const safe = Number.isFinite(limit)
+    ? Math.min(OVERVIEW_SAMPLE_LIMIT_MAX, Math.max(1, Math.floor(limit)))
+    : OVERVIEW_SAMPLE_LIMIT
+  return `SELECT * FROM ${qualifiedName(table)} LIMIT ${String(safe)}`
+}
+
+/**
+ * Null rate as the overview table shows it: `0%`, `100%`, or one decimal.
+ *
+ * The total comes from the same statement as the counts, so a rate is only
+ * unknown when the statement itself answered nothing usable (`—`, never `NaN%`).
+ *
+ * @param nonNull - Non-null count of one column.
+ * @param total - Row count of the object.
+ */
+export function nullRateText(nonNull: number, total: number): string {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(nonNull)) return '—'
+  const nulls = Math.max(0, total - Math.max(0, nonNull))
+  const rate = (nulls / total) * 100
+  if (rate === 0) return '0%'
+  if (rate === 100) return '100%'
+  return `${rate.toFixed(1)}%`
+}

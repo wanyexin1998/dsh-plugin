@@ -38,13 +38,29 @@ describe('cell formatting', () => {
     expect(formatCell('n/a', 'number')).toEqual({ text: 'n/a', align: 'right', isNull: false })
   })
 
-  it('renders dates as ISO-ish text and passes strings through', () => {
-    expect(formatCell(new Date('2026-10-17T08:12:33.000Z'), 'date')).toEqual({
+  it('renders dates as local yyyy-mm-dd hh:mm:ss and normalises ISO date-times', () => {
+    // Built from local components, so this expectation holds in any timezone.
+    expect(formatCell(new Date(2026, 9, 17, 8, 12, 33), 'date')).toEqual({
       text: '2026-10-17 08:12:33',
       align: 'left',
       isNull: false,
     })
+    // A UTC instant is shown on the user's clock; parsed back as local time it
+    // must denote the same instant (no silent timezone shift).
+    const instant = new Date('2026-10-17T08:12:33.000Z')
+    const text = formatCell(instant, 'date').text
+    expect(text).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(new Date(text.replace(' ', 'T')).getTime()).toBe(instant.getTime())
+    // ISO strings are normalised too — with or without zone and milliseconds.
+    expect(formatCell('2026-10-27T01:02:03', 'date').text).toBe('2026-10-27 01:02:03')
+    expect(formatCell('2026-10-27 01:02:03', 'date').text).toBe('2026-10-27 01:02:03')
+    const zoned = formatCell('2026-10-27T01:02:03.000Z', 'date').text
+    expect(new Date(zoned.replace(' ', 'T')).getTime()).toBe(new Date('2026-10-27T01:02:03.000Z').getTime())
+    // Date-only values and free text stay exactly as the driver sent them.
     expect(formatCell('2026-10-17', 'date')).toEqual({ text: '2026-10-17', align: 'left', isNull: false })
+    expect(formatCell('2026-13-45T99:99:99', 'date').text).toBe('2026-13-45T99:99:99')
+    expect(formatCell('订单 2026-10-17 08:12:33 完成', 'date').text).toBe('订单 2026-10-17 08:12:33 完成')
+    expect(formatCell(42, 'date').text).toBe('42')
   })
 
   it('summarises binary payloads by size', () => {
@@ -120,8 +136,15 @@ describe('fullValue (value viewer)', () => {
     expect(fullValue(new Uint8Array([1, 2]), 'binary').text).not.toContain('…')
   })
 
-  it('renders dates as ISO and numbers as text', () => {
-    expect(fullValue(new Date('2026-10-19T00:00:00Z'), 'date').text).toBe('2026-10-19T00:00:00.000Z')
+  it('shows dates in the same local format as the grid, and normalises ISO strings', () => {
+    expect(fullValue(new Date(2026, 9, 19, 0, 0, 0), 'date').text).toBe('2026-10-19 00:00:00')
+    const instant = new Date('2026-10-19T00:00:00Z')
+    const text = fullValue(instant, 'date').text
+    expect(new Date(text.replace(' ', 'T')).getTime()).toBe(instant.getTime())
+    // A DATE column that arrived as text reads like the cell that was clicked.
+    expect(fullValue('2026-10-19T00:00:00.000Z', 'date').text).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(fullValue('2026-10-19', 'date').text).toBe('2026-10-19')
+    expect(fullValue(42, 'date').text).toBe('42')
     expect(fullValue(42, 'number').text).toBe('42')
   })
 })

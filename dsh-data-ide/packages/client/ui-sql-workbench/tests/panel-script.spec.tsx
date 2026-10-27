@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDataSource } from '../src/datasource/model.ts'
-import { selectSql, setSql } from './support/editor.ts'
+import { editorView, pressKey, readSql, selectSql, setSql } from './support/editor.ts'
 import { SqlWorkbenchPanel } from '../src/client/components/SqlWorkbenchPanel.tsx'
 import type { ConnectionDraft, WorkbenchApi } from '../src/client/api.ts'
 import type { ExecuteResponse } from '../src/execute/core.ts'
@@ -63,6 +63,26 @@ const click = (element: Element | undefined | null): void => {
   })
 }
 
+/** Open the overflow menu that holds a control, then click it. */
+function clickLabel(label: string): void {
+  const found = (): Element | null => document.querySelector(`[aria-label="${label}"]`)
+  if (found() !== null) {
+    click(found())
+    return
+  }
+  for (const opener of ['更多查询操作', '更多结果操作', '连接操作']) {
+    const button = document.querySelector(`[aria-label="${opener}"]`)
+    if (button === null) continue
+    click(button)
+    if (found() !== null) {
+      click(found())
+      return
+    }
+    click(button)
+  }
+  click(found())
+}
+
 const byText = (selector: string, text: string): HTMLElement | undefined =>
   [...container.querySelectorAll(selector)].find(node => node.textContent?.includes(text) === true) as HTMLElement | undefined
 
@@ -92,12 +112,12 @@ describe('panel: multi-statement run', () => {
     const api = apiDouble({ executeScript })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
 
-    expect(executeScript).toHaveBeenCalledWith({ connId, sql: 'SELECT 1; SELECT 2', pageSize: 500 })
+    expect(executeScript).toHaveBeenCalledWith(expect.objectContaining({ connId, sql: 'SELECT 1; SELECT 2', pageSize: 500 }))
     // Result tabs only: the strip also carries 输出.
     const tabs = [...container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])')]
     expect(tabs).toHaveLength(2)
@@ -105,6 +125,76 @@ describe('panel: multi-statement run', () => {
 
     click(tabs[0])
     expect(container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])')[0]?.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('cancels a running script by its statement ids (SQL-107)', async () => {
+    let release: (() => void) | undefined
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const executeScript = vi.fn(async () => {
+      await gate
+      return { statements: [], durationMs: 0 }
+    })
+    const cancel = vi.fn(async () => ({ cancelled: true }))
+    const api = apiDouble({ executeScript, cancel })
+    await mountWithScript(api, 'SELECT 1; SELECT 2')
+    clickLabel('执行全部')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    clickLabel('取消')
+    expect(cancel).toHaveBeenCalledTimes(2)
+
+    release?.()
+    await act(async () => {
+      await gate
+      await Promise.resolve()
+    })
+  })
+
+  it('renames a result tab and keeps a pinned tab across the next run (SQL-314)', async () => {
+    const executeScript = vi.fn(async () => ({
+      durationMs: 5,
+      statements: [
+        { index: 0, sql: 'SELECT 1', ok: true as const, response: page([[1]], 1) },
+        { index: 1, sql: 'SELECT 2', ok: true as const, response: page([[2]], 2) },
+      ],
+    }))
+    const api = apiDouble({ executeScript })
+    await mountWithScript(api, 'SELECT 1; SELECT 2')
+    clickLabel('执行全部')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const tabList = (): Element[] => [...container.querySelectorAll('[data-sql-script] [role="tab"]:not([data-sql-output-tab])')]
+    act(() => {
+      tabList()[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    const field = container.querySelector('[aria-label="重命名结果标签"]') as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(field, '第一段')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+      field.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+    expect(tabList()[0]?.textContent).toContain('第一段')
+
+    // Right-click pins it; the next run keeps it and appends the new results.
+    act(() => {
+      tabList()[0]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    })
+    expect(tabList()[0]?.querySelector('[data-sql-tab-pinned]')).not.toBeNull()
+    clickLabel('执行全部')
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(tabList()).toHaveLength(3)
+    expect(tabList()[0]?.textContent).toContain('第一段')
+    expect(tabList()[0]?.querySelector('[data-sql-tab-pinned]')).not.toBeNull()
   })
 
   it('refetches the active statement for the next page and for a sort', async () => {
@@ -117,7 +207,7 @@ describe('panel: multi-statement run', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -146,7 +236,7 @@ describe('panel: multi-statement run', () => {
     })
     await mountWithScript(api, 'SELECT 1; DELETE FROM t')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -160,7 +250,7 @@ describe('panel: multi-statement run', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -172,7 +262,7 @@ describe('panel: multi-statement run', () => {
     const api = apiDouble({ executeScript: vi.fn(async () => Promise.reject(new Error('网络断了'))) })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -190,7 +280,7 @@ describe('panel: multi-statement run', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -210,7 +300,7 @@ describe('panel: multi-statement run', () => {
     act(() => {
       selectSql(container, 0, 8)
     })
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行')
     await act(async () => {
       await Promise.resolve()
     })
@@ -232,7 +322,7 @@ describe('panel: multi-statement edges', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -253,7 +343,7 @@ describe('panel: multi-statement edges', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -278,13 +368,14 @@ describe('panel: hardening', () => {
     const api = apiDouble({ executeScript: executeScript as unknown as WorkbenchApi['executeScript'] })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
-    // The button is disabled while running; clicking again must not start another run.
-    const button = container.querySelector('[aria-label="执行"]') as HTMLButtonElement
-    expect(button.disabled).toBe(true)
+    // While a script runs, the one control is Cancel, so it cannot start a second run.
+    expect(container.querySelector('[aria-label="执行"]')).toBeNull()
+    const button = container.querySelector('[aria-label="取消"]') as HTMLButtonElement
+    expect(button.disabled).toBe(false)
     act(() => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -294,6 +385,137 @@ describe('panel: hardening', () => {
     await act(async () => {
       await Promise.resolve()
     })
+  })
+
+  it('clears the console and explains a comment-only script from the more menu', async () => {
+    const api = apiDouble({
+      execute: vi.fn(async () => ({ ok: false as const, error: { code: 'EMPTY', message: 'empty' } })),
+    })
+    await mountWithScript(api, 'SELECT 1')
+    clickLabel('清空')
+    expect(readSql(container)).toBe('')
+
+    await mountWithScript(api, '-- just a comment')
+    act(() => {
+      pressKey(container, { key: 'Enter', ctrlKey: true })
+      pressKey(container, { key: 'e', ctrlKey: true, shiftKey: true })
+    })
+    clickLabel('解释计划')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(api.execute).toHaveBeenCalled()
+  })
+
+  it('handles run-all, rerun and history from the editor chords', async () => {
+    const executeScript = vi.fn(async () => ({ durationMs: 1, statements: [] }))
+    const api = apiDouble({ executeScript })
+    await mountWithScript(api, 'SELECT 1; SELECT 2')
+
+    act(() => {
+      pressKey(container, { key: 'Enter', ctrlKey: true, altKey: true })
+      pressKey(container, { key: 'h', ctrlKey: true, shiftKey: true })
+    })
+    expect(container.querySelector('[data-sql-history-overlay]')).not.toBeNull()
+
+    act(() => {
+      selectSql(container, 0, 8)
+      pressKey(container, { key: 'Enter', ctrlKey: true })
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    act(() => {
+      selectSql(container, 0, 0)
+      pressKey(container, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(executeScript).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      pressKey(container, { key: 'Enter', ctrlKey: true, altKey: true })
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(executeScript).toHaveBeenCalledTimes(2)
+
+    act(() => {
+      pressKey(container, { key: 'e', ctrlKey: true, shiftKey: true })
+    })
+    act(() => {
+      setSql(container, 'select 1')
+      pressKey(container, { key: 'l', ctrlKey: true, altKey: true })
+    })
+    expect(readSql(container)).toBe('SELECT 1')
+  })
+
+  it('does not cancel when 执行 is double-clicked', async () => {
+    let release: () => void = () => undefined
+    const execute = vi.fn(() => new Promise<ExecuteResponse>(resolve => {
+      release = () => {
+        resolve(page([[1]], 1))
+      }
+    }))
+    const cancel = vi.fn(async () => ({ cancelled: true }))
+    const api = apiDouble({ execute: execute as unknown as WorkbenchApi['execute'], cancel })
+    await mountWithScript(api, 'SELECT 1')
+
+    clickLabel('执行')
+    const cancelButton = document.querySelector('[aria-label="取消"]')
+    act(() => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }))
+    })
+    expect(cancel).not.toHaveBeenCalled()
+
+    click(cancelButton)
+    expect(cancel).toHaveBeenCalledTimes(1)
+    release()
+    await act(async () => {
+      await Promise.resolve()
+    })
+  })
+
+  it('renames the run button from the caret and the selection', async () => {
+    const sql = 'SELECT 1;\nUPDATE t SET a = 1'
+    await mountWithScript(apiDouble(), sql)
+    const view = editorView(container)
+
+    act(() => {
+      view.dispatch({ selection: { anchor: 0 } })
+    })
+    expect(document.querySelector('[data-sql-run]')?.textContent).toBe('执行')
+
+    const updateAt = sql.indexOf('UPDATE')
+    act(() => {
+      view.dispatch({ selection: { anchor: updateAt } })
+    })
+    expect(document.querySelector('[data-sql-run]')?.textContent).toBe('执行写入')
+
+    act(() => {
+      view.dispatch({ selection: { anchor: updateAt, head: updateAt + 6 } })
+    })
+    expect(document.querySelector('[data-sql-run]')?.textContent).toBe('执行写入')
+
+    act(() => {
+      view.dispatch({ selection: { anchor: 6, head: 7 } })
+    })
+    expect(document.querySelector('[data-sql-run]')?.textContent).toBe('执行')
+  })
+
+  it('names the run control after the statement at the caret', async () => {
+    const api = apiDouble()
+    await mountWithScript(api, '')
+    expect(container.querySelector('[aria-label="执行"]')).not.toBeNull()
+
+    await mountWithScript(api, 'UPDATE t SET a = 1')
+    expect(container.querySelector('[aria-label="执行写入"]')?.textContent).toBe('执行写入')
   })
 
   it('drops script tabs and results when the connection changes', async () => {
@@ -307,7 +529,7 @@ describe('panel: hardening', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
@@ -339,11 +561,11 @@ describe('panel: refresh', () => {
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
-    click(container.querySelector('[aria-label="刷新结果"]'))
+    clickLabel('刷新结果')
     await act(async () => {
       await Promise.resolve()
     })
@@ -357,11 +579,11 @@ describe('panel: refresh', () => {
     })
     await mountWithScript(api, 'SELECT 1')
 
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await act(async () => {
       await Promise.resolve()
     })
-    click(container.querySelector('[aria-label="刷新结果"]'))
+    clickLabel('刷新结果')
     await act(async () => {
       await Promise.resolve()
     })
@@ -404,7 +626,7 @@ describe('panel: per-tab result state (R6)', () => {
       fetchPage,
     })
     await mountWithScript(api, 'SELECT 1; SELECT 2')
-    click(container.querySelector('[aria-label="执行"]'))
+    clickLabel('执行全部')
     await settle()
   }
 

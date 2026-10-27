@@ -4,7 +4,8 @@
  * The engine ships `typeName` (the driver's wire type name) precisely so the
  * grid can decide alignment and representation here instead of guessing from
  * the value: numbers get thousands separators and right alignment, dates render
- * ISO-ish, binary gets a size placeholder rather than a megabyte of escapes.
+ * as local `yyyy-mm-dd hh:mm:ss` (需求6), binary gets a size placeholder rather
+ * than a megabyte of escapes.
  *
  * Pure functions with no React and no locale API, so the rendering is identical
  * on every host and directly testable.
@@ -67,9 +68,42 @@ export function formatNumber(value: number): string {
   return groupDigits(String(rounded))
 }
 
+/** Two-digit zero padding for month/day/hour/minute/second. */
+function pad2(value: number): string {
+  return value < 10 ? `0${String(value)}` : String(value)
+}
+
+/**
+ * Local `yyyy-mm-dd hh:mm:ss` — the one time format the UI shows (需求6).
+ *
+ * Local, not UTC: a row reading `2026-10-17 08:12:33` means 8:12 on the user's
+ * clock, which is what a person comparing it with their own actions expects.
+ */
+function formatLocalDateTime(date: Date): string {
+  const day = `${String(date.getFullYear())}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+  return `${day} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+}
+
+/**
+ * ISO date-*time* strings this module normalises.
+ *
+ * `2026-10-27T01:02:03`, `2026-10-27T01:02:03.000Z` and
+ * `2026-10-27 01:02:03+08:00` all match; a **date-only** value deliberately does
+ * not. `new Date('2026-10-27')` interprets the text as UTC, so normalising it
+ * would flip the calendar day for users west of Greenwich — and the bare date is
+ * already the shape everyone expects, so it passes through verbatim.
+ */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?$/
+
 /** `2026-10-17 08:12:33` for dates, verbatim text otherwise. */
 function formatDate(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 19).replace('T', ' ')
+  if (value instanceof Date) return formatLocalDateTime(value)
+  if (typeof value === 'string' && ISO_DATE_TIME.test(value)) {
+    const parsed = new Date(value)
+    // An out-of-range component (`2026-13-45T99:99:99`) fails to parse; showing
+    // the text as typed beats printing "Invalid Date".
+    if (!Number.isNaN(parsed.getTime())) return formatLocalDateTime(parsed)
+  }
   return String(value)
 }
 
@@ -131,7 +165,13 @@ export function fullValue(value: unknown, kind: ColumnKind): FullValue {
     return { text, chars: text.length, kind }
   }
   if (value instanceof Date) {
-    const text = value.toISOString()
+    // Same local `yyyy-mm-dd hh:mm:ss` as the grid cell: the viewer must not
+    // show a different (UTC) value than the cell the user clicked (需求6).
+    const text = formatLocalDateTime(value)
+    return { text, chars: text.length, kind }
+  }
+  if (kind === 'date' && typeof value === 'string') {
+    const text = formatDate(value)
     return { text, chars: text.length, kind }
   }
   if (kind === 'json') {

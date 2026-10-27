@@ -8,6 +8,8 @@ import type { ClientContext, SidebarRightTabDefinition } from '../src/client/con
 interface Registration {
   readonly name: string
   readonly key?: string
+  readonly id?: string
+  readonly order?: number
   readonly locale?: string
   readonly inject?: (...args: unknown[]) => Record<string, unknown>
 }
@@ -87,13 +89,14 @@ describe('client half', () => {
     expect(workbenchApi(throwing as unknown as Record<string, unknown>)).toBeUndefined()
   })
 
-  it('registers copy, one page type and both keyed seats', () => {
+  it('registers copy, the chat bridge, one page type and both keyed seats', () => {
     const h = harness()
 
     apply(h.ctx)
 
     expect(h.effects).toEqual([
       'dsh-data-ide: tab copy',
+      'dsh-data-ide: chat input bridge',
       'dsh-data-ide: sidebar tab type',
       'dsh-data-ide: sidebar tab body',
       'dsh-data-ide: sidebar tab title',
@@ -109,9 +112,15 @@ describe('client half', () => {
     expect(definition.guide?.[0]?.title()).toBe('tab.title')
     expect(definition.guide?.[0]?.description?.()).toBe('tab.guide')
     expect(definition.guide?.[0]?.icon).toBeTypeOf('function')
-    expect(h.injected).toEqual([TAB_BODY_SLOT, TAB_TITLE_SLOT])
-    expect(h.registrations[0]).toMatchObject({ name: TAB_BODY_SLOT, key: TAB_ID, locale: 'dsh-data-ide.tab' })
-    expect(h.registrations[1]).toEqual({ name: TAB_TITLE_SLOT, key: TAB_ID })
+    expect(h.injected).toEqual(['conversation.input.dock', TAB_BODY_SLOT, TAB_TITLE_SLOT])
+    expect(h.registrations[0]).toMatchObject({
+      name: 'conversation.input.dock',
+      id: 'dsh-data-ide-chat-bridge',
+      order: 80,
+    })
+    expect(h.registrations[0]?.key).toBeUndefined()
+    expect(h.registrations[1]).toMatchObject({ name: TAB_BODY_SLOT, key: TAB_ID, locale: 'dsh-data-ide.tab' })
+    expect(h.registrations[2]).toEqual({ name: TAB_TITLE_SLOT, key: TAB_ID })
   })
 
   it('hands the body seat the in-process service when the context has one', () => {
@@ -121,7 +130,7 @@ describe('client half', () => {
 
     // `inject` must be a function: the host calls it to build the entry's props
     // (`TypeError: inject is not a function` crashed the seat when it was a record).
-    const inject = h.registrations[0]?.inject
+    const inject = h.registrations[1]?.inject
     expect(inject).toBeTypeOf('function')
     expect((inject as () => unknown)()).toEqual({ api })
   })
@@ -131,7 +140,7 @@ describe('client half', () => {
     apply(h.ctx)
 
     // The web frontend runs in another process, so this is the normal case.
-    const props = (h.registrations[0]?.inject as () => Record<string, unknown>)()
+    const props = (h.registrations[1]?.inject as () => Record<string, unknown>)()
     expect(props['api']).toMatchObject({
       list: expect.any(Function),
       execute: expect.any(Function),
@@ -212,7 +221,8 @@ describe('client half', () => {
     expect(error).toHaveBeenCalledOnce()
     expect(error.mock.calls[0]?.[0]).toContain('sidebarRight')
     expect(h.definitions).toHaveLength(0)
-    expect(h.registrations).toHaveLength(0)
+    // The chat bridge is independent of the right sidebar and stays registered.
+    expect(h.registrations.map(entry => entry.name)).toEqual(['conversation.input.dock'])
     error.mockRestore()
   })
 
@@ -222,7 +232,7 @@ describe('client half', () => {
 
     apply(h.ctx)
 
-    expect(h.effects).toEqual(['dsh-data-ide: tab copy'])
+    expect(h.effects).toEqual(['dsh-data-ide: tab copy', 'dsh-data-ide: chat input bridge'])
     error.mockRestore()
   })
 })

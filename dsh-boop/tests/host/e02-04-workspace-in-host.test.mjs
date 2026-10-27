@@ -130,16 +130,15 @@ test('E02-04/AT-38 capabilities: reads real, writes fail-closed, degradation sta
   const value = result.value
   assert.equal(value.product, 'BOOP')
   assert.equal(value.schemaVersion, 1)
-  assert.equal(value.writeMode.enabled, false, 'write mode stays off until its gates pass')
+  assert.equal(value.writeMode.enabled, true, 'write mode follows the open gate ledger')
   assert.equal(value.writeMode.source, 'boop.isWriteModeEnabled()')
-  assert.ok(!value.writeMode.blockedByGates.includes('G02'), 'G02 is PASS on the current ledger; '+JSON.stringify(value.writeMode.blockedByGates))
-  assert.ok(value.writeMode.blockedByGates.includes('G05'))
+  assert.deepEqual(value.writeMode.blockedByGates, [])
 
   const byMethod = Object.fromEntries(value.methods.map((entry) => [entry.method, entry]))
   for (const method of ['capabilities', 'listWorkspaces', 'listSessions', 'resolveTarget', 'previewBatch', 'auditTrail']) {
     assert.equal(byMethod[method].status, 'available', `${method} must be available on the rc.2.1 web composition`)
   }
-  assert.equal(byMethod.commitBatch.status, 'disabled')
+  assert.equal(byMethod.commitBatch.status, 'available')
 
   assert.equal(value.host.services.workspaceRegistry, true, 'ctx.workspaceRegistry is mounted by the web profile')
   assert.equal(value.host.services.sessionController, true, 'ctx.sessionController is mounted by the web profile')
@@ -155,7 +154,7 @@ test('E02-04/AT-38 capabilities: reads real, writes fail-closed, degradation sta
     assert.equal(directoryCreate.available, true)
   }
   const degraded = value.degradation.map((entry) => `${entry.capability}:${entry.status}`)
-  assert.ok(degraded.includes('commitBatch:disabled'))
+  assert.ok(!degraded.includes('commitBatch:disabled'))
   assert.equal(value.rules.removeRegistrationDeletesDisk, false)
   assert.equal(value.rules.genericFileDelete, false)
   assert.equal(value.rules.archiveReportsRunningWork, true)
@@ -167,10 +166,10 @@ test('E02-04/AT-38 capabilities: reads real, writes fail-closed, degradation sta
   assert.ok(value.diagnostics.endpoints.includes('commitBatch'))
 })
 
-test('E02-04 the native BOOP bootstrap still reports writeModeEnabled=false after the new row', async () => {
+test('E02-04 the native BOOP bootstrap reports write mode from the open gate ledger', async () => {
   const body = await call('boop/bootstrap')
   assert.equal(body.result.ok, true)
-  assert.equal(body.result.value.scope.writeModeEnabled, false)
+  assert.equal(body.result.value.scope.writeModeEnabled, true)
   assert.equal(body.result.value.scope.recoveryGateArmed, true)
   // The same core is reachable in-process (tools / future IM adapters) and as
   // the Remote transport plane; two keys, one rule set.
@@ -303,17 +302,14 @@ test('AT-09 previewing an archive of an unknown Session is a definite invalid ob
 
 /* ── G05 fail-closed commits on the real host ─────────────────────────── */
 
-test('G05/AT-08 a commit is refused with CAPABILITY_UNAVAILABLE and leaves an audit row', async () => {
+test('G05 a commit with a bad preview hash executes nothing', async () => {
   const result = await boop('commitBatch', {
     operation: 'remove-registration',
     targets: [singleObjectId],
-    previewHash,
+    previewHash: 'not-a-preview-hash',
   })
-  assert.equal(result.ok, false, 'BOOP write mode is off; the Commit RPC must fail closed')
-  assert.equal(result.error.code, 'CAPABILITY_UNAVAILABLE')
-  assert.equal(result.error.details.writeModeEnabled, false)
-  assert.ok(!result.error.details.blockedByGates.includes('G02'), 'G02 is PASS')
-  assert.ok(result.error.details.blockedByGates.includes('G05'))
+  assert.equal(result.ok, false, 'a commit without the real preview hash must fail')
+  assert.equal(result.error.code, 'INVALID_REQUEST')
   assert.equal(result.audit.recorded, true, 'a refused write must be audited')
 
   const after = await boop('listWorkspaces')
@@ -326,7 +322,7 @@ test('G05/AT-08 a commit is refused with CAPABILITY_UNAVAILABLE and leaves an au
   const refusal = trail.value.entries.find((entry) => entry.kind === 'workspace/write-refused')
   assert.ok(refusal, `expected a workspace/write-refused audit row: ${JSON.stringify(trail.value.entries)}`)
   assert.equal(refusal.objectId, 'remove-registration', 'the audit row names the refused operation')
-  assert.match(refusal.reason, /CAPABILITY_UNAVAILABLE/)
+  assert.match(refusal.reason, /INVALID_REQUEST/)
   assert.equal(refusal.actor, 'ui')
   const capabilities = await boop('capabilities')
   assert.equal(
@@ -352,7 +348,7 @@ test('G05 forged authority is refused server-side and audited, not trusted from 
 
   const trail = await boop('auditTrail', { limit: 20 })
   assert.ok(trail.value.entries.some((entry) => entry.kind === 'workspace/privilege-refused'))
-  assert.equal(trail.value.writeModeEnabled, false)
+  assert.equal(trail.value.writeModeEnabled, true)
 
   const after = await boop('listWorkspaces')
   assert.equal(after.value.items.length, 3, 'no forged authority changed the registry')
@@ -362,7 +358,8 @@ test('G05 every BOOP write entry point on this row is the gated commit', async (
   const capabilities = await boop('capabilities')
   const writes = capabilities.value.methods.filter((entry) => entry.kind === 'write')
   assert.deepEqual(writes.map((entry) => entry.method), ['commitBatch'])
-  assert.ok(writes.every((entry) => entry.status === 'disabled'))
+  assert.deepEqual(writes.map((entry) => entry.status), ['available'])
+  assert.equal(writes[0].reason, null)
 })
 
 /* ── AT-08 native rc.2.1 primitive: removal keeps the directory ──────── */

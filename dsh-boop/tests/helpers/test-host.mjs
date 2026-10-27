@@ -109,10 +109,16 @@ export function runCli({ home, args, timeoutMs = 180000 }) {
  * startup URL is printed.
  */
 export async function bootWeb({ home, profile, port, timeoutMs = 180000 }) {
+  const env = { ...process.env, DSH_HOME: home }
+  const patchPath = path.join(home, 'profiles', profile, 'cordis.patch.yml')
+  if (fs.existsSync(patchPath) && /pocEnabled:\s*true/u.test(fs.readFileSync(patchPath, 'utf8'))) {
+    // Isolated test profiles opt in. A user install does not set this variable.
+    env.BOOP_ALLOW_POC = '1'
+  }
   const child = spawn(
     NODE_BIN,
     [CLI_ENTRY, '--profile', profile, '--no-open', '--port', String(port)],
-    { cwd: PROJECT_ROOT, env: { ...process.env, DSH_HOME: home }, stdio: ['ignore', 'pipe', 'pipe'] },
+    { cwd: PROJECT_ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] },
   )
   let out = ''
   let err = ''

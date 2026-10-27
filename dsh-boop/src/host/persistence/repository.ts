@@ -1085,26 +1085,45 @@ export class BoopRepository {
     authority: string
     status?: string
     validTime?: string
+    subjectKey?: string
   }): { version: number } {
     const time = this.now()
+    const status = input.status ?? 'active'
     const existing = this.store.db
       .prepare('SELECT version FROM fact WHERE scope_id = ? AND id = ?')
       .get(input.scopeId, input.factId) as { version: number } | undefined
     const version = existing ? Number(existing.version) + 1 : 1
     if (existing) {
       this.store.db
-        .prepare('UPDATE fact SET text = ?, status = ?, authority = ?, valid_time = ?, version = ?, updated_at = ? WHERE scope_id = ? AND id = ?')
-        .run(input.text, input.status ?? 'active', input.authority, input.validTime ?? null, version, time, input.scopeId, input.factId)
+        .prepare(
+          'UPDATE fact SET text = ?, status = ?, authority = ?, valid_time = ?, version = ?, updated_at = ?, subject_key = COALESCE(?, subject_key) WHERE scope_id = ? AND id = ?',
+        )
+        .run(input.text, status, input.authority, input.validTime ?? null, version, time, input.subjectKey ?? null, input.scopeId, input.factId)
     } else {
       this.store.db
         .prepare(
-          'INSERT INTO fact(id,scope_id,owner_type,owner_id,kind,text,status,authority,valid_time,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO fact(id,scope_id,owner_type,owner_id,kind,text,status,authority,subject_key,valid_time,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
         )
-        .run(input.factId, input.scopeId, input.ownerType, input.ownerId, input.kind, input.text, input.status ?? 'active', input.authority, input.validTime ?? null, version, time, time)
+        .run(
+          input.factId,
+          input.scopeId,
+          input.ownerType,
+          input.ownerId,
+          input.kind,
+          input.text,
+          status,
+          input.authority,
+          input.subjectKey ?? null,
+          input.validTime ?? null,
+          version,
+          time,
+          time,
+        )
     }
     this.store.db
       .prepare('INSERT INTO fact_version(fact_id,scope_id,version,snapshot_json,created_at) VALUES(?,?,?,?,?)')
-      .run(input.factId, input.scopeId, version, json({ text: input.text, authority: input.authority, kind: input.kind }), time)
+      .run(input.factId, input.scopeId, version, json({ text: input.text, authority: input.authority, kind: input.kind, subjectKey: input.subjectKey ?? null }), time)
+    this.syncFactIndex(input.scopeId, input.factId, input.text, status)
     return { version }
   }
 
@@ -1167,9 +1186,10 @@ export class BoopRepository {
     status: string
     authority: string
     version: number
+    subjectKey?: string
   }> {
     const rows = this.store.db
-      .prepare('SELECT id, kind, text, status, authority, version FROM fact WHERE scope_id = ? AND owner_type = ? AND owner_id = ? ORDER BY id, version')
+      .prepare('SELECT id, kind, text, status, authority, version, subject_key FROM fact WHERE scope_id = ? AND owner_type = ? AND owner_id = ? ORDER BY id, version')
       .all(scopeId, ownerType, ownerId) as Array<Record<string, unknown>>
     const latest = new Map<string, Record<string, unknown>>()
     for (const row of rows) latest.set(String(row.id), row)
@@ -1180,6 +1200,9 @@ export class BoopRepository {
       status: String(row.status),
       authority: String(row.authority),
       version: Number(row.version),
+      ...(row.subject_key === null || row.subject_key === undefined || String(row.subject_key) === ''
+        ? {}
+        : { subjectKey: String(row.subject_key) }),
     }))
   }
 
@@ -1255,6 +1278,235 @@ export class BoopRepository {
       objectId: row.object_id === null ? null : String(row.object_id),
       reason: row.reason === null ? null : String(row.reason),
     }))
+  }
+
+  /* ── boot marker, init jobs, forget, retrieval index ───────────────── */
+
+  getMeta(key: string): string | null {
+    const row = this.store.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined
+    return row ? String(row.value) : null
+  }
+
+  setMeta(key: string, value: string): void {
+    this.store.db
+      .prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+      .run(key, value)
+  }
+
+  createInitJob(input: {
+    scopeId: string
+    mode: 'from_now' | 'learn_history' | 'import_memory'
+    processed: number
+    total: number | null
+    state: 'pending' | 'running' | 'paused' | 'done' | 'failed'
+    failures: Array<{ objectId: string; reason: string }>
+    createdAt: string
+    finishedAt: string | null
+  }): { id: string } {
+    const id = this.id()
+    this.store.db
+      .prepare(
+        'INSERT INTO init_job(id,scope_id,mode,processed,total,state,failures_json,created_at,finished_at) VALUES(?,?,?,?,?,?,?,?,?)',
+      )
+      .run(id, input.scopeId, input.mode, input.processed, input.total, input.state, json(input.failures), input.createdAt, input.finishedAt)
+    return { id }
+  }
+
+  getInitJob(id: string): {
+    id: string
+    mode: 'from_now' | 'learn_history' | 'import_memory'
+    processed: number
+    total: number | null
+    state: 'pending' | 'running' | 'paused' | 'done' | 'failed'
+    failures: Array<{ objectId: string; reason: string }>
+    createdAt: string
+    finishedAt: string | null
+  } | null {
+    const row = this.store.db
+      .prepare('SELECT id, mode, processed, total, state, failures_json, created_at, finished_at FROM init_job WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined
+    if (!row) return null
+    return {
+      id: String(row.id),
+      mode: String(row.mode) as 'from_now' | 'learn_history' | 'import_memory',
+      processed: Number(row.processed),
+      total: row.total === null ? null : Number(row.total),
+      state: String(row.state) as 'pending' | 'running' | 'paused' | 'done' | 'failed',
+      failures: parse<Array<{ objectId: string; reason: string }>>(String(row.failures_json), []),
+      createdAt: String(row.created_at),
+      finishedAt: row.finished_at === null ? null : String(row.finished_at),
+    }
+  }
+
+  updateInitJob(
+    id: string,
+    patch: Partial<{
+      processed: number
+      total: number | null
+      state: 'pending' | 'running' | 'paused' | 'done' | 'failed'
+      failures: Array<{ objectId: string; reason: string }>
+      finishedAt: string | null
+    }>,
+  ): void {
+    const current = this.getInitJob(id)
+    if (!current) throw new Error('boop: unknown initialization job')
+    const next = { ...current }
+    if (patch.processed !== undefined) next.processed = patch.processed
+    if (patch.total !== undefined) next.total = patch.total
+    if (patch.state !== undefined) next.state = patch.state
+    if (patch.failures !== undefined) next.failures = patch.failures
+    if (patch.finishedAt !== undefined) next.finishedAt = patch.finishedAt
+    this.store.db
+      .prepare('UPDATE init_job SET processed = ?, total = ?, state = ?, failures_json = ?, finished_at = ? WHERE id = ?')
+      .run(next.processed, next.total, next.state, json(next.failures), next.finishedAt, id)
+  }
+
+  saveForgetRule(input: {
+    scopeId: string
+    sourceFingerprint: string
+    selector: unknown
+    mode: 'exclude_source' | 'forget_fact' | 'exclude_scope'
+  }): { id: string } {
+    const id = this.id()
+    this.store.db
+      .prepare('INSERT INTO forget_rule(id,scope_id,source_fingerprint,selector_json,mode,created_at) VALUES(?,?,?,?,?,?)')
+      .run(id, input.scopeId, input.sourceFingerprint, json(input.selector), input.mode, this.now())
+    return { id }
+  }
+
+  forgetRules(scopeId: string): Array<{ id: string; sourceFingerprint: string; selector: unknown; mode: string }> {
+    const rows = this.store.db
+      .prepare('SELECT id, source_fingerprint, selector_json, mode FROM forget_rule WHERE scope_id = ? ORDER BY created_at')
+      .all(scopeId) as Array<Record<string, unknown>>
+    return rows.map((row) => ({
+      id: String(row.id),
+      sourceFingerprint: String(row.source_fingerprint),
+      selector: parse<unknown>(String(row.selector_json), {}),
+      mode: String(row.mode),
+    }))
+  }
+
+  /**
+   * Mark facts tombstoned so a later extraction of the same id cannot revive
+   * them (AT-23). Rows stay readable; the original Session is not touched.
+   */
+  tombstoneFacts(scopeId: string, factIds: string[]): string[] {
+    const done: string[] = []
+    for (const factId of factIds) {
+      const row = this.store.db
+        .prepare('SELECT status, version, text, authority, kind FROM fact WHERE scope_id = ? AND id = ?')
+        .get(scopeId, factId) as { status: string; version: number; text: string; authority: string; kind: string } | undefined
+      if (!row) continue
+      if (row.status !== 'tombstoned') {
+        const version = Number(row.version) + 1
+        const time = this.now()
+        this.store.db
+          .prepare("UPDATE fact SET status = 'tombstoned', version = ?, updated_at = ? WHERE scope_id = ? AND id = ?")
+          .run(version, time, scopeId, factId)
+        this.store.db
+          .prepare('INSERT INTO fact_version(fact_id,scope_id,version,snapshot_json,created_at) VALUES(?,?,?,?,?)')
+          .run(factId, scopeId, version, json({ text: row.text, authority: row.authority, kind: row.kind, status: 'tombstoned' }), time)
+      }
+      this.syncFactIndex(scopeId, factId, '', 'tombstoned')
+      done.push(factId)
+    }
+    return done
+  }
+
+  /** Fact ids whose evidence cites this Session, used by source-forget. */
+  factIdsForSession(scopeId: string, sessionId: string): string[] {
+    const rows = this.store.db
+      .prepare('SELECT DISTINCT fact_id FROM fact_evidence WHERE scope_id = ? AND session_id = ?')
+      .all(scopeId, sessionId) as Array<{ fact_id: string }>
+    return rows.map((row) => String(row.fact_id))
+  }
+
+  activeFactIds(scopeId: string): string[] {
+    const rows = this.store.db
+      .prepare("SELECT id FROM fact WHERE scope_id = ? AND status != 'tombstoned'")
+      .all(scopeId) as Array<{ id: string }>
+    return rows.map((row) => String(row.id))
+  }
+
+  /**
+   * Why a new candidate must not re-enter the ledger. Null means the forget
+   * rules do not block it. A tombstoned id is also blocked.
+   */
+  revivalBlocked(
+    scopeId: string,
+    change: { factId?: string; evidenceRefs?: Array<{ sessionId?: string }> },
+  ): string | null {
+    return this.revivalBlockReason(scopeId, change)
+  }
+
+  revivalBlockReason(
+    scopeId: string,
+    change: { factId?: string; evidenceRefs?: Array<{ sessionId?: string }> },
+  ): string | null {
+    if (change.factId) {
+      const row = this.store.db
+        .prepare('SELECT status FROM fact WHERE scope_id = ? AND id = ?')
+        .get(scopeId, change.factId) as { status: string } | undefined
+      if (row?.status === 'tombstoned') return 'FACT_TOMBSTONED'
+    }
+    const sessions = new Set((change.evidenceRefs ?? []).map((ref) => ref.sessionId).filter((id): id is string => Boolean(id)))
+    for (const rule of this.forgetRules(scopeId)) {
+      if (rule.mode === 'exclude_scope' || rule.sourceFingerprint === '*') return 'FORGET_SCOPE'
+      if (rule.mode === 'forget_fact') {
+        const ids = Array.isArray(rule.selector) ? rule.selector.map(String) : []
+        if (change.factId && ids.includes(change.factId)) return 'FACT_TOMBSTONED'
+      }
+      if (rule.mode === 'exclude_source' && (sessions.has(rule.sourceFingerprint) || rule.sourceFingerprint === '*')) {
+        return 'SOURCE_FORGOTTEN'
+      }
+    }
+    return null
+  }
+
+  /**
+   * Ranked fact search. FTS5 when the derived index exists; otherwise an
+   * exact substring over active facts. Tombstoned rows are never returned.
+   */
+  searchFacts(scopeId: string, query: string, limit: number): Array<{ factId: string; text: string; score: number }> {
+    const needle = query.trim()
+    if (!needle || limit <= 0) return []
+    if (this.store.fts) {
+      const match = ftsQuery(needle)
+      if (match) {
+        try {
+          const rows = this.store.db
+            .prepare(
+              `SELECT f.fact_id, fact.text, bm25(fact_fts) AS rank
+                 FROM fact_fts f
+                 JOIN fact ON fact.scope_id = f.scope_id AND fact.id = f.fact_id
+                WHERE fact_fts MATCH ? AND f.scope_id = ? AND fact.status NOT IN ('tombstoned','superseded')
+                ORDER BY rank
+                LIMIT ?`,
+            )
+            .all(match, scopeId, limit) as Array<{ fact_id: string; text: string; rank: number }>
+          if (rows.length > 0) {
+            return rows.map((row) => ({ factId: String(row.fact_id), text: String(row.text), score: -Number(row.rank) }))
+          }
+        } catch {
+          /* malformed MATCH falls through to the exact scan */
+        }
+      }
+    }
+    const rows = this.store.db
+      .prepare("SELECT id, text FROM fact WHERE scope_id = ? AND status NOT IN ('tombstoned','superseded') AND instr(text, ?) > 0 LIMIT ?")
+      .all(scopeId, needle, limit) as Array<{ id: string; text: string }>
+    return rows.map((row) => ({ factId: String(row.id), text: String(row.text), score: 1 }))
+  }
+
+  private syncFactIndex(scopeId: string, factId: string, text: string, status: string): void {
+    if (!this.store.fts) return
+    try {
+      this.store.db.prepare('DELETE FROM fact_fts WHERE scope_id = ? AND fact_id = ?').run(scopeId, factId)
+      if (status === 'tombstoned' || status === 'superseded') return
+      this.store.db.prepare('INSERT INTO fact_fts(scope_id, fact_id, text) VALUES(?,?,?)').run(scopeId, factId, text)
+    } catch {
+      /* a derived index must not fail the authoritative write */
+    }
   }
 }
 
@@ -1420,4 +1672,15 @@ function mapEvidenceRow(row: Record<string, unknown>): TaskEvidenceRow {
     sourceHash: String(row.source_hash ?? ''),
     artifactRef: row.artifact_ref === null || row.artifact_ref === undefined ? null : String(row.artifact_ref),
   }
+}
+
+/** Quote each token so a user question cannot change the FTS expression. */
+function ftsQuery(value: string): string {
+  const tokens = value
+    .split(/[^\p{L}\p{N}_]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+    .slice(0, 12)
+  if (tokens.length === 0) return ''
+  return tokens.map((token) => `"${token.replaceAll('"', '')}"`).join(' ')
 }

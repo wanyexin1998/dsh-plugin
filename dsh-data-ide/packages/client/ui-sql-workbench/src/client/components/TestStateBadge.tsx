@@ -17,7 +17,14 @@ export function TestStateBadge({ result, busy }: { readonly result?: TestResult;
       </span>
     )
   }
-  if (result === undefined) return <span className={styles.badge}>未测试</span>
+  if (result === undefined) {
+    return (
+      <span className={styles.badge}>
+        <span className={styles.dotIdle} aria-hidden="true" />
+        未测试
+      </span>
+    )
+  }
 
   if (result.state === 'YES') {
     const info = result.info

@@ -61,6 +61,182 @@ const tabs: ScriptTab[] = [
   { sql: 'SELECT 2', result: page([[2]], 2, 7) },
 ]
 
+describe('script result error next steps (SQL-310)', () => {
+  it('binds locate / EXPLAIN to the failed tab', () => {
+    const onExplain = vi.fn()
+    const onLocate = vi.fn()
+    act(() => {
+      root.render(
+        <ScriptResults
+          tabs={[{ sql: 'SELECT bad', result: null, error: { code: 'SQL_SYNTAX', message: '语法错误' } }]}
+          active={0}
+          running={false}
+          pageSize={500}
+          onActive={vi.fn()}
+          onSort={vi.fn()}
+          onPage={vi.fn()}
+          onPageSize={vi.fn()}
+          errorActions={() => ({ line: 3, onLocate, onExplain })}
+        />,
+      )
+    })
+    const byLabel = (label: string): HTMLElement | undefined =>
+      [...container.querySelectorAll(`[aria-label="${label}"]`)][0] as HTMLElement | undefined
+
+    act(() => {
+      byLabel('定位错误行')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onLocate).toHaveBeenCalledWith(3)
+    act(() => {
+      byLabel('解释错误语句')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onExplain).toHaveBeenCalled()
+  })
+
+  it('tolerates an error tab whose failure has no next steps', () => {
+    act(() => {
+      root.render(
+        <ScriptResults
+          tabs={[{ sql: 'SELECT bad', result: null, error: { code: 'X', message: '失败' } }]}
+          active={0}
+          running={false}
+          pageSize={500}
+          onActive={vi.fn()}
+          onSort={vi.fn()}
+          onPage={vi.fn()}
+          onPageSize={vi.fn()}
+          errorActions={() => ({})}
+        />,
+      )
+    })
+    expect(container.textContent).toContain('X')
+    expect(container.querySelector('[aria-label="解释错误语句"]')).toBeNull()
+    expect(container.querySelector('[aria-label="定位错误行"]')).toBeNull()
+  })
+
+  it('forwards the send-to-chat action for a failed tab (SQL-405)', () => {
+    const onSendChat = vi.fn()
+    act(() => {
+      root.render(
+        <ScriptResults
+          tabs={[{ sql: 'SELECT bad', result: null, error: { code: 'X', message: '失败' } }]}
+          active={0}
+          running={false}
+          pageSize={500}
+          onActive={vi.fn()}
+          onSort={vi.fn()}
+          onPage={vi.fn()}
+          onPageSize={vi.fn()}
+          onSendChat={onSendChat}
+        />,
+      )
+    })
+    act(() => {
+      container.querySelector('[aria-label="发到聊天框"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onSendChat).toHaveBeenCalledWith(0)
+  })
+})
+
+describe('script result tabs: rename and pin (SQL-314)', () => {
+  function renderEditable(tabs: ScriptTab[], onRenameTab = vi.fn(), onPinTab = vi.fn()) {
+    act(() => {
+      root.render(
+        <ScriptResults
+          tabs={tabs}
+          active={0}
+          running={false}
+          pageSize={500}
+          onActive={vi.fn()}
+          onSort={vi.fn()}
+          onPage={vi.fn()}
+          onPageSize={vi.fn()}
+          onRenameTab={onRenameTab}
+          onPinTab={onPinTab}
+        />,
+      )
+    })
+    const resultTabs = (): Element[] =>
+      [...container.querySelectorAll('[role="tab"]:not([data-sql-output-tab])')]
+    return { onRenameTab, onPinTab, resultTabs }
+  }
+
+  const input = (): HTMLInputElement | null => container.querySelector('[aria-label="重命名结果标签"]')
+
+  const typeInto = (value: string): void => {
+    const field = input() as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(field, value)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  it('renames on double-click + Enter and ignores an empty name', () => {
+    const view = renderEditable(tabs)
+    act(() => {
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    expect(input()).not.toBeNull()
+    typeInto('订单明细')
+    act(() => {
+      input()?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+    expect(view.onRenameTab).toHaveBeenCalledWith(0, '订单明细')
+
+    // Empty name keeps the old title.
+    act(() => {
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    typeInto('   ')
+    act(() => {
+      input()?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+    expect(view.onRenameTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels renaming on Escape and commits on blur', () => {
+    const view = renderEditable(tabs)
+    act(() => {
+      view.resultTabs()[1]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    act(() => {
+      input()?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
+    })
+    expect(input()).toBeNull()
+
+    act(() => {
+      view.resultTabs()[1]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    typeInto('第二段')
+    act(() => {
+      input()?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(view.onRenameTab).toHaveBeenCalledWith(1, '第二段')
+  })
+
+  it('pins from the context menu and shows the pin marker', () => {
+    const view = renderEditable([{ ...tabs[0] as ScriptTab, pinned: true }, tabs[1] as ScriptTab])
+    expect(container.querySelector('[data-sql-tab-pinned]')).not.toBeNull()
+    act(() => {
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    })
+    expect(view.onPinTab).toHaveBeenCalledWith(0)
+  })
+
+  it('does nothing for rename/pin when the panel passes no handlers', () => {
+    const view = render(tabs)
+    act(() => {
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    expect(input()).toBeNull()
+    act(() => {
+      view.resultTabs()[0]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    })
+    expect(view.resultTabs()).toHaveLength(2)
+  })
+})
+
 describe('script result tabs', () => {
   it('names each tab after its first column and type, with rows and duration', () => {
     const view = render(tabs)
@@ -75,6 +251,12 @@ describe('script result tabs', () => {
     const labels = view.resultTabs().map(tab => tab.textContent)
     expect(labels[0]).toContain('v:int')
     expect(labels[2]).toContain('v:int (3)')
+  })
+
+  it('prefers an explicit table title over the column label (SQL-314)', () => {
+    const view = render([{ sql: 'SELECT * FROM dwd_order', result: page([[1]], 1), title: 'dwd_order' }])
+    expect(view.resultTabs()[0]?.textContent).toContain('dwd_order')
+    expect(view.resultTabs()[0]?.textContent).not.toContain('v:int')
   })
 
   it('marks the active tab and switches on click', () => {
@@ -127,7 +309,8 @@ describe('script result tabs', () => {
     const view = render([{ sql: 'SELECT 1', result: { ...page([[1]], 1000), hasNextPage: true } }])
 
     act(() => {
-      view.buttons().find(button => button.textContent === 'v')?.click()
+      // The header button now carries the name plus a sort indicator glyph.
+      view.buttons().find(button => button.className.includes('sortHeader'))?.click()
     })
     const pager = view.buttons().filter(button => ['上一页', '下一页', '首页', '末页'].includes(button.textContent ?? ''))
     act(() => {

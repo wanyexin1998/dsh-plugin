@@ -375,7 +375,7 @@ test('E07-01 restored ledger: integrity ok, same scopeId/schema, old rows readab
   assert.ok(bootstrap.storage !== null && bootstrap.storage !== undefined, 'the restarted Host opened the restored ledger')
   assert.equal(bootstrap.storage?.scope?.scopeId, scopeIdBefore, 'scopeId is unchanged by the restore')
   assert.equal(bootstrap.storage?.schemaVersion, schemaVersionBefore, 'schema version is unchanged (no fake migration)')
-  assert.equal(bootstrap.scope?.writeModeEnabled, false, 'write mode is still false after the restart')
+  assert.equal(bootstrap.scope?.writeModeEnabled, true, 'write mode still follows the open gate ledger after the restart')
 
   const tasks = await ok('boopTasks/list', { request: {} })
   assert.equal(tasks.available, true, JSON.stringify({ reason: tasks.reason, detail: tasks.detail }))

@@ -956,7 +956,7 @@ export function controlApprovalsFacts(port: ControlPort, request?: unknown): Con
 /* ── decideApproval() — the human decision ───────────────────────────── */
 
 const DECIDE_MESSAGE = {
-  allowed: '审批结论已落账（允许本次）。写模式关闭：本次没有派发任何动作，也没有执行任何外部副作用。',
+  allowed: '审批结论已落账（允许本次）。本次没有派发任何动作，也没有执行任何外部副作用。',
   rejected: '审批已拒绝并落账。不会派发任何动作。',
   alreadyHandled: '该审批已在别处处理：本次没有再次放行，也没有派发任何动作。',
   staleExpired: '此审批已过期失效，不能批准；没有派发任何动作。请重新核查后申请。',

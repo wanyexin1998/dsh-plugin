@@ -86,7 +86,7 @@ const unavailableFacts = {
   state: 'unavailable',
   executed: false,
   reason: 'write-mode-disabled',
-  copy: '写模式在 G01–G06 全部通过前保持关闭，初始化不会写入任何数据。',
+  copy: '写模式在 G01–G06 与 G08、G09 通过前保持关闭，初始化不会写入任何数据。',
   writeModeEnabled: false,
   gates: { G01: 'PASS', G05: 'NOT_RUN', G06: 'NOT_RUN' },
   storage: { ok: true, path: '/tmp/boop/boop.sqlite', scopeId: 'boop-abc123', writable: true },
@@ -133,10 +133,10 @@ test('E04-01 choosing a mode asks the read-only host endpoint and reports real u
   })
   view.host.querySelector('[data-boop-init-mode="learn_history"]').click()
   await tick()
-  assert.deepEqual(calls, [{ endpoint: 'boop/initPlan', args: { mode: 'learn_history' } }], 'real host call with the chosen mode')
+  assert.deepEqual(calls, [{ endpoint: 'boop/initApply', args: { mode: 'learn_history' } }], 'real host call with the chosen mode')
   const result = view.host.querySelector('[data-boop-init-state]')
   assert.equal(result.getAttribute('data-boop-init-state'), 'unavailable')
-  assert.match(result.textContent, /写模式在 G01–G06 全部通过前保持关闭/)
+  assert.match(result.textContent, /写模式在 G01–G06 与 G08、G09 通过前保持关闭/)
   assert.match(result.textContent, /已执行：否（0 写入）/, 'no fake PASS')
   assert.match(result.textContent, /reason: write-mode-disabled/)
   assert.match(result.textContent, /已发现会话：3/, 'real source count is shown')
@@ -329,6 +329,7 @@ test('E04-01 the native settings row shows real facts and never fakes a toggle',
         ok: true,
         value: {
           scope: { dshProfileVersion: '0.2.1-rc.2', writeModeEnabled: false },
+          writeMode: { blockedByGates: ['G05', 'G08', 'G09'] },
           storage: { ok: true, path: '/x/boop.sqlite', scopeId: 'boop-abc123' },
         },
       }
@@ -339,7 +340,7 @@ test('E04-01 the native settings row shows real facts and never fakes a toggle',
   const row = view.host.querySelector('[data-boop-settings]')
   assert.ok(row, 'the additive settings row renders')
   assert.match(view.text(), /BOOP · 波波/)
-  assert.match(view.text(), /写模式关闭（G01–G06 通过前）/)
+  assert.match(view.text(), /写模式关闭（blockedBy: G05, G08, G09）/)
   assert.match(view.text(), /跟随宿主/)
   assert.deepEqual(calls, ['boop/bootstrap'], 'real host facts, once')
   assert.equal(row.querySelector('input, [role="switch"], select'), null, 'no fake setting control is drawn')
@@ -354,7 +355,7 @@ test('E04-01 the settings row reports unavailable state instead of inventing def
   const alert = view.host.querySelector('[role="alert"]')
   assert.ok(alert)
   assert.match(alert.textContent, /connection refused/)
-  assert.doesNotMatch(view.text(), /写模式关闭（G01–G06 通过前）/, 'no invented write-mode fact when the plane failed')
+  assert.doesNotMatch(view.text(), /blockedBy|通过前/, 'no invented write-mode fact when the plane failed')
   view.cleanup()
 })
 

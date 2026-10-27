@@ -9,6 +9,7 @@ import type { WorkbenchApi } from '../src/client/api.ts'
 import type { SchemaSnapshot } from '../src/host/metadata.ts'
 import { createDataSource } from '../src/datasource/model.ts'
 import { readSql } from './support/editor.ts'
+import { findButtonText } from './support/labeled.ts'
 
 const connA = 'f02da6e0-4a1b-4c2d-9f3e-77c1b2a9d0e5'
 const doris = createDataSource({ id: connA, name: 'doris', dbms: 'doris', host: 'h1', username: 'u' })
@@ -289,7 +290,7 @@ describe('panel object browser', () => {
     })
     expect(container.querySelector('[data-sql-schema-root]')?.textContent).toContain('doris')
 
-    click([...container.querySelectorAll('button')].find(button => button.textContent === '配置'))
+    click(findButtonText('配置'))
     await act(async () => {
       await Promise.resolve()
     })

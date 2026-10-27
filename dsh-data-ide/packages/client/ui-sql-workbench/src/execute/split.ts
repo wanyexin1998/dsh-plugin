@@ -16,6 +16,8 @@ export interface SqlStatement {
   readonly text: string
   /** Offset of the first non-space character in the original script. */
   readonly start: number
+  /** Offset just past the last character of `text` (exclusive); start ≤ end. */
+  readonly end: number
 }
 
 /** Ceiling on statements per script; a runaway paste must not queue forever. */
@@ -38,7 +40,10 @@ export function splitStatements(sql: string, limit: number = MAX_SCRIPT_STATEMEN
     const text = raw.trim()
     if (text !== '') {
       const leading = raw.length - raw.trimStart().length
-      if (statements.length < limit) statements.push({ text, start: start + leading })
+      if (statements.length < limit) {
+        const begin = start + leading
+        statements.push({ text, start: begin, end: begin + text.length })
+      }
     }
     start = end + 1
   }
@@ -91,5 +96,46 @@ export function splitStatements(sql: string, limit: number = MAX_SCRIPT_STATEMEN
 /** True when the script holds more than one statement. */
 export function isScript(sql: string): boolean {
   return splitStatements(sql).length > 1
+}
+
+/**
+ * Whether one chunk holds real SQL rather than comments/whitespace only.
+ *
+ * A script may end with a trailing `-- note`; running that alone is a syntax
+ * error, so run-at-cursor treats such chunks as "no statement".
+ */
+function hasSql(text: string): boolean {
+  const stripped = text
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(?:--|#)[^\n]*/g, ' ')
+    .trim()
+  return stripped !== ''
+}
+
+/**
+ * The statement a caret offset belongs to.
+ *
+ * Picks the statement whose trimmed text contains the offset; an offset in the
+ * whitespace/comments between two statements belongs to the one on its right
+ * (the place the user is about to type into). Offsets past the last statement
+ * fall back to the last one; an empty or comment-only script yields `null`.
+ *
+ * @param sql - Whole editor contents.
+ * @param offset - Caret offset in `sql` (clamped to the document).
+ */
+export function statementAt(sql: string, offset: number): SqlStatement | null {
+  // `limit` bounds how many statements are returned, not how far the scanner
+  // reads — one statement is at least one character, so `sql.length + 1` keeps
+  // every statement of a large script.
+  const statements = splitStatements(sql, Math.max(1, sql.length + 1)).filter(statement => hasSql(statement.text))
+  const first = statements[0]
+  if (first === undefined) return null
+  const position = Math.max(0, Math.min(Math.trunc(offset), sql.length))
+  for (const statement of statements) {
+    if (position <= statement.end) return statement
+  }
+  // Non-empty by the guard above; the fallback is the last statement when the
+  // caret sits past every statement's trimmed end.
+  return statements[statements.length - 1] as SqlStatement
 }
 

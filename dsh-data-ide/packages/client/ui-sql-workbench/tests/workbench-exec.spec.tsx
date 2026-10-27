@@ -39,13 +39,24 @@ function click(element: Element | undefined | null): void {
 }
 
 
-const button = (label: string): HTMLButtonElement | undefined =>
-  [...container.querySelectorAll('button')].find(node => node.textContent?.trim() === label) as HTMLButtonElement | undefined
+const button = (label: string): HTMLButtonElement | undefined => {
+  const match = (): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll('button')].find(node => node.textContent?.trim() === label) as HTMLButtonElement | undefined
+  if (match() !== undefined) return match()
+  const opener = document.querySelector('[aria-label="更多查询操作"]')
+  if (opener === null) return undefined
+  act(() => {
+    opener.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  return match()
+}
 
 function page(overrides: Partial<ExecuteResponse> = {}): ExecuteResponse {
   return {
     columns: [{ name: 'id', typeName: 'LONG' }, { name: '订单日期', typeName: 'DATE' }],
-    rows: [[103572, new Date('2026-10-17T08:12:33.000Z')], [null, '2026-10-16']],
+    // Built from local components, so the rendered cell reads the same in every
+    // timezone: format.ts shows the user's clock (需求6), not UTC.
+    rows: [[103572, new Date(2026, 9, 17, 8, 12, 33)], [null, '2026-10-16']],
     total: 900,
     hasNextPage: true,
     offset: 0,
@@ -160,7 +171,7 @@ describe('editor and grid', () => {
     act(() => {
       setSql(container, 'DELETE FROM t')
     })
-    click(button('执行'))
+    click(button('执行写入'))
     await settle()
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('WRITE_NOT_ALLOWED')
@@ -182,6 +193,12 @@ describe('editor and grid', () => {
 })
 
 describe('pager', () => {
+  /** Direct mode hides the pager; count first to exercise the paged UI. */
+  async function countRows(): Promise<void> {
+    click(button('统计总数'))
+    await settle()
+  }
+
   it('shows the range, offers next/last and pages with the right offset', async () => {
     const api = apiDouble()
     await renderPanel(api)
@@ -191,6 +208,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     expect(container.querySelector('[data-pager-range]')?.textContent).toBe('第 1-2 行 / 共 900 行')
     expect(container.querySelector('[data-pager-meta]')?.textContent).toContain('2 行 · 42ms')
@@ -214,6 +232,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     expect(container.querySelector('[data-pager-range]')?.textContent).toBe('第 1-2 行 / 总数未知')
     expect(button('末页')?.disabled).toBe(true)
@@ -228,6 +247,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
     click(button('末页'))
     await settle()
 
@@ -243,6 +263,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     click(button('下一页'))
     await settle()
@@ -268,6 +289,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     expect(container.querySelector('[data-pager-range]')?.textContent).toBe('没有数据 · 总数未知')
   })
@@ -281,6 +303,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     act(() => {
       fill(container.querySelector('select[aria-label="页大小"]') as HTMLSelectElement, '1000')
@@ -305,6 +328,7 @@ describe('pager', () => {
     })
     click(button('执行'))
     await settle()
+    await countRows()
 
     expect(container.querySelector('[data-pager-range]')?.textContent).toBe('没有数据 · 共 900 行')
     expect(container.querySelector('[data-pager-meta]')?.textContent).toContain('2 个值过大已截断')
@@ -324,22 +348,24 @@ describe('sorting', () => {
 
     const header = (): HTMLButtonElement => [...container.querySelectorAll('th button')][0] as HTMLButtonElement
     expect(container.querySelector('th')?.getAttribute('aria-sort')).toBe('none')
+    expect(header().textContent).toContain('⇅')
 
     click(header())
     await settle()
     expect(api.fetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0, sort: { column: 'id', direction: 'ASC' } }))
     expect(container.querySelector('th')?.getAttribute('aria-sort')).toBe('ascending')
-    expect(header().textContent).toContain('▲')
+    expect(header().textContent).toContain('↑')
 
     click(header())
     await settle()
     expect(api.fetchPage).toHaveBeenLastCalledWith(expect.objectContaining({ sort: { column: 'id', direction: 'DESC' } }))
-    expect(header().textContent).toContain('▼')
+    expect(header().textContent).toContain('↓')
 
     click(header())
     await settle()
     expect(api.fetchPage).toHaveBeenLastCalledWith(expect.not.objectContaining({ sort: expect.anything() }))
     expect(container.querySelector('th')?.getAttribute('aria-sort')).toBe('none')
+    expect(header().textContent).toContain('⇅')
   })
 })
 

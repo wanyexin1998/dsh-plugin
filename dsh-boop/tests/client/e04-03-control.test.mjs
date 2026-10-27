@@ -356,7 +356,7 @@ function decisionAllowed(overrides = {}) {
       valid: false,
       canDecide: false,
     }),
-    message: '审批结论已落账（允许本次）。写模式关闭：本次没有派发任何动作，也没有执行任何外部副作用。',
+    message: '审批结论已落账（允许本次）。本次没有派发任何动作，也没有执行任何外部副作用。',
     ...overrides,
   }
 }
@@ -658,7 +658,7 @@ test('E04-03 rejecting is a recorded human decision, not an execution (04§08)',
         decision: 'reject',
         outcome: 'rejected',
         approval: approval({ status: 'rejected', decision: 'rejected', valid: false, canDecide: false }),
-        message: '审批结论已落账（拒绝本次）。写模式关闭：本次没有派发任何动作。',
+        message: '审批已拒绝并落账。不会派发任何动作。',
       }),
     }),
   })

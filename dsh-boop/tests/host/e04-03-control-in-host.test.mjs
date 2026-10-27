@@ -375,8 +375,9 @@ test('E04-03 state projects the real seeded approvals, actions/outbox and recove
   const value = await control('state')
   assert.equal(value.available, true, JSON.stringify(value).slice(0, 800))
   assert.equal(value.scopeId, scopeId)
-  assert.equal(value.writeMode.enabled, false, 'write mode stays off until G02/G05 pass')
+  assert.equal(value.writeMode.enabled, true, 'write mode follows the open gate ledger')
   assert.equal(value.writeMode.source, 'boop.isWriteModeEnabled()')
+  assert.deepEqual(value.writeMode.blockedByGates, [])
   // The blocked list is derived from the frozen gate ledger, so compare it to
   // the authoritative bootstrap facts instead of hard-coding gates.
   const bootstrap = await call('boop/bootstrap')
@@ -385,10 +386,9 @@ test('E04-03 state projects the real seeded approvals, actions/outbox and recove
     [...bootstrap.result.value.writeMode.blockedByGates].sort(),
     'the control plane reports the SAME blocked gates as the gate ledger',
   )
-  assert.ok(value.writeMode.blockedByGates.includes('G05'))
   assert.equal(value.ledger.writable, true, 'the Host owns the single-writer lease')
   assert.equal(value.dispatch.available, false, 'this row never dispatches')
-  assert.equal(value.dispatch.reason, 'write-mode-disabled')
+  assert.equal(value.dispatch.reason, 'dispatch-not-on-this-row')
   assert.equal(value.audit.recorded, false, 'a read does not write an audit row')
 
   const pending = Object.fromEntries(value.pendingApprovals.map((card) => [card.approvalId, card]))
@@ -664,12 +664,12 @@ test('G04/AT-26 the recovery gate blocks the seeded command; release is explicit
 
 /* ── authority / trust boundary ──────────────────────────────────────── */
 
-test('G05 write mode is still false and the control plane never dispatched anything', async () => {
+test('G05 the control plane still never dispatched anything after write mode opened', async () => {
   const bootstrap = await call('boop/bootstrap')
-  assert.equal(bootstrap.result.value.scope.writeModeEnabled, false)
+  assert.equal(bootstrap.result.value.scope.writeModeEnabled, true)
   const state = await control('state')
-  assert.equal(state.writeMode.enabled, false)
-  assert.equal(state.dispatch.available, false)
+  assert.equal(state.writeMode.enabled, true)
+  assert.equal(state.dispatch.available, false, 'approval, stop and release do not dispatch')
   // No seeded outbox row was ever accepted by this plane: approvals and stop only
   // write bookkeeping. (`seed-act-delivered` was pre-seeded as accepted by the
   // fixture, not by the control plane.)
