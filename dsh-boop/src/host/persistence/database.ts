@@ -12,6 +12,7 @@
  */
 import { DatabaseSync } from 'node:sqlite'
 import { CORE_DDL, FTS_DDL, SCHEMA_VERSION } from './schema.ts'
+import { applySchemaV2 } from './schema-v2.ts'
 
 export interface BoopDatabaseOptions {
   path: string
@@ -31,6 +32,13 @@ export interface BootstrapReport {
   schemaVersion: number
   migratedFrom: number | null
 }
+
+export type LedgerInspection =
+  | { kind: 'empty' }
+  | { kind: 'ready'; version: number }
+  | { kind: 'legacy'; version: number }
+  | { kind: 'unsupported'; version: number }
+  | { kind: 'corrupt'; reason: string }
 
 /**
  * Reject storage paths BOOP must not manage (03§02: "网络共享目录不在 SQLite
@@ -85,39 +93,85 @@ export class BoopDatabase {
     this.db.exec('ALTER TABLE fact ADD COLUMN subject_key TEXT')
   }
 
-  /** Apply the frozen core schema and record the schema version. */
-  bootstrap(): BootstrapReport {
-    const before = this.schemaVersion()
-    this.db.exec(CORE_DDL)
-    this.ensureSubjectKey()
-    if (this.fts) {
-      try {
-        this.db.exec(FTS_DDL)
-      } catch {
-        // FTS is derived. A build without FTS5 keeps the ledger and degrades
-        // retrieval to exact match; it never weakens forget or authority rules.
-        this.fts = false
-      }
-    }
-    this.db.exec('BEGIN')
+  /**
+   * Read the ledger without writing. A file that already has BOOP business
+   * tables but no readable schema version is corrupt, not empty.
+   */
+  inspect(): LedgerInspection {
+    let names = new Set<string>()
     try {
-      this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(
-        'schema_version',
-        String(SCHEMA_VERSION),
-      )
+      const rows = this.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name?: unknown }>
+      names = new Set(rows.map((row) => String(row.name)))
+    } catch (error) {
+      return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) }
+    }
+    const business = ['task', 'action', 'fact', 'scopes'].some((name) => names.has(name))
+    if (business && !names.has('meta')) return { kind: 'corrupt', reason: 'business tables exist but meta is missing' }
+    const version = names.has('meta') ? this.schemaVersion() : null
+    if (business && (version === null || Number.isNaN(version))) {
+      return { kind: 'corrupt', reason: 'schema_version is missing or unreadable' }
+    }
+    if (!business && version === null) return { kind: 'empty' }
+    if (version === null) return { kind: 'empty' }
+    if (version > SCHEMA_VERSION) return { kind: 'unsupported', version }
+    if (version === SCHEMA_VERSION) return { kind: 'ready', version }
+    return { kind: 'legacy', version }
+  }
+
+  /**
+   * Initialize an empty ledger to schema 2, or leave an existing ledger untouched.
+   * Upgrades of v1 files happen in `migrate`, after a consistent backup and the
+   * writer fence. This method never stamps a higher version over business data.
+   */
+  bootstrap(): BootstrapReport {
+    const inspection = this.inspect()
+    if (inspection.kind === 'corrupt') throw new Error(`MIGRATION_FAILED: ${inspection.reason}`)
+    if (inspection.kind === 'unsupported') throw new Error(`VERSION_UNSUPPORTED: ${inspection.version}`)
+    if (inspection.kind === 'legacy' || inspection.kind === 'ready') {
+      this.ensureSubjectKey()
+      this.installFts()
+      return this.report(inspection.version, inspection.version)
+    }
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.exec(CORE_DDL)
+      applySchemaV2(this.db as unknown as Parameters<typeof applySchemaV2>[0])
+      this.db
+        .prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+        .run('schema_version', String(SCHEMA_VERSION))
       this.db.exec('COMMIT')
     } catch (error) {
-      this.db.exec('ROLLBACK')
+      try {
+        this.db.exec('ROLLBACK')
+      } catch {
+        /* keep the original migration error */
+      }
       throw error
     }
+    this.installFts()
+    return this.report(SCHEMA_VERSION, null)
+  }
+
+  private installFts(): void {
+    if (!this.fts) return
+    try {
+      this.db.exec(FTS_DDL)
+    } catch {
+      // FTS is derived. A build without FTS5 keeps the ledger and degrades
+      // retrieval to exact match; it never weakens forget or authority rules.
+      this.fts = false
+    }
+  }
+
+  private report(schemaVersion: number, migratedFrom: number | null): BootstrapReport {
     return {
       driver: 'node:sqlite',
       sqliteVersion: this.sqliteVersion,
       wal: this.journalMode.toLowerCase() === 'wal',
       foreignKeys: (this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys === 1,
       fts: this.fts,
-      schemaVersion: SCHEMA_VERSION,
-      migratedFrom: before,
+      schemaVersion,
+      migratedFrom,
     }
   }
 

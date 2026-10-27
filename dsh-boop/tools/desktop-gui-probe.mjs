@@ -13,7 +13,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { chromium } from 'playwright-core'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const EXE = 'E:/deepseek-harness/DeepSeek Harness.exe'
+const EXE = process.env.DSH_DESKTOP_EXE
+if (!EXE) throw new Error('DSH_DESKTOP_EXE is required; this probe has no personal default path')
 const SOURCE = path.join(
   ROOT,
   '.work/test-runs/web-e2e-control-1793084561604/dsh-home/profiles/boop-web-e2e-control',

@@ -22,13 +22,11 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const ASAR = process.env.DSH_ASAR ?? 'E:/deepseek-harness/resources/app.asar'
+const ASAR = process.env.DSH_ASAR ?? ''
 const PAYLOAD =
   process.env.DSH_PAYLOAD ?? path.join(ROOT, '.work/test-host/payload-0.2.1/dsh')
-const NODE_BIN =
-  process.env.DSH_NODE ??
-  'C:/Users/wanyexin/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe'
-const PNPM_BIN = path.resolve(path.dirname(NODE_BIN), '..', 'pnpm/bin/pnpm.cjs')
+const NODE_BIN = process.env.DSH_NODE ?? process.execPath
+const PNPM_BIN = process.env.DSH_PNPM ?? 'pnpm'
 const CLI = path.join(PAYLOAD, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 
 const args = process.argv.slice(2)

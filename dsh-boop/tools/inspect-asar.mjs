@@ -12,7 +12,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const ASAR = process.env.DSH_ASAR ?? 'E:/deepseek-harness/resources/app.asar'
+const ASAR = process.env.DSH_ASAR
+if (!ASAR) {
+  console.error('DSH_ASAR is required; this tool has no personal default path')
+  process.exit(1)
+}
 const fd = fs.openSync(ASAR, 'r')
 try {
   const head = Buffer.alloc(16)

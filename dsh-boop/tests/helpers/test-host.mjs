@@ -19,9 +19,7 @@ import { fileURLToPath } from 'node:url'
 export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const PAYLOAD_ROOT =
   process.env.DSH_PAYLOAD ?? path.join(PROJECT_ROOT, '.work/test-host/payload-0.2.1/dsh')
-export const NODE_BIN =
-  process.env.DSH_NODE ??
-  'C:/Users/wanyexin/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe'
+export const NODE_BIN = process.env.DSH_NODE ?? process.execPath
 export const CLI_ENTRY = path.join(
   PAYLOAD_ROOT,
   'node_modules/@deepseek-ai/dsh/lib/bin.js',
@@ -37,7 +35,7 @@ export function hostFacts() {
     dshVersion: version,
     // Declared desktop build commit (app.asar root package.json `dshBuildCommit`);
     // the installed artifact carries no independent commit metadata.
-    pinnedCommit: '332895e0f7c9d4dbfb29729f5eb367fa263ff986',
+    pinnedCommit: process.env.DSH_BUILD_COMMIT ?? 'unknown',
     node: process.version,
     platform: process.platform,
     arch: process.arch,
@@ -74,11 +72,11 @@ export async function createProfile(home, name, { dependencies = {}, bundles } =
 }
 
 export function pnpmInstall(dir) {
-  const pnpm = path.resolve(
-    'C:/Users/wanyexin/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.cjs',
-  )
+  const pnpm = process.env.DSH_PNPM
+  const command = pnpm && pnpm.endsWith('.cjs') ? NODE_BIN : pnpm || 'pnpm'
+  const args = pnpm && pnpm.endsWith('.cjs') ? [pnpm, 'install'] : ['install']
   return new Promise((resolve, reject) => {
-    const child = spawn(NODE_BIN, [pnpm, 'install'], { cwd: dir, stdio: 'ignore' })
+    const child = spawn(command, args, { cwd: dir, stdio: 'ignore' })
     child.on('error', reject)
     child.on('close', (code) => (code === 0 ? resolve(code) : reject(new Error(`pnpm install failed: ${code}`))))
   })

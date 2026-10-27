@@ -12,7 +12,7 @@
  * application-level schema validation is layered on top, never instead.
  */
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 /** Core tables + indexes, in dependency order. Never includes FTS5. */
 export const CORE_DDL = `

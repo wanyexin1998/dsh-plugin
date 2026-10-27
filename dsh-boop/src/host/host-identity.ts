@@ -6,18 +6,9 @@
  * root carries both the version and `dshBuildCommit`; reading that file is how
  * the board stays honest on 0.2.1-rc.3 without a compatibility exemption.
  */
+import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
-
-const BASELINE = {
-  version: '0.2.1-rc.2',
-  commit: '332895e0f7c9d4dbfb29729f5eb367fa263ff986',
-} as const
-
-const KNOWN_COMMITS: Record<string, string> = {
-  '0.2.1-rc.2': BASELINE.commit,
-  '0.2.1-rc.3': 'be72761ee1a6736ebcdf4f3739363b083ae53c98',
-}
 
 export interface HostIdentity {
   version: string
@@ -41,13 +32,27 @@ function desktopRootPackage(): Record<string, unknown> | null {
   return parsed
 }
 
-/** Version and commit of this process, or the rc.2 baseline when no desktop package is visible. */
+/**
+ * Version and commit of this process.
+ * A missing desktop package or build commit is `unknown`. A version string is
+ * never used to invent the other release's commit.
+ */
 export function readHostIdentity(): HostIdentity {
   const desktop = desktopRootPackage()
-  const version = typeof desktop?.version === 'string' && desktop.version !== '' ? desktop.version : BASELINE.version
-  const declared =
-    typeof desktop?.dshBuildCommit === 'string' && desktop.dshBuildCommit !== ''
-      ? desktop.dshBuildCommit
-      : KNOWN_COMMITS[version]
-  return { version, commit: declared || BASELINE.commit }
+  if (desktop) {
+    return {
+      version: typeof desktop.version === 'string' && desktop.version !== '' ? desktop.version : 'unknown',
+      commit: typeof desktop.dshBuildCommit === 'string' && desktop.dshBuildCommit !== '' ? desktop.dshBuildCommit : 'unknown',
+    }
+  }
+  try {
+    const require = createRequire(path.join(process.cwd(), 'package.json'))
+    const pkg = require('@deepseek-ai/dsh/package.json') as { version?: unknown; dshBuildCommit?: unknown }
+    return {
+      version: typeof pkg.version === 'string' && pkg.version !== '' ? pkg.version : 'unknown',
+      commit: typeof pkg.dshBuildCommit === 'string' && pkg.dshBuildCommit !== '' ? pkg.dshBuildCommit : 'unknown',
+    }
+  } catch {
+    return { version: 'unknown', commit: 'unknown' }
+  }
 }

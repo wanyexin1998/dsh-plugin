@@ -312,8 +312,9 @@ test('E03-01 source cursors track the read watermark per generation', () => {
 
 test('AT-36 migration reports its source version and verifies integrity', async () => {
   const report = await migrate(db, { backupDir: path.join(dir, 'backups') })
-  assert.equal(report.from, 1)
-  assert.equal(report.to, 1)
+  assert.equal(report.from, 2, 'a fresh ledger is initialized at schema 2')
+  assert.equal(report.to, 2)
+  assert.equal(report.applied.length, 0, 'schema 2 is not migrated again')
   assert.equal(report.integrity, 'ok')
   assert.equal(verifyDatabase(db.path).ok, true)
 })

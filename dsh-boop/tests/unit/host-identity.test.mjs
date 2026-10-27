@@ -17,8 +17,8 @@ test('engines.dsh names rc.2 and rc.3 and no compatibility exemption is shipped'
   assert.equal(fs.existsSync(path.join(root, 'compatibility.json')), false)
 })
 
-test('plain Node reports the rc.2 baseline when the desktop package is not this process', () => {
+test('plain Node reports the installed DSH version and does not invent a commit', () => {
   const identity = readHostIdentity()
   assert.equal(identity.version, '0.2.1-rc.2')
-  assert.equal(identity.commit, '332895e0f7c9d4dbfb29729f5eb367fa263ff986')
+  assert.equal(identity.commit, 'unknown')
 })

@@ -16,6 +16,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { BoopDatabase } from './database.ts'
 import { migrate, type MigrationReport } from './migrate.ts'
+import { SCHEMA_VERSION } from './schema.ts'
 import { LeaseManager, createSqliteLeaseStore } from './lease.ts'
 import { BoopRepository } from './repository.ts'
 import type { ScopeIdentity } from '../../shared/types.ts'
@@ -71,7 +72,7 @@ export class BoopStorage {
   readonly repo: BoopRepository
   readonly lease: LeaseManager
   readonly identity: ScopeIdentity
-  readonly migration: MigrationReport | null
+  migration: MigrationReport | null
   private released = false
   private ownsLease = false
   private fencingToken = 0
@@ -131,6 +132,17 @@ export class BoopStorage {
 
   /** Create the data domain and take the single-writer lease. */
   start(): StorageFacts {
+    const inspection = this.db.inspect()
+    if (inspection.kind === 'corrupt' || inspection.kind === 'unsupported') {
+      return {
+        ...this.facts(false),
+        ok: false,
+        error:
+          inspection.kind === 'unsupported'
+            ? `VERSION_UNSUPPORTED: ${inspection.version}`
+            : `MIGRATION_FAILED: ${inspection.reason}`,
+      }
+    }
     this.repo.ensureScope(this.identity.scopeId, this.identity.ownerId)
     const acquired = this.lease.acquire(this.identity.scopeId, this.holder)
     if (acquired.kind === 'held') {
@@ -140,6 +152,20 @@ export class BoopStorage {
     } else {
       this.ownsLease = true
       this.fencingToken = acquired.lease.fencingToken
+      const version = this.db.schemaVersion()
+      if (version !== null && version < SCHEMA_VERSION) {
+        try {
+          this.migration = migrate(this.db, {
+            backupDir: path.join(path.dirname(this.db.path), 'backups'),
+          })
+        } catch (error) {
+          this.release()
+          const failed = this.facts(false)
+          failed.ok = false
+          failed.error = error instanceof Error ? error.message : String(error)
+          return failed
+        }
+      }
       this.startHeartbeat()
       // Production boot reconciliation (G03): a crashed `sending` row becomes
       // outcome_unknown and is never auto-retried. The clean-shutdown marker
@@ -182,11 +208,14 @@ export class BoopStorage {
     }
   }
 
-  /** Check the write fence before any mutation (03§02 single controller). */
+  /**
+   * Check THIS process's remembered holder and fencing token.
+   * Reading the current row and checking it against itself would accept a
+   * successor's lease after this process had already been fenced out.
+   */
   checkWrite(): { ok: true } | { ok: false; reason: string } {
-    const current = this.leaseStoreRead()
-    if (!current) return { ok: false, reason: 'no lease for this data domain' }
-    return this.lease.checkWrite(this.identity.scopeId, current.holder, current.fencingToken)
+    if (!this.ownsLease) return { ok: false, reason: 'lease held by another controller' }
+    return this.lease.checkWrite(this.identity.scopeId, this.holder, this.fencingToken)
   }
 
   private leaseStoreRead(): { holder: string; fencingToken: number } | null {

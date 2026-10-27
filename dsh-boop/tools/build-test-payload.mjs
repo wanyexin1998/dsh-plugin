@@ -17,8 +17,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
-const ASAR = process.env.DSH_ASAR ?? 'E:/deepseek-harness/resources/app.asar'
-const UNPACKED = process.env.DSH_UNPACKED ?? 'E:/deepseek-harness/resources/app.asar.unpacked'
+const ASAR = process.env.DSH_ASAR
+const UNPACKED = process.env.DSH_UNPACKED
+if (!ASAR || !UNPACKED) throw new Error('DSH_ASAR and DSH_UNPACKED are required; this tool has no personal default path')
 const dest = path.resolve(process.argv[2] ?? '.work/test-host/payload')
 
 if (!fs.existsSync(ASAR)) {

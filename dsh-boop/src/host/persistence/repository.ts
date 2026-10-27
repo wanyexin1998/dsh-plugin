@@ -274,7 +274,7 @@ export class BoopRepository {
         .prepare(
           'INSERT INTO scopes(scope_id,owner_id,policy_epoch,schema_version,created_at) VALUES(?,?,?,?,?)',
         )
-        .run(scopeId, ownerId, 1, 1, this.now())
+        .run(scopeId, ownerId, 1, this.store.schemaVersion() ?? 1, this.now())
     } catch (error) {
       const raced = this.getScope(scopeId)
       if (raced) return raced
