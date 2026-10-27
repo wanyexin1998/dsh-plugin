@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-10-28T03:40:00+08:00",
+  "gitTop": "/workspace",
+  "startCommit": "6f9c046681e58a1304704baf165dce5de2a49f4f",
+  "startSubject": "docs(boop): add MVP refactor plan and homepage prototype",
+  "remoteMain": "6f9c046681e58a1304704baf165dce5de2a49f4f",
+  "package": "dsh-boop",
+  "versionBefore": "0.1.0",
+  "versionAfter": "0.2.0",
+  "node": "v22.23.4",
+  "dshCli": "0.2.1-rc.2",
+  "enginesDsh": "0.2.1-rc.2 || 0.2.1-rc.3",
+  "untouchedDirtyFiles": [
+    "dsh-data-ide/pnpm-workspace.yaml",
+    "dsh-split/pnpm-workspace.yaml"
+  ],
+  "note": "Those two files were already dirty on main and are not part of this branch's commits."
+}
