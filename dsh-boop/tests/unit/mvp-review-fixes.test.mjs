@@ -17,6 +17,7 @@ import { encodeSessionReferenceUri, formatSessionReferenceMention, parseSessionR
 import { readWorkChoice } from '../../src/client/home/read-work-choice.ts'
 import { insertDraftText, insertSessionReference } from '../../src/client/home/draft-input.ts'
 import { HomeController } from '../../src/client/home/controller.ts'
+import { PreStepRuntimeGate } from '../../src/host/gate/pre-step.ts'
 
 test('catalog envelope passes the tool output schema', () => {
   const tool = defineTool({
@@ -174,7 +175,7 @@ function serviceWorld() {
     async visible(sessionId, messageId) { return sessions.get(sessionId).visible.has(messageId) },
     async remove() { return false },
     async cancelTurn() { calls.cancel += 1 },
-    async mainIdle() { return true },
+    async mainIdle() { return sessions.get('boop-main')?.busy !== true },
   }
   const service = new DelegationService(db, 'scope-1', ports)
   service.inheritAccess('owner-1', 'test')
@@ -309,6 +310,51 @@ test('candidate insertion keeps the captured span and continue does not replace 
   assert.equal(insertDraftText(actions, '继续处理'), true)
   assert.equal(spans[1].text, '继续处理')
   assert.equal(insertSessionReference({ setDraft() { return true } }, { mention: 'x', label: 'y' }), false)
+})
+
+test('a busy home keeps a pending result in the outbox', async () => {
+  const env = serviceWorld()
+  env.add('boop-main', { home: true, busy: true })
+  env.db.db.exec(`INSERT INTO task(id,scope_id,goal,lifecycle,verification,version,criteria_json,exclusions_json,created_at,updated_at,state_seq,engine_version,stop_requested) VALUES('tsk','scope-1','目标','active','not_requested',1,'[]','[]','t','t',0,2,0)`)
+  env.db.db.exec(`INSERT INTO task_revision(task_id,scope_id,version,snapshot_json,created_at) VALUES('tsk','scope-1',1,'{}','t')`)
+  env.db.db.exec(`INSERT INTO action(id,scope_id,task_id,task_version,target_session_id,payload_hash,payload_json,state,policy_epoch,origin_ref,created_at,updated_at) VALUES('act','scope-1','tsk',1,'sess','h','{}','settled',1,'user','t','t')`)
+  env.db.db.exec(`INSERT INTO task_result(id,scope_id,task_id,task_version,action_id,logical_key,kind,source_generation,event_seq,outcome,deliverable,summary,artifacts_json,evidence_json,checks_json,missing_json,created_at) VALUES('res','scope-1','tsk',1,'act','busy','final','g',1,'completed',1,'done','[]','[]','[]','[]','t')`)
+  env.db.db.exec(`INSERT INTO result_outbox(result_id,scope_id,native_message_id,target_main_session_id,target_binding_version,state,attempt,updated_at) VALUES('res','scope-1','boopres_busy','boop-main',1,'pending',0,'t')`)
+  await env.service.deliver()
+  assert.equal(env.calls.followup, 0)
+  assert.equal(env.db.db.prepare(`SELECT state FROM result_outbox WHERE result_id = 'res'`).get().state, 'pending')
+  env.sessions.get('boop-main').busy = false
+  await env.service.deliver()
+  assert.equal(env.calls.followup, 1)
+  env.db.close()
+})
+
+test('a mixed human and BOOP batch admits the same command once', async () => {
+  const admitted = new Set()
+  const gate = new PreStepRuntimeGate({
+    available: () => true,
+    armed: () => true,
+    entries: () => [],
+    v2AdmissionAllows: (id) => id === 'act-1' && !admitted.has(id),
+    admissionRecorded: (id) => admitted.has(id),
+    recordAdmission: (id) => {
+      if (admitted.has(id)) return false
+      admitted.add(id)
+      return true
+    },
+    knownMessageIds: () => new Set(),
+    scopeId: () => 'scope-1',
+    audit: () => ({ sink: 'memory', recorded: false, id: null }),
+  }, { waitTimeoutMs: 1, pollMs: 1, sleep: async () => undefined })
+  const human = { id: 'user-1', role: 'user', source: { kind: 'user' }, content: [] }
+  const command = { id: 'act-1', role: 'user', source: { kind: 'boop-command' }, content: [] }
+  const next = async () => ({ kind: 'enter', messages: [human, command] })
+  const first = await gate.handle({ messages: [human, command], turn: 1, step: 0 }, next)
+  assert.equal(first.kind, 'enter')
+  assert.deepEqual(first.messages.map((message) => message.id), ['user-1', 'act-1'])
+  const second = await gate.handle({ messages: [human, command], turn: 2, step: 0 }, next)
+  assert.equal(second.kind, 'enter')
+  assert.deepEqual(second.messages.map((message) => message.id), ['user-1'])
 })
 
 test('a failed refresh keeps the last task list', async () => {
