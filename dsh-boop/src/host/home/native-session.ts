@@ -70,19 +70,38 @@ function inboxMessages(ctx: any, sessionId: string): any[] {
 
 async function readObservation(ctx: any, sessionId: string): Promise<{ header: OfficialHeader; events: OfficialEvent[]; revision: string | null } | null> {
   const query = optionalService(ctx, 'sessionQuery')
-  if (!query?.observeSession) return null
+  if (!query?.observeSession && !query?.readSession) return null
   let observed: any = null
+  let header: OfficialHeader = {}
+  let events: OfficialEvent[] = []
+  let revision: string | null = null
   try {
-    observed = await query.observeSession(sessionId, { projectionMode: 'all' })
-    const header = (observed?.header ?? {}) as OfficialHeader
-    const events = Array.isArray(observed?.events) ? observed.events as OfficialEvent[] : []
-    const revision = observed?.revision == null ? null : String(observed.revision)
-    return { header, events, revision }
+    if (typeof query.observeSession === 'function') {
+      observed = await query.observeSession(sessionId, { projectionMode: 'all' })
+      header = (observed?.header ?? {}) as OfficialHeader
+      events = Array.isArray(observed?.events) ? observed.events as OfficialEvent[] : []
+      revision = observed?.revision == null ? null : String(observed.revision)
+    }
   } catch {
-    return null
+    header = {}
+    events = []
   } finally {
     dispose(observed)
+    observed = null
   }
+  try {
+    if (typeof query.readSession === 'function') {
+      const snapshot = await query.readSession(sessionId)
+      const durable = (snapshot?.session ?? snapshot?.header ?? {}) as OfficialHeader
+      const durableEvents = Array.isArray(snapshot?.events) ? snapshot.events as OfficialEvent[] : []
+      if (durableEvents.length > events.length) events = durableEvents
+      if (!header.id && durable.id) header = durable
+    }
+  } catch {
+    /* a durable read failure keeps the live observation */
+  }
+  if (!header.id && events.length === 0) return null
+  return { header, events, revision }
 }
 
 export function createHomeNative(ctx: any): HomeNative {

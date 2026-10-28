@@ -2,7 +2,7 @@
 
 分支：`cursor/boop-mvp-v0.2-f3d6`  
 起点：`6f9c046681e58a1304704baf165dce5de2a49f4f`  
-环境：Linux 云端，Node v22.23.4，本机 DSH CLI `0.2.1-rc.2`。没有 Windows 桌面，也没有已配置的对话模型。
+环境：Linux 云端，Node v22.23.4，本机 DSH CLI `0.2.1-rc.2`。没有 Windows 桌面。隔离的 `DSH_HOME` 里用过一次临时模型密钥；用户自己的 `~/.dsh` 没有改。
 
 状态只用 DONE、PARTIAL、BLOCKED。PARTIAL 表示代码在，但该项要求的真实宿主证据没有。
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | T01 | DONE | `ADR-0001-boop-home.md`，本台账 | 分支从远端 main 拉出，未改 `baseline/` 与 `handoff/` |
 | T02 | PARTIAL | `package.json`，`tests/helpers/test-host.mjs`，`tools/*` | 个人绝对路径改为显式环境变量。`node build.mjs` 与 unit 测试已跑。没有做一次从零的冻结安装 |
-| T03 | PARTIAL | `home/native-session.ts`，`home/observe-facts.ts` | 观察改读正式 `user/message` 正文、直接人类水位、子会话和代理运行状态。没有真实 Host 事件日志 |
+| T03 | PARTIAL | `home/native-session.ts`，`home/observe-facts.ts` | 观察改读正式 `user/message` 正文、直接人类水位、子会话和代理运行状态。隔离宿主里读过 `boop-target-alpha` 的正式日志：被拦住的一轮不拿上一轮的 `pong` 当结果 |
 | T04 | DONE | `persistence/database.ts`，`migrate.ts`，`storage.ts` | 空库直接 schema 2。有业务表但没有 meta 时拒绝写入。`checkWrite` 使用本进程记住的 fence。测试：`mvp-delegation`、原 `e00-03`、`e01-01` |
 | T05 | DONE | `schema-v2.ts`，`delegation/service.ts` | 请求回执、单槽、结果和验收表随迁移创建。20 次同请求在测试里只保留一个 action |
 | T06 | DONE | `home/service.ts`，`tests/unit/mvp-home.test.mjs` | 第二次 ensureHome 不再 create。模型缺失时 `send=false` 仍可 ready |
@@ -19,10 +19,10 @@
 | T09 | PARTIAL | `ComposerState.tsx`，home CSS | 去噪选择器不隐藏审批槽。中文输入法、附件和原生草稿没有在宿主里操作 |
 | T10 | PARTIAL | `delegation/service.ts` catalog/context | 候选最多 5 个，排除项不进目录。上下文预算在服务里截断。真实 SessionQuery 目录未跑 |
 | T11 | PARTIAL | `tools.ts`，`presets/boop.patch.yml` | 注册 `boop_dispatch` 与 `boop_task_control`。工具输出是一份 JSON。没有真实模型调用 |
-| T12 | PARTIAL | `delegation/service.ts`，`host/index.ts` | 忙目标不占槽。宿主每 2 秒在仍持有写租约时调用 tick 和 deliver。没有从真实工具入口看到原会话执行 |
-| T13 | PARTIAL | `gate/pre-step.ts` | 混批留下人类消息。同一条命令第二次混批不再进入。没有真实 pre-step 事件 |
+| T12 | PARTIAL | `delegation/service.ts`，`host/index.ts` | 忙目标不占槽仍是单测。隔离宿主里 `boop_dispatch` 之后，原会话第 3 轮完成并只回复 `pong`，没有工具调用 |
+| T13 | PARTIAL | `gate/pre-step.ts` | 混批留下人类消息，同一条命令第二次混批不再进入。隔离宿主审计有一条 `gate/pre-step-allowed`。早先那条 `not-tracked` 是命令已被取走后状态被写成未知 |
 | T14 | PARTIAL | `delegation/service.ts` finishAction | 结束轮次才写结果。只有「完成了」且不可交付时验证不是 passed |
-| T15 | PARTIAL | deliver() | 主会话忙时结果留在 outbox，空闲后才发送。单测覆盖。没有真实主会话投递 |
+| T15 | PARTIAL | deliver() | 主会话忙时结果留在 outbox，空闲后才发送，单测覆盖。隔离宿主把 `pong` 送回主会话一次，主会话说明已交付、未确认、未验证 |
 | T16 | DONE | stop() | 用户已接管时不调用 cancel。测试覆盖 |
 | T17 | DONE | confirm/revise | 确认收下不改 checks。新修订使用新版本，旧结果还在 |
 | T18 | PARTIAL | reconcile/bootRecover | 丢失的 followup 不重发。杀进程后的真实 Host 恢复未跑 |
@@ -31,7 +31,7 @@
 | T21 | PARTIAL | `SettingsPanel.tsx`，`tasks-api.ts` | 设置里可以保存 none、selected、all_authorized。没有在宿主里点过保存 |
 | T22 | PARTIAL | `scheduler.ts` retireOwned | 启动时改为摘掉带 BOOP 标记的每日日程，不新建。没有在真实 schedule 服务上演练 |
 | T23 | PARTIAL | home 样式注释，旧任务板不再注册 | DS-Bot 只借用紧凑页头的结构，颜色仍是 BOOP。旧任务板源码还在，但不是入口 |
-| T24 | BLOCKED | — | 没有模型，也没有可执行的原会话产物 |
+| T24 | PARTIAL | 隔离宿主上的一次小委托 | 原会话回复了 `pong` 并送回主会话。没有 Windows，42 项验收没有改成通过 |
 | T25 | PARTIAL | 委托测试 | 停止、未知结果、确认收下有单测。审批并发和杀 Host 未跑 |
 | T26 | PARTIAL | 迁移测试 | v1 行保留，备份目录缺失时不升级。没有用旧包装回去再装新包 |
 | T27 | PARTIAL | 截图 | 1280 浅色、深色抽屉、390 窄屏、设置页。对比度没有用仪器量。键盘流程未在宿主里走 |

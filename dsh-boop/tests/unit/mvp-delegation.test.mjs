@@ -51,6 +51,7 @@ function world() {
       if (!session) return 'before-enqueue'
       if (session.fail === 'before') return 'before-enqueue'
       if (session.fail === 'unknown') throw new Error('socket dropped')
+      if (session.claimImmediately) return 'enqueued'
       session.inbox.push(message)
       return 'enqueued'
     },
@@ -277,6 +278,37 @@ test('stop does not cancel a turn the user has taken over', async () => {
   env.db.close()
 })
 
+test('an inbox claim before the log write stays accepted and ignores an older turn', async () => {
+  const env = world()
+  env.addSession('sess-a', {
+    claimImmediately: true,
+    turnTerminal: true,
+    turnId: '1',
+    ownership: 'ended',
+    summary: '旧回复',
+    deliverable: true,
+  })
+  const { prepared } = await delegate(env)
+  await env.service.tick()
+  const accepted = env.service.detail(prepared.data.taskId)
+  assert.equal(accepted.productState, 'accepted')
+  assert.equal(accepted.latestResult, null)
+  await env.service.tick()
+  assert.equal(env.service.detail(prepared.data.taskId).productState, 'accepted')
+  const session = env.sessions.get('sess-a')
+  session.visible.add(env.calls.followup[0].message.id)
+  session.turnId = '2'
+  session.turnTerminal = true
+  session.summary = 'pong'
+  session.deliverable = true
+  session.ownership = 'ended'
+  await env.service.tick()
+  const done = env.service.detail(prepared.data.taskId)
+  assert.equal(done.productState, 'delivered')
+  assert.equal(done.latestResult.summary, 'pong')
+  env.db.close()
+})
+
 test('a lost followup stays unknown and reconcile does not send it again', async () => {
   const env = world()
   env.addSession('sess-a', { fail: 'unknown' })
@@ -304,6 +336,7 @@ test('revise keeps the old result and does not reuse acceptance', async () => {
   await env.service.tick()
   const session = env.sessions.get('sess-a')
   session.inbox = []
+  session.visible.add(env.calls.followup[0].message.id)
   session.turnTerminal = true
   session.turnId = 'turn-1'
   session.ownership = 'ended'

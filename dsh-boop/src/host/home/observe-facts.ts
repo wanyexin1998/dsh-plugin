@@ -44,7 +44,7 @@ export interface InterpretInput {
   pendingMessage?: boolean
 }
 
-const TERMINAL = new Set(['completed', 'aborted', 'error', 'max-tokens', 'interrupted', 'forked'])
+const TERMINAL = new Set(['completed', 'aborted', 'error', 'max-tokens', 'interrupted', 'forked', 'blocked'])
 
 function blocks(content: Array<{ type?: string; text?: string }> | undefined): string {
   if (!Array.isArray(content)) return ''
@@ -61,9 +61,25 @@ function eventText(event: OfficialEvent): string {
   return ''
 }
 
+function assistantText(event: OfficialEvent): string {
+  if (event.type !== 'assistant/message') return ''
+  return blocks(event.data?.message?.content)
+}
+
+function normalize(event: OfficialEvent): OfficialEvent {
+  const data = (event as { data?: unknown }).data
+  if (typeof data !== 'string') return event
+  try {
+    return { ...event, data: JSON.parse(data) }
+  } catch {
+    return event
+  }
+}
+
 function ordered(events: OfficialEvent[]): OfficialEvent[] {
   return events
-    .filter((event) => typeof event?.seq === 'number' && Number.isFinite(event.seq))
+    .map(normalize)
+    .filter((event) => Number.isFinite(Number(event?.seq)))
     .slice()
     .sort((left, right) => Number(left.seq) - Number(right.seq))
 }
@@ -88,15 +104,17 @@ export function interpretTarget(input: InterpretInput): TargetObservation {
   let endKind: string | null = null
   let turnStartSeq = -1
   for (const event of events) {
-    if (event.type === 'turn/start' && typeof event.data?.turn === 'number') {
-      turnId = String(event.data.turn)
+    const turn = Number(event.data?.turn)
+    if (!Number.isFinite(turn)) continue
+    if (event.type === 'turn/start') {
+      turnId = String(turn)
       turnOpen = true
       endKind = null
       turnStartSeq = Number(event.seq)
-    } else if (event.type === 'turn/end' && typeof event.data?.turn === 'number') {
-      turnId = String(event.data.turn)
+    } else if (event.type === 'turn/end') {
+      turnId = String(turn)
       turnOpen = false
-      endKind = event.data.reason?.kind ?? 'completed'
+      endKind = event.data?.reason?.kind ?? 'completed'
     }
   }
   const turnTerminal = !turnOpen && endKind != null && TERMINAL.has(endKind)
@@ -110,15 +128,16 @@ export function interpretTarget(input: InterpretInput): TargetObservation {
   else if (turnOpen && human) ownership = 'user_takeover'
   else if (turnOpen && boop) ownership = 'exclusive'
   else if (turnOpen) ownership = 'unknown'
-  const summary = [...events].reverse().map(eventText).find((text) => text.length > 0) ?? null
-  const deliverable = turnTerminal && endKind === 'completed' && Boolean(summary && summary.trim().length > 0)
+  const assistantSummary = [...slice].reverse().map(assistantText).find((text) => text.length > 0) ?? null
+  const summary = assistantSummary ?? (turnTerminal && endKind === 'blocked' ? '原会话没有执行这件委托。' : null)
+  const deliverable = turnTerminal && endKind === 'completed' && Boolean(assistantSummary && assistantSummary.trim().length > 0)
   const sourceGeneration = input.revision != null && String(input.revision).length > 0
     ? String(input.revision)
     : `${header.id ?? ''}:${header.version ?? ''}:${header.createdAt ?? ''}:${head}`
   return {
     reachable: true,
     busy: input.agentStatus === 'running',
-    pendingHuman: endKind === 'blocked',
+    pendingHuman: false,
     archived: false,
     subagent,
     home,

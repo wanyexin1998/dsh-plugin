@@ -251,6 +251,7 @@ export class PreStepRuntimeGate {
     for (const messageId of allowed) {
       this.consumed.add(messageId)
       this.counters.allowed += 1
+      this.recordV2(messageId, payload)
       this.audit('gate/pre-step-allowed', messageId, `released; session=${sessionId ?? 'unknown'}`)
     }
     this.lastDecision = {

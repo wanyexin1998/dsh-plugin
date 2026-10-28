@@ -613,21 +613,23 @@ export class DelegationService {
       })
       return
     }
-    let flushed = false
-    try {
-      flushed = outcome === 'enqueued' && (await this.ports.flush(sessionId))
-    } catch {
-      flushed = false
-    }
-    const seen = flushed && ((await this.ports.pending(sessionId, actionId)) || (await this.ports.visible(sessionId, actionId)))
-    await this.db.write(() => {
-      if (seen) {
-        this.db.db.prepare(`UPDATE action SET state = 'accepted', updated_at = ? WHERE id = ? AND scope_id = ?`).run(this.ports.now(), actionId, this.scopeId)
-        this.db.db.prepare(`UPDATE command_outbox SET state = 'accepted' WHERE action_id = ? AND scope_id = ?`).run(actionId, this.scopeId)
-      } else {
-        this.db.db.prepare(`UPDATE action SET state = 'outcome_unknown', updated_at = ? WHERE id = ? AND scope_id = ?`).run(this.ports.now(), actionId, this.scopeId)
-        this.db.db.prepare(`UPDATE command_outbox SET state = 'unknown' WHERE action_id = ? AND scope_id = ?`).run(actionId, this.scopeId)
+    if (outcome === 'enqueued') {
+      // The target claims this inbox row before pre-step, so pending() is already
+      // false and the log does not contain it yet. Downgrading to outcome_unknown
+      // here makes the gate fail closed (not-tracked) and ends the turn blocked.
+      const now = this.ports.now()
+      this.db.db.prepare(`UPDATE action SET state = 'accepted', updated_at = ? WHERE id = ? AND scope_id = ? AND state = 'dispatching'`).run(now, actionId, this.scopeId)
+      this.db.db.prepare(`UPDATE command_outbox SET state = 'accepted' WHERE action_id = ? AND scope_id = ?`).run(actionId, this.scopeId)
+      try {
+        await this.ports.flush(sessionId)
+      } catch {
+        /* observation still follows the accepted command */
       }
+      return
+    }
+    await this.db.write(() => {
+      this.db.db.prepare(`UPDATE action SET state = 'outcome_unknown', updated_at = ? WHERE id = ? AND scope_id = ? AND state = 'dispatching'`).run(this.ports.now(), actionId, this.scopeId)
+      this.db.db.prepare(`UPDATE command_outbox SET state = 'unknown' WHERE action_id = ? AND scope_id = ?`).run(actionId, this.scopeId)
     })
   }
 
@@ -637,10 +639,13 @@ export class DelegationService {
     const observed = await this.ports.observe(String(action.target_session_id))
     if (!observed) return
     const now = this.ports.now()
-    if (!observed.turnTerminal) {
+    const messageSeen = await this.ports.visible(String(action.target_session_id), String(action.message_id))
+    const sameTurn = action.turn_id != null && observed.turnId != null && String(action.turn_id) === String(observed.turnId)
+    if (!observed.turnTerminal || (!messageSeen && !sameTurn)) {
       await this.db.write(() => {
-        const state = observed.turnId ? 'running' : String(action.state)
-        this.db.db.prepare(`UPDATE action SET state = ?, turn_id = COALESCE(?, turn_id), updated_at = ? WHERE id = ? AND scope_id = ?`).run(state, observed.turnId, now, actionId, this.scopeId)
+        const state = !observed.turnTerminal && observed.turnId ? 'running' : String(action.state)
+        const turnId = !observed.turnTerminal ? observed.turnId : null
+        this.db.db.prepare(`UPDATE action SET state = ?, turn_id = COALESCE(?, turn_id), updated_at = ? WHERE id = ? AND scope_id = ?`).run(state, turnId, now, actionId, this.scopeId)
         this.db.db
           .prepare(`UPDATE action_runtime SET ownership = ?, native_approval_id = ?, observed_through_seq = ?, updated_at = ? WHERE action_id = ? AND scope_id = ?`)
           .run(observed.ownership, observed.approvalId, observed.headSeq, now, actionId, this.scopeId)

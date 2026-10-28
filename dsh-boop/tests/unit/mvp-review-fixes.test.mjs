@@ -138,6 +138,8 @@ test('observation reads human text and does not treat a loaded session as busy',
   assert.equal(observed.subagent, false)
   assert.equal(observed.latestDirectUserSeq, 3)
   assert.equal(observed.headSeq, 8)
+  assert.equal(observed.turnTerminal, true)
+  assert.equal(observed.deliverable, false)
   const events = contextFromEvents([
     { type: 'user/message', seq: 3, data: { id: 'user-3', source: { kind: 'user' }, content: [{ type: 'text', text: '不要部署' }] } },
     { type: 'turn/end', seq: 8, data: { turn: 1, reason: { kind: 'completed' } } },
@@ -327,6 +329,55 @@ test('a busy home keeps a pending result in the outbox', async () => {
   await env.service.deliver()
   assert.equal(env.calls.followup, 1)
   env.db.close()
+})
+
+test('a blocked turn does not reuse an earlier assistant reply', () => {
+  const observed = interpretTarget({
+    header: { id: 'boop-target-alpha', version: 4, createdAt: 1793155545523 },
+    events: [
+      { type: 'turn/start', seq: 4, data: { turn: 1 } },
+      { type: 'user/message', seq: 8, data: { id: 'user-8', source: { kind: 'user' }, content: [{ type: 'text', text: '只回复 pong' }] } },
+      { type: 'assistant/message', seq: 18, data: { turn: 1, message: { content: [{ type: 'text', text: 'pong' }] } } },
+      { type: 'turn/end', seq: 20, data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: 22, data: { turn: 2 } },
+      { type: 'turn/end', seq: 24, data: { turn: 2, reason: { kind: 'blocked' } } },
+    ],
+    agentStatus: 'idle',
+    workspaceId: 'ws',
+    title: 'alpha',
+    homeSessionId: 'home',
+  })
+  assert.equal(observed.turnId, '2')
+  assert.equal(observed.turnTerminal, true)
+  assert.equal(observed.deliverable, false)
+  assert.equal(observed.pendingHuman, false)
+  assert.equal(observed.ownership, 'ended')
+  assert.equal(observed.summary, '原会话没有执行这件委托。')
+})
+
+test('a pure BOOP batch is admitted once when the v2 action is live', async () => {
+  const admitted = new Set()
+  const gate = new PreStepRuntimeGate({
+    available: () => true,
+    armed: () => true,
+    entries: () => [],
+    v2AdmissionAllows: (id) => id === 'act-1' && !admitted.has(id),
+    admissionRecorded: (id) => admitted.has(id),
+    recordAdmission: (id) => {
+      if (admitted.has(id)) return false
+      admitted.add(id)
+      return true
+    },
+    knownMessageIds: () => new Set(),
+    scopeId: () => 'scope-1',
+    audit: () => ({ sink: 'memory', recorded: false, id: null }),
+  }, { waitTimeoutMs: 1, pollMs: 1, sleep: async () => undefined })
+  const command = { id: 'act-1', role: 'user', source: { kind: 'boop-command' }, content: [] }
+  const first = await gate.handle({ messages: [command], turn: 2, step: 0 }, async () => ({ kind: 'enter', messages: [command] }))
+  assert.equal(first.kind, 'enter')
+  const second = await gate.handle({ messages: [command], turn: 3, step: 0 }, async () => ({ kind: 'enter', messages: [command] }))
+  assert.equal(second.kind, 'reject')
+  assert.equal(admitted.has('act-1'), true)
 })
 
 test('a mixed human and BOOP batch admits the same command once', async () => {

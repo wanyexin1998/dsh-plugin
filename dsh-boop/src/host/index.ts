@@ -178,7 +178,9 @@ export function apply(ctx: any): void {
       let stopped = false
       const run = (): void => {
         if (stopped || writer.checkWrite().ok !== true) return
-        void service.tick().then(() => service.deliver()).catch(() => undefined)
+        void service.tick().then(() => service.deliver()).catch((error) => {
+          console.error('[boop] delegation tick failed', error instanceof Error ? error.message : error)
+        })
       }
       const timer = setInterval(run, 2000)
       wake = run
