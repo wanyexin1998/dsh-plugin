@@ -31,6 +31,27 @@ const executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome'
 const browser = await chromium.launch({ headless: true, executablePath })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
 await page.goto(htmlPath.startsWith('/') ? `file://${htmlPath}` : htmlPath, { waitUntil: 'load' })
+const widths = await page.locator('[data-preview="islands-light"]').evaluate((frame) => {
+  const column = frame.querySelector('.boop-column')
+  const rail = frame.querySelector('.boop-islands')
+  const islands = [...frame.querySelectorAll('.boop-island')].map((node) => ({
+    expanded: node.getAttribute('data-expanded'),
+    width: node.getBoundingClientRect().width,
+  }))
+  return {
+    column: column ? column.clientWidth : 0,
+    rail: rail ? rail.clientWidth : 0,
+    islands,
+  }
+})
+if (widths.rail <= 0 || widths.islands.length === 0) throw new Error(`island preview missing: ${JSON.stringify(widths)}`)
+for (const island of widths.islands) {
+  if (island.width > widths.rail / 2 + 1) {
+    throw new Error(`island wider than half the conversation: ${JSON.stringify({ ...widths, island })}`)
+  }
+}
+fs.writeFileSync(path.join(outDir, 'boop-island-widths.json'), JSON.stringify(widths, null, 2))
+await page.locator('[data-preview="islands-light"]').screenshot({ path: path.join(outDir, 'boop-island-light.png') })
 await page.locator('[data-preview="welcome-light"]').screenshot({ path: path.join(outDir, 'boop-home-welcome-light.png') })
 await page.locator('[data-preview="working-dark"]').screenshot({ path: path.join(outDir, 'boop-home-working-dark.png') })
 await page.locator('[data-preview="narrow"]').screenshot({ path: path.join(outDir, 'boop-home-narrow.png') })

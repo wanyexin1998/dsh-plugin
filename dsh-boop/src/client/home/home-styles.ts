@@ -105,6 +105,82 @@ body[data-ds-dark-theme] [data-boop-home],
 }
 [data-boop-home] .boop-banner { margin: 12px 0; color: var(--boop-muted); }
 [data-boop-home] .boop-summary { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+[data-boop-home] .boop-islands {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(740px, 100%);
+  margin: 8px auto 12px;
+}
+[data-boop-home] .boop-island {
+  width: fit-content;
+  max-width: 50%;
+  background: var(--boop-text);
+  color: var(--boop-bg);
+  border-radius: 16px;
+}
+[data-boop-home] .boop-island[data-expanded="true"] { width: 50%; }
+body[data-ds-dark-theme] [data-boop-home] .boop-island,
+[data-boop-home][data-boop-theme="dark"] .boop-island {
+  background: #2C333C;
+  color: var(--boop-text);
+}
+[data-boop-home] .boop-island-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+[data-boop-home] .boop-island-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-boop-home] .boop-island-status { flex: none; font-size: 12px; opacity: 0.72; }
+[data-boop-home] .boop-island-body { padding: 0 12px 10px; font-size: 13px; line-height: 1.45; }
+[data-boop-home] .boop-island-summary { margin: 6px 0 0; }
+[data-boop-home] .boop-island .boop-muted { color: inherit; opacity: 0.72; }
+[data-boop-home] .boop-island .boop-actions { margin-top: 8px; }
+[data-boop-home] .boop-island .boop-text-button,
+[data-boop-home] .boop-island .boop-primary {
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 12.5px;
+}
+[data-boop-home] .boop-island .boop-text-button {
+  background: transparent;
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+}
+[data-boop-home] .boop-island-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+[data-boop-home] .boop-island-choice:disabled { cursor: default; opacity: 0.6; }
 [data-boop-home] .boop-card-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 [data-boop-home] .boop-card-title strong { font-size: 15px; font-weight: 600; }
 [data-boop-home] .boop-pill { font-size: 12px; color: var(--boop-accent); background: var(--boop-soft); border-radius: 999px; padding: 2px 8px; }

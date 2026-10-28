@@ -91,6 +91,16 @@ function Composer(): React.ReactElement {
 export function Gallery(): React.ReactElement {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', background: '#888' }}>
+      <Frame width={1280} label="islands-light">
+        <Shell status="可以聊天，也可以继续已有项目">
+          <p className="boop-muted" style={{ marginTop: 24 }}>收到，它回复了 pong。</p>
+          <div className="boop-islands">
+            <WorkCard layout="island" task={task} onAction={() => undefined} />
+            <WorkCard layout="island" task={delivered} defaultExpanded onAction={() => undefined} />
+          </div>
+          <Composer />
+        </Shell>
+      </Frame>
       <Frame width={1280} label="welcome-light">
         <Shell status="可以聊天，也可以继续已有项目">
           <BoopWelcome message="我是波波。你可以和我聊想法，也可以让我继续推进已有项目。" modelMissing={false} onSetup={() => undefined} />
@@ -99,8 +109,11 @@ export function Gallery(): React.ReactElement {
       </Frame>
       <Frame width={1280} label="working-dark">
         <Shell theme="dark" status="正在处理一件工作，聊天仍然可用" drawer={<WorkDrawer tasks={[task, delivered]} selectedTaskId={delivered.taskId} onClose={() => undefined} onAction={() => undefined} />}>
-          <div className="boop-card" style={{ marginTop: 24 }}>继续 Cellgent 分屏的原开发会话，检查窄屏问题，先不要部署。</div>
-          <WorkCard task={task} onAction={() => undefined} />
+          <p className="boop-muted" style={{ marginTop: 24 }}>继续 Cellgent 分屏的原开发会话，检查窄屏问题，先不要部署。</p>
+          <div className="boop-islands">
+            <WorkCard layout="island" task={task} onAction={() => undefined} />
+            <WorkCard layout="island" task={delivered} defaultExpanded onAction={() => undefined} />
+          </div>
           <Composer />
         </Shell>
       </Frame>

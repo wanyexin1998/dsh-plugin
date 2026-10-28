@@ -1,5 +1,6 @@
 import React from 'react'
 import type { WorkCandidate } from '../../shared/mvp-contract.ts'
+import { Island } from './Island.tsx'
 import { readWorkChoice } from './read-work-choice.ts'
 
 export { readWorkChoice }
@@ -14,16 +15,15 @@ export function TargetCandidates(props: {
   const [note, setNote] = React.useState<string | null>(null)
   if (!choice || props.phase !== 'plain') return null
   return (
-    <div className="boop-card" data-boop-candidates="">
-      <strong>找到几个相关会话，你想继续哪一个？</strong>
-      <div className="boop-summary" style={{ marginTop: 10 }}>
+    <div className="boop-islands" data-boop-candidates="">
+      <Island title="相关会话" status={String(choice.candidates.length)}>
         {choice.candidates.map((candidate) => {
           const placed = props.inserted === candidate.selectionKey
           return (
             <button
               key={candidate.selectionKey}
               type="button"
-              className="boop-text-button"
+              className="boop-island-choice"
               disabled={placed}
               onClick={() => {
                 void props.onInsert(candidate).then((applied) => {
@@ -31,13 +31,13 @@ export function TargetCandidates(props: {
                 })
               }}
             >
-              <span>{candidate.title}</span>
-              <span className="boop-muted">{candidate.workspaceTitle ?? '未命名工作区'} · {candidate.lastActivityAt ?? '最近活动未知'}</span>
+              <span className="boop-island-title">{candidate.title}</span>
+              <span className="boop-muted">{candidate.workspaceTitle ?? '未命名工作区'}</span>
             </button>
           )
         })}
-      </div>
-      {note ? <p className="boop-muted">{note}</p> : null}
+        {note ? <p className="boop-muted">{note}</p> : null}
+      </Island>
     </div>
   )
 }

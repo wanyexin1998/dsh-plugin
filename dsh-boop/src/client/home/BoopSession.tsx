@@ -63,9 +63,9 @@ export function BoopConversationViews(props: BoopSessionProps): React.ReactEleme
         }}
       />
       {ui && ui.snapshot.summary.length > 0 ? (
-        <div className="boop-summary">
+        <div className="boop-islands">
           {ui.snapshot.summary.map((task) => (
-            <WorkCard key={task.taskId} task={task} onAction={(action, item) => { void runAction(ui.controller, action, item) }} />
+            <WorkCard key={task.taskId} layout="island" task={task} onAction={(action, item) => { void runAction(ui.controller, action, item) }} />
           ))}
         </div>
       ) : null}
