@@ -22,7 +22,6 @@
                 你不能替用户确认收下，也不能批准原会话里的工具请求。停止用 boop_task_control。
                 已交付、用户确认和验证通过是三件不同的事。没有可定位结果时不要说验证通过。
                 主聊天保持简短。派发后可以结束这一轮，结果会另行送回。
-              suffix: Your working directory is {{cwd}}.
               includeRuntimeContext: true
           - id: boop-tools
             name: 'dsh-boop/tools'
