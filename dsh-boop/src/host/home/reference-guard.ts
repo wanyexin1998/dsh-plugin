@@ -12,6 +12,21 @@
 
 import { formatSessionReferenceMention, parseSessionReferenceText } from '../../shared/session-mention.ts'
 
+const installedGuards = new WeakSet<object>()
+
+/** Remove schemes the host parser would read again from a denied label. */
+export function neutralizeSessionText(text: string): string {
+  let current = text
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = current
+      .replace(/@\[(?:\\.|[^\\\]])*\]\((?:dsh-session:[^)\s]*)\)/gu, '（未读取的会话）')
+      .replace(/dsh-session:[A-Za-z0-9_-]+/gu, '（未读取的会话）')
+    if (next === current) break
+    current = next
+  }
+  return current
+}
+
 export type ReferenceDecision = 'allow' | 'deny' | 'unknown'
 
 export interface ReferencePolicy {
@@ -59,7 +74,7 @@ export function gateHomeReferences(messages: unknown[], policy: ReferencePolicy)
       } catch {
         changed = true
         notes.push('有一条会话引用无法识别，已保留原文说明，没有读取它。')
-        return { ...textBlock, text: textBlock.text.replace(/dsh-session:[A-Za-z0-9_-]+/gu, '（未读取的会话引用）') }
+        return { ...textBlock, text: neutralizeSessionText(textBlock.text) }
       }
       if (parsed.references.length === 0) return block as TextBlock
       const decisions = parsed.references.map((reference) => ({ reference, decision: policy.decide(reference.sessionId) }))
@@ -68,7 +83,8 @@ export function gateHomeReferences(messages: unknown[], policy: ReferencePolicy)
       const allowed = decisions.filter((item) => item.decision === 'allow').map((item) => item.reference)
       const blocked = decisions.filter((item) => item.decision !== 'allow')
       const restored = allowed.map((reference) => formatSessionReferenceMention(reference)).join(' ')
-      const text = restored.length > 0 ? `${parsed.text}\n${restored}` : parsed.text
+      const visible = neutralizeSessionText(parsed.text)
+      const text = restored.length > 0 ? `${visible}\n${restored}` : visible
       notes.push(
         blocked.some((item) => item.decision === 'unknown')
           ? '有会话引用暂时无法确认是否可以读取，已先不读取。'
@@ -80,10 +96,9 @@ export function gateHomeReferences(messages: unknown[], policy: ReferencePolicy)
       rewritten.push(message)
       continue
     }
-    rewritten.push({ ...(record as object), content })
     rewritten.push({
-      source: { kind: 'boop-result', purpose: 'reference-scope' },
-      content: [{ type: 'text', text: notes.join('') }],
+      ...(record as object),
+      content: [...content, { type: 'text', text: notes.join('') }],
     })
   }
   return rewritten
@@ -94,12 +109,15 @@ export function gateHomeReferences(messages: unknown[], policy: ReferencePolicy)
  * no event hook, which the home service treats as send=false.
  */
 export function installHomeReferenceGuard(agent: { ctx?: { on?: Function } }, policy: ReferencePolicy): boolean {
-  const on = agent.ctx?.on
-  if (typeof on !== 'function') return false
-  on.call(agent.ctx, 'agent/pre-step', async (_payload: unknown, next: () => Promise<{ kind?: string; messages?: unknown[] }>) => {
+  const context = agent.ctx
+  const on = context?.on
+  if (!context || typeof on !== 'function') return false
+  if (installedGuards.has(context)) return true
+  on.call(context, 'agent/pre-step', async (_payload: unknown, next: () => Promise<{ kind?: string; messages?: unknown[] }>) => {
     const decision = await next()
     if (!decision || decision.kind === 'reject' || !Array.isArray(decision.messages)) return decision
     return { ...decision, messages: gateHomeReferences(decision.messages, policy) }
   })
+  installedGuards.add(context)
   return true
 }
