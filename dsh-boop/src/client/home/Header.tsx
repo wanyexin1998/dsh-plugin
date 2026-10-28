@@ -14,7 +14,7 @@ export function BoopHeader(props: {
       <div className="boop-header-id">
         <span className="boop-avatar"><BoopMark size={32} label="波波" /></span>
         <div style={{ minWidth: 0 }}>
-          <div className="boop-name">BOBO · 波波</div>
+          <div className="boop-name">BOOP · 波波</div>
           <div className="boop-status">{props.status}</div>
         </div>
       </div>

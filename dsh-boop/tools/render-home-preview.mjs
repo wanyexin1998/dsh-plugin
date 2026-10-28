@@ -25,7 +25,7 @@ await esbuild.build({
 })
 const js = fs.readFileSync(bundlePath, 'utf8')
 const htmlPath = path.join(outDir, 'boop-home-preview.html')
-fs.writeFileSync(htmlPath, `<!doctype html><html><head><meta charset="utf-8"><title>BOBO · 波波</title></head><body style="margin:0;background:#d5d8de"><div id="root"></div><script>${js}</script></body></html>`)
+fs.writeFileSync(htmlPath, `<!doctype html><html><head><meta charset="utf-8"><title>BOOP · 波波</title></head><body style="margin:0;background:#d5d8de"><div id="root"></div><script>${js}</script></body></html>`)
 
 const executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome'
 const browser = await chromium.launch({ headless: true, executablePath })

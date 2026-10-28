@@ -59,7 +59,7 @@ export function BoopHome(props: {
         data-boop-home=""
         data-boop-advanced={snapshot.advanced ? 'true' : 'false'}
         data-boop-connection={snapshot.connection}
-        aria-label="BOBO · 波波"
+        aria-label="BOOP · 波波"
       >
         <BoopHeader
           status={snapshot.phase === 'ready' ? '可以聊天，也可以继续已有项目' : snapshot.message}

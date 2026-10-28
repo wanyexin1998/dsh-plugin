@@ -10,7 +10,7 @@
 
 注册自有 `main` 面板 `boop.home`。页头、欢迎态、工作抽屉和设置由 BOOP 拥有。正文和输入使用宿主 `conversation.content` 的 embedded factory，绑定 `boop/ensureHome` 返回的真实 Session。主入口不调用 `openSession`，也不创建 Session。
 
-工程目录、包名和 SQLite 路径保持 `dsh-boop`。对用户显示的名称是「BOBO · 波波」。
+工程目录、包名和 SQLite 路径保持 `dsh-boop`。对用户显示的名称是「BOOP · 波波」。
 
 ## 本次覆盖的旧约束
 
