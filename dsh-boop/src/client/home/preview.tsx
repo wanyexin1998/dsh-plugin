@@ -98,7 +98,7 @@ export function Gallery(): React.ReactElement {
         </Shell>
       </Frame>
       <Frame width={1280} label="working-dark">
-        <Shell theme="dark" status="正在处理一件工作，聊天仍然可用" drawer={<WorkDrawer tasks={[task, delivered]} onClose={() => undefined} onAction={() => undefined} />}>
+        <Shell theme="dark" status="正在处理一件工作，聊天仍然可用" drawer={<WorkDrawer tasks={[task, delivered]} selectedTaskId={delivered.taskId} onClose={() => undefined} onAction={() => undefined} />}>
           <div className="boop-card" style={{ marginTop: 24 }}>继续 Cellgent 分屏的原开发会话，检查窄屏问题，先不要部署。</div>
           <WorkCard task={task} onAction={() => undefined} />
           <Composer />
@@ -111,7 +111,7 @@ export function Gallery(): React.ReactElement {
         </Shell>
       </Frame>
       <Frame width={1100} label="settings">
-        <Shell status="设置" drawer={<SettingsPanel home={{ state: 'ready', mainSessionId: 'hidden', bindingVersion: 1, capabilities: { send: true, readSources: true, delegate: true, stop: true, reasonCodes: [] } }} onClose={() => undefined} onAdvanced={() => undefined} />}>
+        <Shell status="设置" drawer={<SettingsPanel home={{ state: 'ready', mainSessionId: 'hidden', bindingVersion: 1, capabilities: { send: true, readSources: true, delegate: true, stop: true, reasonCodes: [] } }} access={{ mode: 'all_authorized', workspaceIds: [], sessionIds: [], policyEpoch: 1, grantedBy: 'host', inherited: true }} onClose={() => undefined} onAdvanced={() => undefined} onSave={() => undefined} />}>
           <BoopWelcome message="我是波波。你可以和我聊想法，也可以让我继续推进已有项目。" modelMissing={false} onSetup={() => undefined} />
         </Shell>
       </Frame>

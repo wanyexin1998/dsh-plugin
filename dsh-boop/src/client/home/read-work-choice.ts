@@ -26,11 +26,19 @@ function textOf(node: ToolResultNodeLike): string | null {
   return block.text
 }
 
+function isDirectUser(node: ToolResultNodeLike & { role?: unknown; source?: { kind?: unknown } }): boolean {
+  if (node.kind === 'tool-result' || node.kind === 'tool-call') return false
+  if (node.kind === 'user' || node.kind === 'user-message' || node.role === 'user') return true
+  return node.source?.kind === 'user'
+}
+
 export function readWorkChoice(nodes: unknown): WorkChoice | null {
   if (!Array.isArray(nodes)) return null
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
-    const node = nodes[index] as ToolResultNodeLike
-    if (!node || node.kind !== 'tool-result' || node.name !== 'boop_catalog' || node.isError || node.call == null) continue
+    const node = nodes[index] as ToolResultNodeLike & { role?: unknown; source?: { kind?: unknown } }
+    if (!node || typeof node !== 'object') continue
+    if (isDirectUser(node)) return null
+    if (node.kind !== 'tool-result' || node.name !== 'boop_catalog' || node.isError || node.call == null) continue
     const text = textOf(node)
     if (text === null) return null
     let parsed: unknown
