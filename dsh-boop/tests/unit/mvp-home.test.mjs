@@ -36,6 +36,7 @@ test('ensureHome creates one session and the second call does not create another
     },
     policy: { decide: () => 'allow' },
     now: () => '2026-10-28T00:00:00.000Z',
+    fenceOk: () => true,
   })
   const first = await service.ensureHome({ requestId: 'a' })
   const second = await service.ensureHome({ requestId: 'b' })

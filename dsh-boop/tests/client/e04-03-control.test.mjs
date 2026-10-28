@@ -1260,14 +1260,7 @@ test('E04-03 the BOOP panel wires the control area and the client bundle carries
   assert.match(board, /from '\.\/control\.tsx'/)
 
   const client = fs.readFileSync(path.join(root, 'lib/client.js'), 'utf8')
-  for (const endpoint of [
-    'boopControl/state',
-    'boopControl/approvals',
-    'boopControl/decideApproval',
-    'boopControl/stop',
-    'boopControl/recovery',
-    'boopControl/release',
-  ]) {
+  for (const endpoint of ['boop/ensureHome', 'boopTasks/stop', 'boopTasks/confirm', 'boopTasks/reconcile']) {
     assert.ok(client.includes(endpoint), `the generated client bundle carries ${endpoint}`)
   }
   assert.ok(client.includes("id: 'dsh-boop'"), 'the module id is still the package name')

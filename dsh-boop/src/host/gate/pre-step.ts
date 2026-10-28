@@ -81,7 +81,8 @@ export interface RuntimeGatePort {
   /** Host-side registry of message ids BOOP itself minted in this process. */
   knownMessageIds(): ReadonlySet<string>
   v2AdmissionAllows?(messageId: string): boolean
-  recordAdmission?(messageId: string, turnId: string): void
+  admissionRecorded?(messageId: string): boolean
+  recordAdmission?(messageId: string, turnId: string): boolean | void
   scopeId(): string | null
   audit(record: PreStepAuditRecord): PreStepAuditReceipt
 }
@@ -399,8 +400,14 @@ export class PreStepRuntimeGate {
   }
 
   private v2Allows(messageId: string): boolean {
+    if (this.admitted(messageId)) return false
     const port = this.port as RuntimeGatePort & { v2AdmissionAllows?: (messageId: string) => boolean }
     try { return port.v2AdmissionAllows?.(messageId) === true } catch { return false }
+  }
+
+  private admitted(messageId: string): boolean {
+    const port = this.port as RuntimeGatePort & { admissionRecorded?: (messageId: string) => boolean }
+    try { return port.admissionRecorded?.(messageId) === true } catch { return false }
   }
 
   private async handleMixed(
@@ -414,8 +421,15 @@ export class PreStepRuntimeGate {
     for (const claim of boopClaims) {
       const outcome = this.evaluateNow(claim)
       if (outcome.kind === 'allow') {
-        this.counters.allowed += 1
-        this.recordV2(claim.messageId, payload)
+        const recorded = this.recordV2(claim.messageId, payload)
+        if (!recorded || this.consumed.has(claim.messageId)) {
+          blocked.add(claim.messageId)
+          this.counters.blocked += 1
+          this.audit('gate/pre-step-blocked', claim.messageId, `already-admitted; mixed-batch; session=${sessionId ?? 'unknown'}`)
+        } else {
+          this.consumed.add(claim.messageId)
+          this.counters.allowed += 1
+        }
       } else {
         blocked.add(claim.messageId)
         this.counters.blocked += 1
@@ -437,7 +451,7 @@ export class PreStepRuntimeGate {
   }
 
   private evaluateNow(claim: BoopClaim): { kind: 'allow' } | { kind: 'block'; reason: string } {
-    if (this.consumed.has(claim.messageId)) return { kind: 'block', reason: PRE_STEP_REASON.alreadyExecuted }
+    if (this.consumed.has(claim.messageId) || this.admitted(claim.messageId)) return { kind: 'block', reason: PRE_STEP_REASON.alreadyExecuted }
     if (this.v2Allows(claim.messageId)) return { kind: 'allow' }
     try {
       if (!this.port.available()) return { kind: 'block', reason: PRE_STEP_REASON.gateUnavailable }
@@ -451,9 +465,14 @@ export class PreStepRuntimeGate {
     }
   }
 
-  private recordV2(messageId: string, payload: PreStepPayloadLike): void {
-    const port = this.port as RuntimeGatePort & { recordAdmission?: (messageId: string, turnId: string) => void }
-    try { port.recordAdmission?.(messageId, `turn:${payload.turn ?? 'unknown'}`) } catch { /* admission is best-effort beside the decision */ }
+  private recordV2(messageId: string, payload: PreStepPayloadLike): boolean {
+    const port = this.port as RuntimeGatePort & { recordAdmission?: (messageId: string, turnId: string) => boolean | void }
+    if (typeof port.recordAdmission !== 'function') return true
+    try {
+      return port.recordAdmission(messageId, `turn:${payload.turn ?? 'unknown'}`) !== false
+    } catch {
+      return false
+    }
   }
 
   private audit(kind: string, messageId: string | null, reason: string | null): void {
@@ -495,24 +514,36 @@ export function runtimeGatePortOf(ctx: any, options: { simulateUnavailable?: boo
       try {
         const db = ctx.boop?.storage?.()?.db?.db
         if (!db) return false
+        const admitted = db.prepare(`SELECT 1 AS hit FROM action_admission WHERE message_id = ? LIMIT 1`).get(messageId)
+        if (admitted) return false
         const row = db.prepare(`SELECT state FROM action WHERE message_id = ? AND managed_v2 = 1`).get(messageId) as { state?: string } | undefined
         return row?.state === 'dispatching' || row?.state === 'accepted' || row?.state === 'running'
       } catch {
         return false
       }
     },
-    recordAdmission(messageId: string, turnId: string): void {
+    admissionRecorded(messageId: string): boolean {
       try {
         const db = ctx.boop?.storage?.()?.db?.db
-        if (!db) return
-        db.prepare(
+        if (!db) return false
+        return Boolean(db.prepare(`SELECT 1 AS hit FROM action_admission WHERE message_id = ? LIMIT 1`).get(messageId))
+      } catch {
+        return false
+      }
+    },
+    recordAdmission(messageId: string, turnId: string): boolean {
+      try {
+        const db = ctx.boop?.storage?.()?.db?.db
+        if (!db) return false
+        const inserted = db.prepare(
           `INSERT INTO action_admission(action_id,scope_id,message_id,target_generation,turn_id,admitted_at)
            SELECT id, scope_id, message_id, 'observed', ?, ?
            FROM action WHERE message_id = ? AND managed_v2 = 1
            ON CONFLICT(action_id, scope_id) DO NOTHING`,
         ).run(turnId, new Date().toISOString(), messageId)
+        return inserted.changes === 1
       } catch {
-        /* schema 1 or a missing action must not throw out of the gate */
+        return false
       }
     },
     knownMessageIds(): ReadonlySet<string> {

@@ -72,7 +72,7 @@ export function BoopConversationViews(props: BoopSessionProps): React.ReactEleme
       {ui ? (
         <ComposerState
           connection={ui.snapshot.connection}
-          modelMissing={Boolean(modelMissing) && ui.snapshot.advanced}
+          modelMissing={Boolean(modelMissing) && ui.snapshot.advanced && !blank}
           notice={ui.snapshot.notice}
           onRetry={() => ui.controller.reconnect()}
           onSetup={() => ui.controller.setDrawer('settings', true)}
@@ -87,7 +87,8 @@ export function BoopUnavailable(): React.ReactElement {
 }
 
 async function runAction(controller: HomeController, action: string, task: Parameters<HomeController['stopTask']>[0]): Promise<void> {
-  if (action === 'open_session') controller.openSource(task.target.sessionId)
+  if (action === 'view') controller.selectTask(task.taskId)
+  else if (action === 'open_session') controller.openSource(task.target.sessionId)
   else if (action === 'stop') await controller.stopTask(task)
   else if (action === 'confirm') await controller.confirmTask(task)
   else if (action === 'continue') await controller.continueTask(task)

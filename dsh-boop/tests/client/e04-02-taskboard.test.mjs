@@ -1023,7 +1023,7 @@ test('E04-02 the frozen entry wires the taskboard panel and the client bundle st
   assert.match(board, /from '\.\/taskboard\/index\.tsx'/)
 
   const client = fs.readFileSync(path.join(root, 'lib/client.js'), 'utf8')
-  for (const endpoint of ['boopTasks/list', 'boopTasks/detail', 'boopTasks/capabilities', 'boopTasks/setPriority']) {
+  for (const endpoint of ['boop/ensureHome', 'boopTasks/listV2', 'boopTasks/detailV2', 'boopTasks/stop', 'boopTasks/confirm']) {
     assert.ok(client.includes(endpoint), `the generated client bundle carries ${endpoint}`)
   }
   assert.ok(client.includes("id: 'dsh-boop'"), 'the module id is still the package name')

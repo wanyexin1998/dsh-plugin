@@ -2,13 +2,13 @@
  * Host adapters for the verified public session APIs.
  *
  * create / resolveAgent / sessions.flush / followup / inbox.remove / cancel
- * are the only mutation calls. Missing surfaces return unavailable; they are
- * not replaced with a pretend session.
+ * are the only mutation calls. Observation reads sessionQuery and the live
+ * agent status. A loaded session is not treated as a running agent.
  */
 
-import { createHash } from 'node:crypto'
 import type { HomeNative } from './service.ts'
 import type { CatalogSession, ContextEvent, DelegationPorts, TargetObservation } from '../delegation/service.ts'
+import { contextFromEvents, interpretTarget, logContainsMessage, type OfficialEvent, type OfficialHeader } from './observe-facts.ts'
 
 function textOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -22,43 +22,98 @@ function optionalService(ctx: any, name: string): any {
   }
 }
 
-export function createHomeNative(ctx: any, cwdFingerprint: (cwd: string) => string): HomeNative {
+function dispose(observed: any): void {
+  try { observed?.[Symbol.dispose]?.() } catch { observed?.dispose?.() }
+}
+
+function workspaceMap(ctx: any): Map<string, string> {
+  const map = new Map<string, string>()
+  try {
+    const registry = optionalService(ctx, 'workspaceRegistry')
+    const workspaces = registry?.list?.() ?? []
+    for (const workspace of workspaces) {
+      const id = String(workspace?.id ?? '')
+      if (id === '') continue
+      for (const sessionId of workspace?.sessionIds ?? []) map.set(String(sessionId), id)
+    }
+  } catch {
+    /* unknown workspace stays null */
+  }
+  return map
+}
+
+function homeSessionId(ctx: any, scopeId: string): string | null {
+  try {
+    const db = ctx.boop?.storage?.()?.db?.db
+    if (!db || scopeId === '') return null
+    const row = db.prepare(`SELECT session_id FROM home_binding_history WHERE scope_id = ? AND closed_at IS NULL`).get(scopeId) as { session_id?: string } | undefined
+    return row?.session_id ? String(row.session_id) : null
+  } catch {
+    return null
+  }
+}
+
+function agentStatusOf(ctx: any, sessionId: string): 'idle' | 'running' | 'unknown' {
+  const live = ctx.sessions?.get?.(sessionId)
+  const status = live?.agent?.status ?? live?.status
+  if (status === 'running') return 'running'
+  if (status === 'idle') return 'idle'
+  return 'unknown'
+}
+
+function inboxMessages(ctx: any, sessionId: string): any[] {
+  const projections = optionalService(ctx, 'sessionProjections')
+  const session = ctx.sessions?.get?.(sessionId)
+  const state = session && projections?.stateOf?.(session, 'inbox')
+  return [...(state?.['next-turn'] ?? []), ...(state?.['next-step'] ?? [])]
+}
+
+async function readObservation(ctx: any, sessionId: string): Promise<{ header: OfficialHeader; events: OfficialEvent[]; revision: string | null } | null> {
+  const query = optionalService(ctx, 'sessionQuery')
+  if (!query?.observeSession) return null
+  let observed: any = null
+  try {
+    observed = await query.observeSession(sessionId, { projectionMode: 'all' })
+    const header = (observed?.header ?? {}) as OfficialHeader
+    const events = Array.isArray(observed?.events) ? observed.events as OfficialEvent[] : []
+    const revision = observed?.revision == null ? null : String(observed.revision)
+    return { header, events, revision }
+  } catch {
+    return null
+  } finally {
+    dispose(observed)
+  }
+}
+
+export function createHomeNative(ctx: any): HomeNative {
   return {
     async observe(sessionId) {
       const empty = { exists: false, subagent: false, archived: false, preset: null, cwd: null }
+      const read = await readObservation(ctx, sessionId)
+      if (!read) return empty
+      const header = read.header
       const projections = optionalService(ctx, 'sessionProjections')
       const live = ctx.sessions?.get?.(sessionId) ?? null
-      const readPreset = (target: unknown): string | null => {
-        if (!projections?.stateOf || !target) return null
+      let preset = typeof header.agentPreset === 'string' ? header.agentPreset : null
+      if (!preset && projections?.stateOf && live) {
         try {
-          const preset = projections.stateOf(target, 'agentPreset')
-          if (typeof preset === 'string') return preset
-          if (preset && typeof preset === 'object') {
-            const record = preset as { id?: unknown; presetId?: unknown; name?: unknown }
-            const id = record.id ?? record.presetId ?? record.name
-            return typeof id === 'string' ? id : null
+          const value = projections.stateOf(live, 'agentPreset')
+          if (typeof value === 'string') preset = value
+          else if (value && typeof value === 'object') {
+            const id = (value as { id?: unknown; presetId?: unknown }).id ?? (value as { presetId?: unknown }).presetId
+            if (typeof id === 'string') preset = id
           }
         } catch {
-          return null
+          preset = null
         }
-        return null
       }
-      try {
-        const query = optionalService(ctx, 'sessionQuery')
-        const observed = query?.observeSession ? await query.observeSession(sessionId, { projectionMode: 'all' }) : null
-        const header = observed?.header ?? observed ?? live?.header ?? live ?? {}
-        const preset = readPreset(live) ?? readPreset(observed?.agent?.session) ?? readPreset(header)
-        const cwd = header?.cwd ?? header?.meta?.cwd ?? live?.meta?.cwd ?? live?.cwd ?? null
-        try { observed?.[Symbol.dispose]?.() } catch { observed?.dispose?.() }
-        return {
-          exists: Boolean(observed || live),
-          subagent: header?.parentSessionId != null || header?.kind === 'subagent',
-          archived: header?.archived === true,
-          preset,
-          cwd: typeof cwd === 'string' ? cwd : null,
-        }
-      } catch {
-        return live ? { ...empty, exists: true, preset: readPreset(live), cwd: typeof live?.cwd === 'string' ? live.cwd : null } : empty
+      const cwd = typeof header.cwd === 'string' ? header.cwd : typeof live?.cwd === 'string' ? live.cwd : null
+      return {
+        exists: Boolean(header.id || live),
+        subagent: header.origin === 'subagent' || typeof header.parentSession === 'string',
+        archived: false,
+        preset,
+        cwd,
       }
     },
     async resolve(sessionId) {
@@ -67,7 +122,7 @@ export function createHomeNative(ctx: any, cwdFingerprint: (cwd: string) => stri
         if (!found || found.error) return { ok: false, agent: null }
         const agent = found.agent ?? found
         return { ok: Boolean(agent), agent }
-      } catch (error) {
+      } catch {
         return { ok: false, agent: null }
       }
     },
@@ -86,10 +141,17 @@ export function createHomeNative(ctx: any, cwdFingerprint: (cwd: string) => stri
     },
     async modelAvailable() {
       try {
-        const models = ctx.modelDirectory?.list?.() ?? ctx.models?.list?.()
-        if (Array.isArray(models)) return models.length > 0
+        const llm = optionalService(ctx, 'llm')
+        const providers = await llm?.listProviders?.()
+        if (Array.isArray(providers) && providers.length > 0) return true
       } catch {
-        /* unknown model directory is not a configured model */
+        /* a missing llm service is not a configured model */
+      }
+      try {
+        const models = ctx.modelDirectory?.list?.() ?? ctx.models?.list?.()
+        if (Array.isArray(models) && models.length > 0) return true
+      } catch {
+        /* unknown directories stay unavailable */
       }
       return false
     },
@@ -98,85 +160,105 @@ export function createHomeNative(ctx: any, cwdFingerprint: (cwd: string) => stri
 
 export function createDelegationPorts(ctx: any, scopeId: string, now: () => string): DelegationPorts {
   const known = new Set<string>()
+  const seen = new Set<string>()
   return {
     now,
     nowMs: () => Date.parse(now()),
-    fenceOk: () => ctx.boop?.storage?.()?.checkWrite?.().ok !== false,
+    fenceOk() {
+      try {
+        const storage = ctx.boop?.storage?.()
+        return storage?.checkWrite?.().ok === true
+      } catch {
+        return false
+      }
+    },
     async listSessions() {
-      const rows = await optionalService(ctx, 'sessionQuery')?.listSessions?.()
+      const query = optionalService(ctx, 'sessionQuery')
+      const rows = await query?.listSessions?.()
       if (!Array.isArray(rows)) return []
-      return rows.map((row: any): CatalogSession => {
-        const header = row.header ?? row
-        return {
-          sessionId: String(header.id ?? row.id ?? ''),
-          workspaceId: header.workspaceId ?? null,
-          title: String(header.title ?? header.id ?? '未命名会话'),
-          workspaceTitle: header.workspaceTitle ?? null,
-          activity: row.live ? 'running' : 'idle',
-          lastActivityAt: header.updatedAt ? new Date(header.updatedAt).toISOString() : null,
-          preview: null,
-          archived: header.archived === true,
-          subagent: header.parentSessionId != null,
-          home: false,
+      const workspaces = workspaceMap(ctx)
+      const home = homeSessionId(ctx, scopeId)
+      const listed: CatalogSession[] = []
+      for (const row of rows) {
+        const header = (row?.header ?? row) as OfficialHeader
+        const sessionId = String(header.id ?? row?.id ?? '')
+        if (sessionId === '') continue
+        seen.add(sessionId)
+        const status = agentStatusOf(ctx, sessionId)
+        let title = sessionId
+        try {
+          const snapshot = typeof query.readTitle === 'function' ? await query.readTitle(sessionId) : null
+          const text = snapshot?.title ?? snapshot?.text
+          if (typeof text === 'string' && text.trim().length > 0) title = text
+        } catch {
+          title = sessionId
         }
-      }).filter((row: CatalogSession) => row.sessionId.length > 0)
+        listed.push({
+          sessionId,
+          workspaceId: workspaces.get(sessionId) ?? null,
+          title,
+          workspaceTitle: null,
+          activity: status === 'running' ? 'running' : status === 'idle' ? 'idle' : 'unknown',
+          lastActivityAt: typeof header.createdAt === 'number' ? new Date(header.createdAt).toISOString() : null,
+          preview: null,
+          archived: false,
+          subagent: header.origin === 'subagent' || typeof header.parentSession === 'string',
+          home: home != null && sessionId === home,
+        })
+      }
+      return listed
     },
     async observe(sessionId): Promise<TargetObservation | null> {
+      const read = await readObservation(ctx, sessionId)
+      if (!read) return null
+      seen.add(sessionId)
+      const workspaces = workspaceMap(ctx)
+      const pending = inboxMessages(ctx, sessionId).some((message) => message?.source?.kind === 'boop-command' || message?.source?.kind === 'boop-result')
+      let title = String(read.header.id ?? sessionId)
       try {
         const query = optionalService(ctx, 'sessionQuery')
-        if (!query?.observeSession) return null
-        const observed = await query.observeSession(sessionId, { projectionMode: 'all' })
-        const header = observed?.header ?? {}
-        const events = typeof query.listEvents === 'function' ? await query.listEvents(sessionId) : []
-        const list = Array.isArray(events) ? events : []
-        const head = list.length > 0 ? Number(list[list.length - 1].seq ?? -1) : -1
-        try { observed?.[Symbol.dispose]?.() } catch { observed?.dispose?.() }
-        return {
-          reachable: true,
-          busy: observed?.live === true || header.running === true,
-          pendingHuman: false,
-          archived: header.archived === true,
-          subagent: header.parentSessionId != null,
-          home: false,
-          title: String(header.title ?? sessionId),
-          workspaceId: header.workspaceId ?? null,
-          workspaceTitle: header.workspaceTitle ?? null,
-          sourceGeneration: String(header.version ?? header.generation ?? 'unknown'),
-          headSeq: head,
-          latestDirectUserSeq: head,
-          latestDirectUserMessageId: null,
-          pendingMessage: false,
-          turnId: null,
-          turnTerminal: false,
-          ownership: 'unknown',
-          approvalId: null,
-          summary: null,
-          deliverable: false,
-          checks: [],
-          artifacts: [],
-          missing: [],
-          evidenceSeq: Math.max(0, head),
-        }
+        const snapshot = typeof query?.readTitle === 'function' ? await query.readTitle(sessionId) : null
+        const text = snapshot?.title ?? snapshot?.text
+        if (typeof text === 'string' && text.trim().length > 0) title = text
       } catch {
-        return null
+        /* the id remains the visible title */
       }
+      return interpretTarget({
+        header: read.header,
+        events: read.events,
+        agentStatus: agentStatusOf(ctx, sessionId),
+        workspaceId: workspaces.get(sessionId) ?? null,
+        title,
+        homeSessionId: homeSessionId(ctx, scopeId),
+        revision: read.revision,
+        pendingMessage: pending,
+      })
     },
-    async readEvents(sessionId, limit): Promise<ContextEvent[]> {
+    async readEvents(sessionId, limit, beforeSeq): Promise<ContextEvent[]> {
+      const read = await readObservation(ctx, sessionId)
+      if (!read) return []
+      const generation = read.revision ?? `${read.header.id ?? sessionId}:${read.header.version ?? ''}:${read.header.createdAt ?? ''}`
+      return contextFromEvents(read.events, sessionId, generation, limit, beforeSeq)
+    },
+    excluded(sessionId) {
       try {
-        const events = await optionalService(ctx, 'sessionQuery')?.listEvents?.(sessionId)
-        if (!Array.isArray(events)) return []
-        return events.slice(-limit).map((event: any) => ({
-          seq: Number(event.seq ?? 0),
-          text: String(event.surface?.text ?? event.type ?? ''),
-          sessionId,
-          sourceGeneration: 'unknown',
-        }))
+        const db = ctx.boop?.storage?.()?.db?.db
+        if (!db || scopeId === '') return true
+        const rules = db.prepare(`SELECT mode, source_fingerprint FROM forget_rule WHERE scope_id = ?`).all(scopeId) as Array<{ mode?: string; source_fingerprint?: string }>
+        for (const rule of rules) {
+          if (rule.mode === 'exclude_scope' || rule.source_fingerprint === '*') return true
+          if (rule.mode === 'exclude_source' && rule.source_fingerprint === sessionId) return true
+        }
+        const cursor = db.prepare(`SELECT 1 AS hit FROM source_cursor WHERE scope_id = ? AND session_id = ? AND state = 'excluded' LIMIT 1`).get(scopeId, sessionId)
+        return Boolean(cursor)
       } catch {
-        return []
+        return true
       }
     },
-    excluded() { return false },
-    hostCanRead() { return true },
+    hostCanRead(sessionId) {
+      if (!optionalService(ctx, 'sessionQuery')) return 'unknown'
+      return seen.has(sessionId) ? true : 'unknown'
+    },
     async followup(sessionId, message) {
       const found = await ctx.sessionController?.resolveAgent?.(sessionId)
       const agent = found?.agent ?? found
@@ -198,14 +280,13 @@ export function createDelegationPorts(ctx: any, scopeId: string, now: () => stri
       return (await ctx.sessions.flush(session)) === true
     },
     async pending(sessionId, messageId) {
-      const sessions = ctx.sessions
-      const projections = optionalService(ctx, 'sessionProjections')
-      const session = sessions?.get?.(sessionId)
-      const state = session && projections?.stateOf?.(session, 'inbox')
-      const pending = [...(state?.['next-turn'] ?? []), ...(state?.['next-step'] ?? [])]
-      return pending.some((message: any) => message?.id === messageId)
+      return inboxMessages(ctx, sessionId).some((message) => message?.id === messageId)
     },
-    async visible() { return false },
+    async visible(sessionId, messageId) {
+      const read = await readObservation(ctx, sessionId)
+      if (!read) return false
+      return logContainsMessage(read.events, messageId)
+    },
     async remove(sessionId, messageId) {
       const found = await ctx.sessionController?.resolveAgent?.(sessionId)
       const agent = found?.agent ?? found
@@ -217,11 +298,12 @@ export function createDelegationPorts(ctx: any, scopeId: string, now: () => stri
       const agent = found?.agent ?? found
       await agent?.cancel?.({ kind: 'user' }, { keepInbox: true })
     },
-    async mainIdle() { return true },
+    async mainIdle() {
+      const home = homeSessionId(ctx, scopeId)
+      if (!home) return false
+      return agentStatusOf(ctx, home) !== 'running'
+    },
   }
-  void scopeId
-  void cwdFingerprint
-  void createHash
 }
 
 export function rememberKnownMessage(ctx: any, messageId: string): void {

@@ -310,6 +310,28 @@ class BoopTasksApi extends TypertRemoteService {
     return { schemaVersion: 2, kind: 'boop.task', ok: true, data: detail }
   }
 
+  access(): unknown {
+    const delegation = this.mvp()
+    const view = delegation?.readAccess?.()
+    if (!view) return { schemaVersion: 2, kind: 'boop.access', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '还不能读取工作范围。', retryable: true } }
+    return { schemaVersion: 2, kind: 'boop.access', ok: true, data: view }
+  }
+
+  async setAccess(request?: unknown): Promise<unknown> {
+    const delegation = this.mvp()
+    const body = unwrap(request)
+    if (!delegation) return { schemaVersion: 2, kind: 'boop.access', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能修改工作范围。', retryable: true } }
+    const mode = body.mode === 'none' || body.mode === 'selected' || body.mode === 'all_authorized' ? body.mode : null
+    if (!mode) return { schemaVersion: 2, kind: 'boop.access', ok: false, error: { code: 'INVALID_ARGUMENT', message: '需要选择一个访问范围。', retryable: false } }
+    return delegation.setAccess({
+      requestId: String(body.requestId ?? `access-${Date.now()}`),
+      expectedPolicyEpoch: Number(body.expectedPolicyEpoch),
+      mode,
+      workspaceIds: Array.isArray(body.workspaceIds) ? body.workspaceIds.map(String) : [],
+      sessionIds: Array.isArray(body.sessionIds) ? body.sessionIds.map(String) : [],
+    }, uiCall(this.ctx, String(body.requestId ?? 'ui-access')))
+  }
+
   private async control(operation: 'stop', request?: unknown): Promise<unknown> {
     const delegation = this.mvp()
     const body = unwrap(request)
@@ -345,7 +367,7 @@ function uiCall(ctx: any, originRef: string): any {
 for (const method of ['capabilities', 'list', 'detail', 'setPriority']) {
   remote(method)(BoopTasksApi.prototype)
 }
-for (const method of ['listV2', 'detailV2', 'stop', 'confirm', 'reconcile']) {
+for (const method of ['listV2', 'detailV2', 'stop', 'confirm', 'reconcile', 'access', 'setAccess']) {
   remote(method)(BoopTasksApi.prototype)
 }
 

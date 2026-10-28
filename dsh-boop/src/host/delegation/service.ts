@@ -137,6 +137,7 @@ export class DelegationService {
   private readonly db: BoopDatabase
   private readonly scopeId: string
   private readonly ports: DelegationPorts
+  private readonly workspaces = new Map<string, string | null>()
 
   constructor(db: BoopDatabase, scopeId: string, ports: DelegationPorts) {
     this.db = db
@@ -232,10 +233,15 @@ export class DelegationService {
     if (access.mode === 'none') return 'deny'
     if (access.mode === 'selected') {
       if (access.sessionIds.includes(sessionId)) return 'allow'
-      if (workspaceId && access.workspaceIds.includes(workspaceId)) return 'allow'
+      const workspace = workspaceId ?? this.workspaces.get(sessionId) ?? null
+      if (workspace && access.workspaceIds.includes(workspace)) return 'allow'
       return 'deny'
     }
     return 'allow'
+  }
+
+  private rememberWorkspace(sessionId: string, workspaceId: string | null): void {
+    this.workspaces.set(sessionId, workspaceId)
   }
 
   capabilities(send: boolean): HomeCapabilities {
@@ -269,6 +275,7 @@ export class DelegationService {
     let truncated = false
     for (const session of sessions) {
       if (session.home || session.archived || session.subagent) continue
+      this.rememberWorkspace(session.sessionId, session.workspaceId)
       if (this.canRead(session.sessionId, session.workspaceId) !== 'allow') continue
       if (candidates.length >= limit) {
         truncated = true
@@ -322,6 +329,7 @@ export class DelegationService {
       return failReply('boop.context', { code: 'TARGET_NOT_ORDINARY', message: '只能委托一个普通的已有会话。', retryable: false })
     }
     const access = this.canRead(targetSessionId, observed.workspaceId)
+    this.rememberWorkspace(targetSessionId, observed.workspaceId)
     if (access !== 'allow') {
       return failReply('boop.context', {
         code: access === 'unknown' ? 'SOURCE_ACCESS_REQUIRED' : 'SCOPE_DENIED',
@@ -412,17 +420,31 @@ export class DelegationService {
     if (Date.parse(snapshot.expires_at) <= this.ports.nowMs()) {
       return failReply('boop.dispatch', { code: 'CONTEXT_EXPIRED', message: '刚才读到的内容已过期，需要再读一次。', retryable: true }, args.requestId)
     }
+    if (String(snapshot.origin_message_id) !== call.originRef || snapshot.main_session_id !== call.mainSessionId) {
+      return failReply('boop.dispatch', { code: 'CONTEXT_REQUIRED', message: '读取到的上下文和这次消息对不上。', retryable: true }, args.requestId)
+    }
     if (Number(snapshot.policy_epoch) !== call.policyEpoch) {
       return failReply('boop.dispatch', { code: 'CONTEXT_CHANGED', message: '读取范围变了，需要按新范围再读一次。', retryable: true }, args.requestId)
     }
-    const access = this.canRead(args.targetSessionId, null)
+    const observed = await this.ports.observe(args.targetSessionId)
+    if (!observed?.reachable) return failReply('boop.dispatch', { code: 'TARGET_NOT_FOUND', message: '没有找到这个会话。', retryable: true }, args.requestId)
+    this.rememberWorkspace(args.targetSessionId, observed.workspaceId)
+    if (observed.home || observed.subagent) return failReply('boop.dispatch', { code: 'TARGET_NOT_ORDINARY', message: '不能把波波自己或子代理当成执行会话。', retryable: false }, args.requestId)
+    if (observed.archived) return failReply('boop.dispatch', { code: 'TARGET_ARCHIVED', message: '这个会话已归档。', retryable: false }, args.requestId)
+    if (
+      String(snapshot.source_generation) !== observed.sourceGeneration
+      || Number(snapshot.head_seq) !== observed.headSeq
+      || Number(snapshot.latest_user_seq) !== observed.latestDirectUserSeq
+    ) {
+      return failReply('boop.dispatch', { code: 'CONTEXT_CHANGED', message: '原会话里有了新的要求，需要再读一次近况。', retryable: true }, args.requestId)
+    }
+    const access = this.canRead(args.targetSessionId, observed.workspaceId)
     if (access !== 'allow') {
       return failReply('boop.dispatch', { code: 'SCOPE_DENIED', message: '这个会话不在可以委托的范围内。', retryable: false }, args.requestId)
     }
-    const observed = await this.ports.observe(args.targetSessionId)
-    if (!observed?.reachable) return failReply('boop.dispatch', { code: 'TARGET_NOT_FOUND', message: '没有找到这个会话。', retryable: true }, args.requestId)
-    if (observed.home || observed.subagent) return failReply('boop.dispatch', { code: 'TARGET_NOT_ORDINARY', message: '不能把波波自己或子代理当成执行会话。', retryable: false }, args.requestId)
-    if (observed.archived) return failReply('boop.dispatch', { code: 'TARGET_ARCHIVED', message: '这个会话已归档。', retryable: false }, args.requestId)
+    if (!this.ports.fenceOk(call)) {
+      return failReply('boop.dispatch', { code: 'WRITER_FENCE_LOST', message: '当前数据连接已换人保管，这次没有新建工作。', retryable: true }, args.requestId)
+    }
     const taskId = `tsk_${randomUUID()}`
     const actionId = `act_${randomUUID()}`
     const now = this.ports.now()
@@ -500,8 +522,26 @@ export class DelegationService {
     for (const action of queued) {
       const task = this.taskRow(action.task_id)
       if (!task || Number(task.stop_requested) === 1) continue
+      const row = this.actionRow(action.id)
+      if (!this.ports.fenceOk(this.leaseCall())) {
+        this.rejectPlanned(action.id)
+        continue
+      }
+      const access = this.readAccess()
+      if (!access || Number(row?.policy_epoch) !== access.policyEpoch) {
+        this.rejectPlanned(action.id)
+        continue
+      }
       const observed = await this.ports.observe(action.target_session_id)
-      if (!observed?.reachable) continue
+      if (!observed?.reachable || observed.archived || observed.subagent || observed.home) {
+        this.rejectPlanned(action.id)
+        continue
+      }
+      this.rememberWorkspace(action.target_session_id, observed.workspaceId)
+      if (this.canRead(action.target_session_id, observed.workspaceId) !== 'allow') {
+        this.rejectPlanned(action.id)
+        continue
+      }
       const runtime = this.runtime(action.id)
       if (runtime && (observed.sourceGeneration !== runtime.target_generation || observed.latestDirectUserSeq !== Number(runtime.latest_user_seq))) {
         this.setQueue(action.id, 'context_changed')
@@ -527,6 +567,28 @@ export class DelegationService {
   private async sendClaimed(actionId: string, sessionId: string): Promise<void> {
     const action = this.actionRow(actionId)
     if (!action) return
+    const observed = await this.ports.observe(sessionId)
+    const access = this.readAccess()
+    const runtime = this.runtime(actionId)
+    const task = this.taskRow(String(action.task_id))
+    const blocked = !this.ports.fenceOk(this.leaseCall())
+      || !access
+      || Number(action.policy_epoch) !== access.policyEpoch
+      || Number(task?.stop_requested) === 1
+      || !observed?.reachable
+      || observed.archived
+      || observed.subagent
+      || observed.home
+      || this.canRead(sessionId, observed.workspaceId) !== 'allow'
+      || (runtime && (observed.sourceGeneration !== runtime.target_generation || observed.latestDirectUserSeq !== Number(runtime.latest_user_seq)))
+    if (blocked) {
+      await this.db.write(() => {
+        this.db.db.prepare(`UPDATE action SET state = 'rejected', updated_at = ? WHERE id = ? AND scope_id = ? AND state = 'dispatching'`).run(this.ports.now(), actionId, this.scopeId)
+        this.db.db.prepare(`UPDATE command_outbox SET state = 'cancelled' WHERE action_id = ? AND scope_id = ?`).run(actionId, this.scopeId)
+        this.releaseSlot(actionId)
+      })
+      return
+    }
     const args = JSON.parse(String(action.payload_json)) as DispatchArgs
     const message = {
       id: actionId,
@@ -655,6 +717,12 @@ export class DelegationService {
         this.db.db.prepare(`UPDATE result_outbox SET state = 'sent', updated_at = ? WHERE result_id = ? AND scope_id = ?`).run(this.ports.now(), row.result_id, this.scopeId)
         continue
       }
+      if (await this.ports.pending(row.target_main_session_id, row.native_message_id)) {
+        this.db.db.prepare(`UPDATE result_outbox SET state = 'sending', updated_at = ? WHERE result_id = ? AND scope_id = ? AND state = 'pending'`).run(this.ports.now(), row.result_id, this.scopeId)
+        continue
+      }
+      if (row.state !== 'pending') continue
+      this.db.db.prepare(`UPDATE result_outbox SET state = 'sending', updated_at = ? WHERE result_id = ? AND scope_id = ? AND state = 'pending'`).run(this.ports.now(), row.result_id, this.scopeId)
       const result = this.db.db.prepare(`SELECT summary, task_id FROM task_result WHERE id = ? AND scope_id = ?`).get(row.result_id, this.scopeId) as { summary?: string; task_id?: string } | undefined
       const message = {
         id: row.native_message_id,
@@ -689,48 +757,52 @@ export class DelegationService {
     if (Number(task.version) !== args.expectedTaskVersion) {
       return failReply('boop.control', { code: 'TASK_VERSION_CONFLICT', message: '工作内容已经变过，请看最新进展再停止。', retryable: true, taskId: args.taskId }, args.requestId)
     }
-    const action = this.latestAction(args.taskId)
+    const rows = this.actions(args.taskId)
     await this.db.write(() => {
       this.db.db.prepare(`UPDATE task SET stop_requested = 1, state_seq = state_seq + 1, updated_at = ? WHERE id = ? AND scope_id = ?`).run(this.ports.now(), args.taskId, this.scopeId)
-      if (action) {
+      for (const action of rows) {
         this.db.db.prepare(`UPDATE action_runtime SET stop_requested = 1, updated_at = ? WHERE action_id = ? AND scope_id = ?`).run(this.ports.now(), action.id, this.scopeId)
-      }
-    })
-    if (!action || action.state === 'planned' || action.state === 'rejected') {
-      await this.db.write(() => {
-        if (action) {
+        if (action.state === 'planned' || action.state === 'rejected') {
           this.db.db.prepare(`UPDATE action SET state = 'stopped', updated_at = ? WHERE id = ? AND scope_id = ? AND state IN ('planned','rejected')`).run(this.ports.now(), action.id, this.scopeId)
           this.db.db.prepare(`UPDATE command_outbox SET state = 'cancelled' WHERE action_id = ? AND scope_id = ? AND state IN ('prepared','blocked')`).run(action.id, this.scopeId)
           this.releaseIfHeld(action.id, 'stopped-before-send')
         }
-      })
-      return this.controlReply(args, 'stopped', null)
-    }
-    const observed = await this.ports.observe(String(action.target_session_id))
-    if (observed && (observed.ownership === 'user_takeover' || observed.ownership === 'mixed')) {
-      await this.db.write(() => {
-        this.db.db.prepare(`UPDATE action_runtime SET ownership = ?, updated_at = ? WHERE action_id = ? AND scope_id = ?`).run(observed.ownership, this.ports.now(), action.id, this.scopeId)
-      })
-      return this.controlReply(args, 'stopped_future_only', 'STOP_OWNERSHIP_CHANGED')
-    }
-    if (observed?.pendingMessage && !observed.turnId) {
-      const removed = await this.ports.remove(String(action.target_session_id), String(action.message_id))
-      const flushed = await this.ports.flush(String(action.target_session_id))
-      const still = await this.ports.pending(String(action.target_session_id), String(action.message_id))
-      if (removed && flushed && !still) {
-        await this.db.write(() => {
-          this.db.db.prepare(`UPDATE action SET state = 'stopped', updated_at = ? WHERE id = ? AND scope_id = ?`).run(this.ports.now(), action.id, this.scopeId)
-          this.db.db.prepare(`UPDATE command_outbox SET state = 'cancelled' WHERE action_id = ? AND scope_id = ?`).run(action.id, this.scopeId)
-          this.releaseIfHeld(action.id, 'removed-pending')
-        })
-        return this.controlReply(args, 'stopped', null)
       }
+    })
+    const live = rows.filter((action) => OCCUPYING.includes(String(action.state)))
+    if (live.length === 0) return this.controlReply(args, 'stopped', null)
+    let futureOnly = false
+    let requested = false
+    for (const action of live) {
+      const observed = await this.ports.observe(String(action.target_session_id))
+      if (observed && (observed.ownership === 'user_takeover' || observed.ownership === 'mixed')) {
+        await this.db.write(() => {
+          this.db.db.prepare(`UPDATE action_runtime SET ownership = ?, updated_at = ? WHERE action_id = ? AND scope_id = ?`).run(observed.ownership, this.ports.now(), action.id, this.scopeId)
+        })
+        futureOnly = true
+        continue
+      }
+      if (observed?.pendingMessage && !observed.turnId) {
+        const removed = await this.ports.remove(String(action.target_session_id), String(action.message_id))
+        const flushed = await this.ports.flush(String(action.target_session_id))
+        const still = await this.ports.pending(String(action.target_session_id), String(action.message_id))
+        if (removed && flushed && !still) {
+          await this.db.write(() => {
+            this.db.db.prepare(`UPDATE action SET state = 'stopped', updated_at = ? WHERE id = ? AND scope_id = ?`).run(this.ports.now(), action.id, this.scopeId)
+            this.db.db.prepare(`UPDATE command_outbox SET state = 'cancelled' WHERE action_id = ? AND scope_id = ?`).run(action.id, this.scopeId)
+            this.releaseIfHeld(action.id, 'removed-pending')
+          })
+          continue
+        }
+      }
+      if (observed?.ownership === 'exclusive' && observed.turnId && !observed.turnTerminal) {
+        await this.ports.cancelTurn(String(action.target_session_id))
+      }
+      requested = true
     }
-    if (observed?.ownership === 'exclusive' && observed.turnId && !observed.turnTerminal) {
-      await this.ports.cancelTurn(String(action.target_session_id))
-      return this.controlReply(args, 'stop_requested', null)
-    }
-    if (action.state === 'outcome_unknown') return this.controlReply(args, 'stopped_future_only', 'OUTCOME_UNKNOWN')
+    if (futureOnly && !requested) return this.controlReply(args, 'stopped_future_only', 'STOP_OWNERSHIP_CHANGED')
+    const stillLive = this.actions(args.taskId).some((action) => OCCUPYING.includes(String(action.state)))
+    if (!stillLive) return this.controlReply(args, 'stopped', null)
     return this.controlReply(args, 'stop_requested', null)
   }
 
@@ -759,7 +831,10 @@ export class DelegationService {
     const actionId = `act_${randomUUID()}`
     const now = this.ports.now()
     const goal = args.goal ?? String(task.goal)
-    const digest = payloadHash({ targetSessionId: target, goal, instruction: args.instruction, criteria: args.criteria ?? [], exclusions: args.exclusions ?? [], taskVersion: nextVersion, policyEpoch: call.policyEpoch })
+    const criteria = args.criteria ?? this.stringList(task.criteria_json)
+    const exclusions = args.exclusions ?? this.stringList(task.exclusions_json)
+    const revision = { ...args, goal, criteria, exclusions }
+    const digest = payloadHash({ targetSessionId: target, goal, instruction: args.instruction, criteria, exclusions, taskVersion: nextVersion, policyEpoch: call.policyEpoch })
     const queueReason = latest && OCCUPYING.includes(String(latest.state)) ? 'previous_action' : null
     try {
     await this.db.write(() => {
@@ -768,15 +843,15 @@ export class DelegationService {
           `UPDATE task SET version = ?, goal = ?, criteria_json = ?, exclusions_json = ?, lifecycle = 'active', verification = 'not_requested', stop_requested = 0, state_seq = state_seq + 1, updated_at = ?
            WHERE id = ? AND scope_id = ? AND version = ?`,
         )
-        .run(nextVersion, goal, JSON.stringify(args.criteria ?? []), JSON.stringify(args.exclusions ?? []), now, args.taskId, this.scopeId, args.expectedTaskVersion)
+        .run(nextVersion, goal, JSON.stringify(criteria), JSON.stringify(exclusions), now, args.taskId, this.scopeId, args.expectedTaskVersion)
       if (!changed.changes) throw new Error('TASK_VERSION_CONFLICT')
-      this.db.db.prepare(`INSERT INTO task_revision(task_id,scope_id,version,snapshot_json,intent_ref,created_at) VALUES(?,?,?,?,?,?)`).run(args.taskId, this.scopeId, nextVersion, JSON.stringify(args), call.originRef, now)
+      this.db.db.prepare(`INSERT INTO task_revision(task_id,scope_id,version,snapshot_json,intent_ref,created_at) VALUES(?,?,?,?,?,?)`).run(args.taskId, this.scopeId, nextVersion, JSON.stringify(revision), call.originRef, now)
       this.db.db
         .prepare(
           `INSERT INTO action(id,scope_id,task_id,task_version,target_session_id,payload_hash,payload_json,state,message_id,policy_epoch,origin_ref,created_at,updated_at,managed_v2)
            VALUES(?,?,?,?,?,?,?,'planned',?,?,?,?,?,1)`,
         )
-        .run(actionId, this.scopeId, args.taskId, nextVersion, target, digest, JSON.stringify(args), actionId, call.policyEpoch, call.originRef, now, now)
+        .run(actionId, this.scopeId, args.taskId, nextVersion, target, digest, JSON.stringify(revision), actionId, call.policyEpoch, call.originRef, now, now)
       this.db.db.prepare(`INSERT INTO command_outbox(action_id,scope_id,state,attempt) VALUES(?,?,'prepared',0)`).run(actionId, this.scopeId)
       this.db.db
         .prepare(
@@ -922,7 +997,7 @@ export class DelegationService {
     if (!task) return null
     const target = this.db.db.prepare(`SELECT * FROM task_target WHERE task_id = ? AND scope_id = ? AND role = 'executor-v2'`).get(taskId, this.scopeId) as any
     const legacyTarget = target ?? (this.db.db.prepare(`SELECT * FROM task_target WHERE task_id = ? AND scope_id = ? LIMIT 1`).get(taskId, this.scopeId) as any)
-    const action = this.latestAction(taskId)
+    const action = this.displayAction(taskId)
     const runtime = action ? this.runtime(String(action.id)) : undefined
     const result = this.db.db
       .prepare(`SELECT * FROM task_result WHERE task_id = ? AND scope_id = ? ORDER BY created_at DESC LIMIT 1`)
@@ -1066,9 +1141,36 @@ export class DelegationService {
   }
 
   private latestAction(taskId: string): any {
+    return this.actions(taskId)[0]
+  }
+
+  private displayAction(taskId: string): any {
+    const rows = this.actions(taskId)
+    return rows.find((row) => OCCUPYING.includes(String(row.state))) ?? rows[0]
+  }
+
+  private actions(taskId: string): any[] {
     return this.db.db
-      .prepare(`SELECT * FROM action WHERE task_id = ? AND scope_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`)
-      .get(taskId, this.scopeId)
+      .prepare(`SELECT * FROM action WHERE task_id = ? AND scope_id = ? ORDER BY created_at DESC, id DESC`)
+      .all(taskId, this.scopeId) as any[]
+  }
+
+  private stringList(value: unknown): string[] {
+    try {
+      const parsed = JSON.parse(String(value ?? '[]'))
+      return Array.isArray(parsed) ? parsed.map((item) => String(item)) : []
+    } catch {
+      return []
+    }
+  }
+
+  private leaseCall(): TrustedCall {
+    return { originRef: 'lease', originKind: 'ui', mainSessionId: '', bindingVersion: 1, policyEpoch: 1, holder: '', fence: 0 }
+  }
+
+  private rejectPlanned(actionId: string): void {
+    this.db.db.prepare(`UPDATE action SET state = 'rejected', updated_at = ? WHERE id = ? AND scope_id = ? AND state = 'planned'`).run(this.ports.now(), actionId, this.scopeId)
+    this.db.db.prepare(`UPDATE command_outbox SET state = 'cancelled' WHERE action_id = ? AND scope_id = ? AND state IN ('prepared','blocked')`).run(actionId, this.scopeId)
   }
 
   private runtime(actionId: string): any {

@@ -14,6 +14,7 @@ import { createMainSessionStore, type BoopCall } from './main-session.ts'
 import { BoopHome, BoopHomeSession } from './home/index.tsx'
 import { BOOP_HOME_CSS } from './home/home-styles.ts'
 import { HOME_INTENT_KEY, HOME_PANEL_KEY, HomeController, type HomeHost, type RetainedSession } from './home/controller.ts'
+import { insertDraftText, insertSessionReference, resolveDraftActions } from './home/draft-input.ts'
 
 export const MAIN_KEY = HOME_PANEL_KEY
 export const inject = ['slots', 'layout', 'connection', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'conversation']
@@ -36,6 +37,7 @@ function applyInner(ctx: any): void {
     }
   }
   const mainStore = createMainSessionStore({ mainSessionId: null })
+  let controller: HomeController
   const host: HomeHost = {
     call,
     retain(sessionId, signal): RetainedSession {
@@ -64,38 +66,45 @@ function applyInner(ctx: any): void {
     },
     async insertReference(input) {
       try {
-        const actx = ctx.sessions.scope?.(mainStore.getSnapshot()?.mainSessionId)
+        const id = controller.getSnapshot().reference?.id ?? mainStore.getSnapshot()?.mainSessionId
+        const actx = ctx.sessions.scope?.(id)
         const facade = ctx.conversation?.input?.for?.(actx)
-        if (!facade || typeof facade.captureInsertion !== 'function' && typeof ctx.sessions.scope !== 'function') return false
-        const span = facade.captureInsertion?.() ?? { start: 0, end: 0 }
-        return facade.insertReference?.({
-          source: 'reference',
-          ref: input.mention,
-          label: input.label,
-          appearance: 'session',
-          clipboardText: input.mention,
-        }, { ...span, start: span.end }) === true
+        return insertSessionReference(resolveDraftActions(facade), input)
       } catch {
         return false
       }
     },
     async setDraftText(text) {
       try {
-        const id = mainStore.getSnapshot()?.mainSessionId
+        const id = controller.getSnapshot().reference?.id ?? mainStore.getSnapshot()?.mainSessionId
         const actx = ctx.sessions.scope?.(id)
         const facade = ctx.conversation?.input?.for?.(actx)
-        if (!facade?.setDraft && !facade?.insertText) return false
-        if (typeof facade.setDraft === 'function') return facade.setDraft(text) !== false
-        return facade.insertText(text) !== false
+        return insertDraftText(resolveDraftActions(facade), text)
       } catch {
         return false
       }
     },
   }
-  const controller = new HomeController(host)
+  controller = new HomeController(host)
+
+  const rememberPanel = (id: string): void => {
+    try { sessionStorage.setItem(HOME_INTENT_KEY, id) } catch { /* private mode */ }
+  }
+  try {
+    const layout = ctx.layout
+    if (layout && typeof layout.selectPanel === 'function' && layout.selectPanel.__boopTracked !== true) {
+      const original = layout.selectPanel.bind(layout)
+      const tracked = (id: string) => {
+        if (typeof id === 'string' && id.length > 0) rememberPanel(id)
+        return original(id)
+      }
+      tracked.__boopTracked = true
+      layout.selectPanel = tracked
+    }
+  } catch { /* the host layout stays as it is */ }
 
   const openHome = (): { ok: true } => {
-    try { sessionStorage.setItem(HOME_INTENT_KEY, '1') } catch { /* private mode */ }
+    try { rememberPanel(MAIN_KEY) } catch { /* private mode */ }
     try { ctx.layout.selectPanel(MAIN_KEY) } catch (error) {
       console.error('[boop] could not open the home panel', error)
     }
@@ -122,7 +131,23 @@ function applyInner(ctx: any): void {
     React.useEffect(() => {
       void controller.mount().then(() => {
         const home = controller.getSnapshot().home
-        if (home && home.state === 'ready') mainStore.set({ mainSessionId: home.mainSessionId, phase: 'ready' })
+        if (home && home.state === 'ready') {
+          mainStore.set({
+            mainSessionId: home.mainSessionId,
+            phase: 'ready',
+            error: null,
+            identityConflict: false,
+            host: {
+              state: 'bound',
+              mainSessionId: home.mainSessionId,
+              scopeId: null,
+              writable: true,
+              durable: true,
+              reason: null,
+              storage: null,
+            },
+          })
+        }
       })
       return () => controller.destroy()
     }, [])
@@ -141,7 +166,8 @@ function applyInner(ctx: any): void {
       inject: () => ({}),
     }, BoopHomeSession))
     try {
-      if (sessionStorage.getItem(HOME_INTENT_KEY) === '1') ctx.layout.selectPanel(MAIN_KEY)
+      const remembered = sessionStorage.getItem(HOME_INTENT_KEY)
+      if (remembered === MAIN_KEY) ctx.layout.selectPanel(MAIN_KEY)
     } catch { /* storage or layout may be absent in a test */ }
     return () => {
       disposeSession?.()

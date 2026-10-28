@@ -7,6 +7,7 @@ export function BoopHeader(props: {
   settingsOpen: boolean
   onWork: () => void
   onSettings: () => void
+  workButtonRef?: React.Ref<HTMLButtonElement>
 }): React.ReactElement {
   return (
     <header className="boop-header">
@@ -18,7 +19,7 @@ export function BoopHeader(props: {
         </div>
       </div>
       <div className="boop-header-actions">
-        <button type="button" className="boop-text-button" aria-pressed={props.workOpen} onClick={props.onWork}>工作</button>
+        <button ref={props.workButtonRef} type="button" className="boop-text-button" aria-pressed={props.workOpen} onClick={props.onWork}>工作</button>
         <button type="button" className="boop-text-button" aria-pressed={props.settingsOpen} onClick={props.onSettings}>设置</button>
       </div>
     </header>

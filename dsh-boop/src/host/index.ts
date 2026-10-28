@@ -156,8 +156,11 @@ export function apply(ctx: any): void {
         scopeId,
         ownerId: storage.identity.ownerId,
         dshHome: ctx.dshHomePath?.() ?? '',
-        native: createHomeNative(ctx, (value) => value),
+        native: createHomeNative(ctx),
         policy,
+        fenceOk: () => {
+          try { return storage.checkWrite().ok === true } catch { return false }
+        },
       })
       delegation = new DelegationService(storage.db, scopeId, createDelegationPorts(ctx, scopeId, () => new Date().toISOString()))
       delegation.bootRecover()
@@ -166,6 +169,23 @@ export function apply(ctx: any): void {
       } catch {
         /* an existing explicit grant stays; a failed inherit leaves read closed */
       }
+    }
+
+    let wake = (): void => undefined
+    if (delegation && storage) {
+      const service = delegation
+      const writer = storage
+      let stopped = false
+      const run = (): void => {
+        if (stopped || writer.checkWrite().ok !== true) return
+        void service.tick().then(() => service.deliver()).catch(() => undefined)
+      }
+      const timer = setInterval(run, 2000)
+      wake = run
+      ctx.effect(() => () => {
+        stopped = true
+        clearInterval(timer)
+      }, 'boop: delegation driver')
     }
 
     ctx.provide('boop', {
@@ -208,6 +228,9 @@ export function apply(ctx: any): void {
       },
       delegation(): DelegationService | null {
         return delegation
+      },
+      wakeDelegation(): void {
+        wake()
       },
       async ensureHome(request?: { requestId?: string }) {
         if (!home) {

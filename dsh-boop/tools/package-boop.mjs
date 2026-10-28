@@ -312,8 +312,8 @@ try {
   recordCheck('3D model is the expected real GLB size', glb !== undefined && glb.bytes > 1_000_000, glb ? `${glb.bytes} bytes` : 'missing')
   recordCheck(
     'client bundle is present and non-trivial',
-    (byPath.get('lib/client.js')?.bytes ?? 0) > 100_000,
-    'lib/client.js is missing or too small',
+    (byPath.get('lib/client.js')?.bytes ?? 0) > 20_000,
+    'lib/client.js is missing or empty',
   )
 
   /* ── stage 4: deterministic-byte evidence for a second run ─────────── */

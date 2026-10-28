@@ -51,7 +51,15 @@ export class HomeService {
     this.native = options.native
     this.policy = options.policy
     this.now = options.now ?? (() => new Date().toISOString())
-    this.fenceOk = options.fenceOk ?? (() => true)
+    this.fenceOk = options.fenceOk ?? (() => false)
+  }
+
+  /** The one open home binding. A scopes id that disagrees is not an identity. */
+  currentIdentity(): { sessionId: string; bindingVersion: number } | null {
+    const bound = this.binding()
+    const main = this.scopeMain()
+    if (!bound || !main || bound.session_id !== main) return null
+    return { sessionId: bound.session_id, bindingVersion: bound.binding_version }
   }
 
   ensureHome(request: { requestId?: string } = {}): Promise<Reply<'boop.home', HomeView>> {
@@ -62,26 +70,58 @@ export class HomeService {
     return this.inflight
   }
 
+  private lostFence(requestId?: string): Reply<'boop.home', HomeView> | null {
+    if (this.fenceOk()) return null
+    return failReply('boop.home', { code: 'WRITER_FENCE_LOST', message: '当前数据连接已换人保管，没有改动波波的身份。', retryable: true }, requestId)
+  }
+
   private async ensureOnce(requestId?: string): Promise<Reply<'boop.home', HomeView>> {
-    if (!this.fenceOk()) {
-      return failReply('boop.home', { code: 'WRITER_FENCE_LOST', message: '当前数据连接已换人保管，没有改动波波的身份。', retryable: true }, requestId)
-    }
+    const blocked = this.lostFence(requestId)
+    if (blocked) return blocked
     const bound = this.binding()
-    if (bound) {
+    const main = this.scopeMain()
+    if (bound && main && bound.session_id !== main) {
+      return okReply('boop.home', this.repair('HOME_REPAIR_REQUIRED', main, '波波的主会话记录不一致，没有再创建一个。'), { requestId })
+    }
+    if (bound && !main) {
+      return okReply('boop.home', this.repair('HOME_REPAIR_REQUIRED', bound.session_id, '波波的主会话记录不完整，没有再创建一个。'), { requestId })
+    }
+    if (bound && main) {
       const checked = await this.verifyExisting(bound.session_id, bound.binding_version)
+      if (this.lostFence(requestId)) return this.lostFence(requestId)!
       if (checked && checked.state === 'ready') return okReply('boop.home', checked, { requestId })
       return okReply('boop.home', checked && checked.state !== 'ready' ? checked : this.repair('HOME_REPAIR_REQUIRED', bound.session_id), { requestId })
+    }
+    if (main) {
+      const version = (this.maxVersion() ?? 0) + 1
+      const checked = await this.verifyExisting(main, version)
+      if (this.lostFence(requestId)) return this.lostFence(requestId)!
+      if (checked?.state === 'ready') {
+        try {
+          this.bind(main, version)
+        } catch {
+          return okReply('boop.home', this.repair('HOME_REPAIR_REQUIRED', main, '原来的主会话还在，这次没有把它换成另一个。'), { requestId })
+        }
+        return okReply('boop.home', checked, { requestId })
+      }
+      return okReply('boop.home', checked && checked.state !== 'ready' ? checked : this.repair('HOME_REPAIR_REQUIRED', main, '原来的主会话还不能用，没有另建一个。'), { requestId })
     }
     const journal = this.journal()
     if (journal?.returned_session_id || journal?.requested_session_id) {
       const sessionId = journal.returned_session_id || journal.requested_session_id
       const recovered = await this.verifyExisting(sessionId, journal.expected_binding_version)
+      if (this.lostFence(requestId)) return this.lostFence(requestId)!
       if (recovered?.state === 'ready') {
-        this.bind(sessionId, journal.expected_binding_version)
+        try {
+          this.bind(sessionId, journal.expected_binding_version)
+        } catch {
+          return okReply('boop.home', this.repair('HOME_REPAIR_REQUIRED', sessionId), { requestId })
+        }
         return okReply('boop.home', recovered, { requestId })
       }
       if (recovered) return okReply('boop.home', recovered, { requestId })
     }
+    if (this.lostFence(requestId)) return this.lostFence(requestId)!
     return okReply('boop.home', await this.provision(journal?.requested_session_id ?? null), { requestId })
   }
 
@@ -92,7 +132,8 @@ export class HomeService {
     if (facts.subagent || facts.archived) return this.repair('TARGET_NOT_ORDINARY', sessionId, '波波的主会话不能是子代理或已归档会话。')
     if (facts.preset && facts.preset !== 'boop') return this.repair('PRESET_UNAVAILABLE', sessionId, '主会话没有挂上 boop 预设。')
     if (!facts.preset) return this.repair('PRESET_UNAVAILABLE', sessionId, '还不能确认主会话的预设。')
-    if (facts.cwd && this.fingerprint(facts.cwd) !== this.fingerprint(this.cwd)) {
+    const observedCwd = typeof facts.cwd === 'string' ? path.resolve(facts.cwd) : ''
+    if (observedCwd.length === 0 || this.fingerprint(observedCwd) !== this.fingerprint(path.resolve(this.cwd))) {
       return this.repair('HOME_REPAIR_REQUIRED', sessionId, '主会话的工作目录和波波记录不一致。')
     }
     this.guardReady = installHomeReferenceGuard(resolved.agent, this.policy)
@@ -119,6 +160,10 @@ export class HomeService {
          WHERE home_provisioning.stage IN ('prepared','repair_required')`,
       )
       .run(this.scopeId, key, version, requestedSessionId, now, now)
+    if (!this.fenceOk()) {
+      this.markRepair('WRITER_FENCE_LOST', null)
+      return this.repair('WRITER_FENCE_LOST', requestedSessionId, '当前数据连接已换人保管，没有创建波波的会话。')
+    }
     let created: { sessionId: string }
     try {
       created = await this.native.create({ sessionId: requestedSessionId, cwd: this.cwd, agentPreset: 'boop' })
@@ -129,6 +174,10 @@ export class HomeService {
     this.db.db
       .prepare(`UPDATE home_provisioning SET returned_session_id = ?, stage = 'native_created', updated_at = ? WHERE scope_id = ?`)
       .run(created.sessionId, this.now(), this.scopeId)
+    if (!this.fenceOk()) {
+      this.markRepair('WRITER_FENCE_LOST', created.sessionId)
+      return this.repair('WRITER_FENCE_LOST', created.sessionId, '会话已经创建，但数据连接换人了，没有把它登记成波波。')
+    }
     if (created.sessionId !== requestedSessionId) {
       this.markRepair('HOME_REPAIR_REQUIRED', created.sessionId)
       return this.repair('HOME_REPAIR_REQUIRED', created.sessionId)
@@ -148,14 +197,16 @@ export class HomeService {
   }
 
   private bind(sessionId: string, version: number): void {
+    if (!this.fenceOk()) throw new Error('WRITER_FENCE_LOST')
     const existing = this.binding()
-    if (existing?.session_id === sessionId) {
+    if (existing?.session_id === sessionId && this.scopeMain() === sessionId) {
       this.db.db.prepare(`UPDATE home_provisioning SET stage = 'bound', updated_at = ? WHERE scope_id = ?`).run(this.now(), this.scopeId)
       return
     }
     this.db.db.exec('BEGIN IMMEDIATE')
     try {
-      this.db.db.prepare(`UPDATE scopes SET main_session_id = ? WHERE scope_id = ? AND (main_session_id IS NULL OR main_session_id = ?)`).run(sessionId, this.scopeId, sessionId)
+      const updated = this.db.db.prepare(`UPDATE scopes SET main_session_id = ? WHERE scope_id = ? AND (main_session_id IS NULL OR main_session_id = ?)`).run(sessionId, this.scopeId, sessionId)
+      if (updated.changes !== 1) throw new Error('HOME_IDENTITY_CONFLICT')
       this.db.db
         .prepare(
           `INSERT INTO home_binding_history(scope_id,binding_version,session_id,previous_session_id,preset_id,cwd_fingerprint,context_ref,opened_at,closed_at)
@@ -202,6 +253,11 @@ export class HomeService {
     this.db.db
       .prepare(`UPDATE home_provisioning SET stage = 'repair_required', error_code = ?, returned_session_id = COALESCE(?, returned_session_id), updated_at = ? WHERE scope_id = ?`)
       .run(code, returned, this.now(), this.scopeId)
+  }
+
+  private scopeMain(): string | null {
+    const row = this.db.db.prepare(`SELECT main_session_id FROM scopes WHERE scope_id = ?`).get(this.scopeId) as { main_session_id?: string | null } | undefined
+    return row?.main_session_id ? String(row.main_session_id) : null
   }
 
   private binding(): { session_id: string; binding_version: number } | undefined {

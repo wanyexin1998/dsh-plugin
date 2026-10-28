@@ -31,27 +31,98 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 
 import { runVerifyTool } from './verify/verify-api.ts'
 import { validateDispatchArgs, validateStopArgs } from '../shared/mvp-contract.ts'
+import { directHumanOrigin, type OfficialEvent } from './home/observe-facts.ts'
 import type { TrustedCall } from './delegation/service.ts'
 
-function trustedCall(exec: any, ctx: any): TrustedCall | null {
-  const delegation = ctx.boop?.delegation?.()
+export const REPLY_OUTPUT = {
+  schema: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      schemaVersion: { type: 'number' },
+      kind: { type: 'string' },
+      ok: { type: 'boolean' },
+      requestId: { type: 'string' },
+      replayed: { type: 'boolean' },
+      data: { type: 'object', additionalProperties: true },
+      error: { type: 'object', additionalProperties: true },
+      scope: {
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          product: { type: 'string' },
+          dshProfileVersion: { type: 'string' },
+        },
+      },
+      capabilities: { type: 'object', additionalProperties: true },
+      writeModeEnabled: { type: 'boolean' },
+      available: { type: 'boolean' },
+      degraded: { type: 'boolean' },
+      hitCount: { type: 'number' },
+      body: { type: 'string' },
+    },
+  },
+  render: (_args: unknown, value: unknown) => [
+    {
+      type: 'text' as const,
+      text: JSON.stringify(value ?? null),
+    },
+  ],
+}
+
+async function trustedCall(exec: any, ctx: any): Promise<TrustedCall | null> {
   const home = ctx.boop?.home?.()
-  void home
-  const agent = exec?.agent
-  const sessionId = agent?.session?.id ?? agent?.id
-  const origin = exec?.originUserMessageId ?? exec?.userMessageId ?? exec?.callId
-  if (typeof sessionId !== 'string' || typeof origin !== 'string') return null
   const storage = ctx.boop?.storage?.()
+  if (!home || typeof home.currentIdentity !== 'function' || !storage || storage.checkWrite?.().ok !== true) return null
+  const identity = home.currentIdentity()
+  if (!identity) return null
+  const sessionId = exec?.agent?.session?.id ?? exec?.agent?.id
+  if (typeof sessionId !== 'string' || sessionId !== identity.sessionId) return null
+  const preset = await homePreset(ctx, sessionId)
+  if (preset !== 'boop') return null
+  const events = await homeEvents(ctx, sessionId)
+  const hinted = typeof exec?.originUserMessageId === 'string' ? exec.originUserMessageId : typeof exec?.userMessageId === 'string' ? exec.userMessageId : null
+  const origin = directHumanOrigin(events, hinted)
+  if (!origin || origin === exec?.callId) return null
+  const scope = storage.repo?.getScope?.(storage.identity.scopeId)
   return {
     originRef: origin,
     originKind: 'user',
-    mainSessionId: sessionId,
-    bindingVersion: 1,
-    policyEpoch: storage?.repo?.getScope?.(storage.identity.scopeId)?.policyEpoch ?? 1,
-    holder: storage?.identity?.ownerId ?? 'owner',
-    fence: storage?.facts?.(true)?.lease?.fencingToken ?? 0,
+    mainSessionId: identity.sessionId,
+    bindingVersion: identity.bindingVersion,
+    policyEpoch: scope?.policyEpoch ?? 1,
+    holder: storage.identity?.ownerId ?? 'owner',
+    fence: storage.facts?.(true)?.lease?.fencingToken ?? 0,
     toolCallId: typeof exec?.callId === 'string' ? exec.callId : undefined,
   }
+}
+
+async function homePreset(ctx: any, sessionId: string): Promise<string | null> {
+  try {
+    const query = ctx.reflect?.get?.('sessionQuery', false)
+    const observed = await query?.observeSession?.(sessionId, { projectionMode: 'none' })
+    const preset = observed?.header?.agentPreset
+    try { observed?.[Symbol.dispose]?.() } catch { observed?.dispose?.() }
+    return typeof preset === 'string' ? preset : null
+  } catch {
+    return null
+  }
+}
+
+async function homeEvents(ctx: any, sessionId: string): Promise<OfficialEvent[]> {
+  try {
+    const query = ctx.reflect?.get?.('sessionQuery', false)
+    const observed = await query?.observeSession?.(sessionId, { projectionMode: 'none' })
+    const events = Array.isArray(observed?.events) ? observed.events as OfficialEvent[] : []
+    try { observed?.[Symbol.dispose]?.() } catch { observed?.dispose?.() }
+    return events
+  } catch {
+    return []
+  }
+}
+
+function wake(ctx: any): void {
+  try { ctx.boop?.wakeDelegation?.() } catch { /* the driver owns the error */ }
 }
 export const name = 'boop-tools'
 
@@ -74,37 +145,12 @@ export function apply(ctx: any): void {
           taskId: { type: 'string' },
           limit: { type: 'integer' },
         },
-        output: {
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              scope: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  product: { type: 'string' },
-                  dshProfileVersion: { type: 'string' },
-                },
-              },
-              capabilities: { type: 'object', additionalProperties: true },
-              writeModeEnabled: { type: 'boolean' },
-            },
-          },
-          render: (_args, value) => [
-            {
-              type: 'text',
-              text: value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 2
-                ? JSON.stringify(value)
-                : `BOOP scope: ${(value as { scope?: { product?: string; dshProfileVersion?: string } }).scope?.product ?? 'BOOP'} on DSH ${(value as { scope?: { dshProfileVersion?: string } }).scope?.dshProfileVersion ?? ''}; write mode ${(value as { writeModeEnabled?: boolean }).writeModeEnabled ? 'ENABLED' : 'disabled (gates pending)'}.`,
-            },
-          ],
-        },
+        output: REPLY_OUTPUT,
         execute: async (args, exec) => {
           const delegation = ctx.boop?.delegation?.()
           const mode = args?.mode === 'work' || args?.mode === 'tasks' || args?.mode === 'capabilities' ? args.mode : 'capabilities'
           if (delegation && mode !== 'capabilities') {
-            const trusted = trustedCall(exec, ctx)
+            const trusted = await trustedCall(exec, ctx)
             if (!trusted) {
               return { schemaVersion: 2, kind: 'boop.catalog', ok: false, error: { code: 'SCOPE_DENIED', message: '这次读取没有对上当前的波波会话。', retryable: false } }
             }
@@ -240,30 +286,11 @@ export function apply(ctx: any): void {
           beforeSeq: { type: 'integer' },
           limit: { type: 'integer' },
         },
-        output: {
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              available: { type: 'boolean' },
-              degraded: { type: 'boolean' },
-              hitCount: { type: 'number' },
-              body: { type: 'string' },
-            },
-          },
-          render: (_args, value) => [
-            {
-              type: 'text',
-              text: value && typeof value === 'object' && (value as { schemaVersion?: unknown }).schemaVersion === 2
-                ? JSON.stringify(value)
-                : String((value as { body?: unknown }).body ?? ''),
-            },
-          ],
-        },
+        output: REPLY_OUTPUT,
         execute: async (args, exec) => {
           const delegation = ctx.boop?.delegation?.()
           if (delegation && (typeof args.targetSessionId === 'string' || typeof args.taskId === 'string')) {
-            const trusted = trustedCall(exec, ctx)
+            const trusted = await trustedCall(exec, ctx)
             if (!trusted) {
               return { schemaVersion: 2, kind: 'boop.context', ok: false, error: { code: 'SCOPE_DENIED', message: '这次读取没有对上当前的波波会话。', retryable: false } }
             }
@@ -327,9 +354,11 @@ export function apply(ctx: any): void {
         const parsed = validateDispatchArgs(args)
         if (!parsed.ok) return { schemaVersion: 2, kind: 'boop.dispatch', ok: false, error: { code: 'INVALID_ARGUMENT', message: parsed.message, retryable: false } }
         const delegation = ctx.boop?.delegation?.()
-        const trusted = trustedCall(exec, ctx)
+        const trusted = await trustedCall(exec, ctx)
         if (!delegation || !trusted) return { schemaVersion: 2, kind: 'boop.dispatch', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能委托，没有新建工作。', retryable: true } }
-        return delegation.prepare(parsed.value, trusted)
+        const prepared = await delegation.prepare(parsed.value, trusted)
+        if (prepared.ok) wake(ctx)
+        return prepared
       },
     }))
     ctx.tools.register(defineTool({
@@ -349,7 +378,7 @@ export function apply(ctx: any): void {
       output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
       execute: async (args, exec) => {
         const delegation = ctx.boop?.delegation?.()
-        const trusted = trustedCall(exec, ctx)
+        const trusted = await trustedCall(exec, ctx)
         if (!delegation || !trusted) return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'NATIVE_UNAVAILABLE', message: '现在不能控制这件工作。', retryable: true } }
         if (args.operation === 'stop') {
           const parsed = validateStopArgs(args)
@@ -357,7 +386,7 @@ export function apply(ctx: any): void {
           return delegation.stop(parsed.value, { ...trusted, originKind: 'user' })
         }
         if ((args.operation === 'resume' || args.operation === 'revise') && typeof args.contextToken === 'string' && typeof args.instruction === 'string') {
-          return delegation.revise({
+          const revised = await delegation.revise({
             requestId: String(args.requestId),
             taskId: String(args.taskId),
             expectedTaskVersion: Number(args.expectedTaskVersion),
@@ -367,6 +396,8 @@ export function apply(ctx: any): void {
             criteria: Array.isArray(args.criteria) ? args.criteria : undefined,
             exclusions: Array.isArray(args.exclusions) ? args.exclusions : undefined,
           }, trusted)
+          if (revised.ok) wake(ctx)
+          return revised
         }
         return { schemaVersion: 2, kind: 'boop.control', ok: false, error: { code: 'INVALID_ARGUMENT', message: '继续处理需要新的上下文和新的要求。', retryable: false } }
       },

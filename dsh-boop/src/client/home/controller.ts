@@ -3,7 +3,7 @@
  * task refreshes that do not replace that reference.
  */
 
-import type { HomeView, TaskView } from '../../shared/mvp-contract.ts'
+import type { AccessView, HomeView, TaskView } from '../../shared/mvp-contract.ts'
 
 export interface HomeCall {
   (endpoint: string, args?: Record<string, unknown>): Promise<any>
@@ -44,6 +44,8 @@ export interface HomeSnapshot {
   connection: string
   notice: string | null
   generation: number
+  selectedTaskId: string | null
+  access: AccessView | null
 }
 
 type Listener = () => void
@@ -61,6 +63,8 @@ const EMPTY: HomeSnapshot = {
   connection: 'connected',
   notice: null,
   generation: 0,
+  selectedTaskId: null,
+  access: null,
 }
 
 export class HomeController {
@@ -70,6 +74,7 @@ export class HomeController {
   private abort: AbortController | null = null
   private unsubscribe: (() => void) | null = null
   private reference: RetainedSession | null = null
+  private poll: ReturnType<typeof setInterval> | null = null
   private readonly host: HomeHost
 
   constructor(host: HomeHost) {
@@ -89,7 +94,10 @@ export class HomeController {
     this.abort = new AbortController()
     this.unsubscribe?.()
     this.unsubscribe = this.host.connection.subscribe(() => {
-      this.patch({ connection: this.host.connection.getSnapshot() ?? 'unknown' })
+      const connection = this.host.connection.getSnapshot() ?? 'unknown'
+      const previous = this.snapshot.connection
+      this.patch({ connection })
+      if (previous !== 'connected' && connection === 'connected') void this.refreshTasks()
     })
     this.patch({
       phase: 'loading',
@@ -130,6 +138,8 @@ export class HomeController {
       advanced: needsModel,
     })
     await this.refreshTasks()
+    await this.loadAccess()
+    this.poll = setInterval(() => { void this.refreshTasks() }, 4000)
   }
 
   destroy(): void {
@@ -137,6 +147,8 @@ export class HomeController {
     this.abort?.abort()
     this.unsubscribe?.()
     this.unsubscribe = null
+    if (this.poll) clearInterval(this.poll)
+    this.poll = null
     this.reference?.release()
     this.reference = null
     this.patch({ reference: null, phase: 'loading' })
@@ -145,15 +157,53 @@ export class HomeController {
   async refreshTasks(): Promise<void> {
     const generation = this.generation
     const reference = this.reference
-    const reply = await this.host.call('boopTasks/listV2', { request: {} })
+    let reply: any
+    try {
+      reply = await this.host.call('boopTasks/listV2', { request: {} })
+    } catch {
+      if (generation === this.generation) this.patch({ notice: '进展暂时没有同步，显示的是上次看到的状态。' })
+      return
+    }
     if (generation !== this.generation || reference !== this.reference) return
-    const page = reply?.data ?? reply?.value?.data ?? reply?.value
-    const items = Array.isArray(page?.items) ? page.items as TaskView[] : []
-    this.patch({ tasks: items, summary: items.slice(0, 3) })
+    const data = reply?.data ?? reply?.value?.data ?? reply?.value
+    if (reply?.ok === false || data?.ok === false || !data || !Array.isArray(data.items)) {
+      this.patch({ notice: data?.error?.message ?? reply?.error?.message ?? '进展暂时没有同步，显示的是上次看到的状态。' })
+      return
+    }
+    const items = data.items as TaskView[]
+    this.patch({ tasks: items, summary: items.slice(0, 3), notice: null })
   }
 
   setDrawer(drawer: HomeSnapshot['drawer'], advanced?: boolean): void {
     this.patch({ drawer, ...(advanced === undefined ? {} : { advanced }) })
+    if (drawer === 'work') void this.refreshTasks()
+    if (drawer === 'settings') void this.loadAccess()
+  }
+
+  selectTask(taskId: string): void {
+    this.patch({ selectedTaskId: taskId, drawer: 'work' })
+    void this.loadTask(taskId)
+  }
+
+  private async loadTask(taskId: string): Promise<void> {
+    const generation = this.generation
+    let reply: any
+    try {
+      reply = await this.host.call('boopTasks/detailV2', { request: { taskId } })
+    } catch {
+      if (generation === this.generation) this.patch({ notice: '详情暂时没有同步，显示的是上次看到的工作。' })
+      return
+    }
+    if (generation !== this.generation) return
+    const data = reply?.data ?? reply?.value?.data ?? reply?.value
+    if (reply?.ok === false || data?.ok === false || typeof data?.taskId !== 'string') {
+      this.patch({ notice: data?.error?.message ?? '详情暂时没有同步，显示的是上次看到的工作。' })
+      return
+    }
+    const next = this.snapshot.tasks.some((task) => task.taskId === data.taskId)
+      ? this.snapshot.tasks.map((task) => task.taskId === data.taskId ? data as TaskView : task)
+      : [data as TaskView, ...this.snapshot.tasks]
+    this.patch({ tasks: next, summary: next.slice(0, 3) })
   }
 
   toggleAdvanced(): void {
@@ -182,19 +232,27 @@ export class HomeController {
       this.patch({ notice: '停止请求还没送到，连接恢复后可以再试。' })
       return
     }
-    await this.host.call('boopTasks/stop', {
+    const reply = await this.host.call('boopTasks/stop', {
       request: {
         requestId: `stop-${task.taskId}-${task.taskVersion}`,
         taskId: task.taskId,
         expectedTaskVersion: task.taskVersion,
       },
     })
+    const data = reply?.data ?? reply?.value?.data ?? reply?.value
+    if (reply?.ok === false || data?.ok === false) {
+      this.patch({ notice: data?.error?.message ?? reply?.error?.message ?? '停止没有确认，这件工作可能还在进行。' })
+      return
+    }
     await this.refreshTasks()
   }
 
   async confirmTask(task: TaskView): Promise<void> {
-    if (!task.latestResult || this.snapshot.connection === 'disconnected') return
-    await this.host.call('boopTasks/confirm', {
+    if (!task.latestResult || this.snapshot.connection === 'disconnected') {
+      this.patch({ notice: '现在不能确认收下。' })
+      return
+    }
+    const reply = await this.host.call('boopTasks/confirm', {
       request: {
         requestId: `confirm-${task.latestResult.resultId}`,
         taskId: task.taskId,
@@ -203,12 +261,50 @@ export class HomeController {
         decision: 'accept',
       },
     })
+    const data = reply?.data ?? reply?.value?.data ?? reply?.value
+    if (reply?.ok === false || data?.ok === false) {
+      this.patch({ notice: data?.error?.message ?? reply?.error?.message ?? '确认没有完成，结果仍保持原样。' })
+      return
+    }
     await this.refreshTasks()
   }
 
   async reconcileTask(task: TaskView): Promise<void> {
     await this.host.call('boopTasks/reconcile', { request: { taskId: task.taskId } })
     await this.refreshTasks()
+  }
+
+  async loadAccess(): Promise<void> {
+    try {
+      const reply = await this.host.call('boopTasks/access', { request: {} })
+      const data = reply?.data ?? reply?.value?.data ?? reply?.value
+      if (data?.mode) this.patch({ access: data as AccessView })
+    } catch {
+      /* settings can still explain that the range is unconfirmed */
+    }
+  }
+
+  async saveAccess(mode: AccessView['mode'], workspaceIds: string[], sessionIds: string[]): Promise<void> {
+    const epoch = this.snapshot.access?.policyEpoch
+    if (epoch == null) {
+      this.patch({ notice: '还没有读到当前范围，没有保存。' })
+      return
+    }
+    const reply = await this.host.call('boopTasks/setAccess', {
+      request: {
+        requestId: `access-${epoch}-${mode}`,
+        expectedPolicyEpoch: epoch,
+        mode,
+        workspaceIds,
+        sessionIds,
+      },
+    })
+    const data = reply?.data ?? reply?.value?.data ?? reply?.value
+    if (reply?.ok === false || data?.ok === false || !data?.mode) {
+      this.patch({ notice: data?.error?.message ?? '范围没有改成。' })
+      return
+    }
+    this.patch({ access: data as AccessView, notice: '已更新可访问的工作。' })
   }
 
   private patch(partial: Partial<HomeSnapshot>): void {
