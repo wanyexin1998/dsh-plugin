@@ -19,6 +19,14 @@ import { insertDraftText, insertSessionReference, resolveDraftActions } from './
 export const MAIN_KEY = HOME_PANEL_KEY
 export const inject = ['slots', 'layout', 'connection', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'conversation']
 
+function connectionMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message === 'Failed to fetch' || message === 'Load failed' || message.includes('NetworkError')) {
+    return '连接断开，恢复后会重新同步进展。'
+  }
+  return message
+}
+
 export function apply(ctx: any): void {
   try {
     applyInner(ctx)
@@ -33,7 +41,7 @@ function applyInner(ctx: any): void {
       const result = await ctx.connection.rpc.call('/api', endpoint, { args: args ?? {} })
       return result ?? { ok: false }
     } catch (error) {
-      return { ok: false, error: { message: error instanceof Error ? error.message : String(error) } }
+      return { ok: false, error: { message: connectionMessage(error) } }
     }
   }
   const mainStore = createMainSessionStore({ mainSessionId: null })
@@ -41,14 +49,20 @@ function applyInner(ctx: any): void {
   const host: HomeHost = {
     call,
     retain(sessionId, signal): RetainedSession {
-      const ref = ctx.sessions.retain(sessionId, { source: 'boopHome', signal })
-      return {
-        id: sessionId,
-        native: ref,
-        ready: ref.ready,
-        release() {
-          try { ref.release() } catch { /* one release */ }
-        },
+      try {
+        const ref = ctx.sessions.retain(sessionId, { source: 'boopHome', signal })
+        return {
+          id: sessionId,
+          native: ref,
+          ready: ref.ready,
+          release() {
+            try { ref.release() } catch { /* one release */ }
+          },
+        }
+      } catch (error) {
+        const ready = Promise.reject(error)
+        ready.catch(() => undefined)
+        return { id: sessionId, native: null, ready, release() {} }
       }
     },
     connection: {
@@ -148,6 +162,8 @@ function applyInner(ctx: any): void {
             },
           })
         }
+      }).catch((error) => {
+        console.error('[boop] home did not finish opening', error)
       })
       return () => controller.destroy()
     }, [])

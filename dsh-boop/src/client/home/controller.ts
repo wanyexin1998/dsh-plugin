@@ -107,6 +107,10 @@ export class HomeController {
     })
     const reply = await this.host.call('boop/ensureHome', { request: { requestId: `home-${generation}` } })
     if (generation !== this.generation) return
+    if (reply?.ok === false && reply?.error?.message) {
+      this.patch({ phase: 'repair', message: String(reply.error.message), home: null })
+      return
+    }
     const view = reply?.data ?? reply?.value?.data ?? reply?.value
     if (!view || view.state !== 'ready' || typeof view.mainSessionId !== 'string') {
       this.patch({
@@ -116,13 +120,8 @@ export class HomeController {
       })
       return
     }
-    const retained = this.host.retain(view.mainSessionId, this.abort.signal)
-    try {
-      await retained.ready
-    } catch {
-      if (generation === this.generation) retained.release()
-      return
-    }
+    const retained = await this.openHome(view.mainSessionId, this.abort.signal)
+    if (!retained) return
     if (generation !== this.generation) {
       retained.release()
       return
@@ -152,6 +151,34 @@ export class HomeController {
     this.reference?.release()
     this.reference = null
     this.patch({ reference: null, phase: 'loading' })
+  }
+
+  private async openHome(sessionId: string, signal: AbortSignal): Promise<RetainedSession | null> {
+    let last = '主会话还没有出现在列表里。'
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (signal.aborted) return null
+      const retained = this.host.retain(sessionId, signal)
+      try {
+        await retained.ready
+        return retained
+      } catch (error) {
+        retained.release()
+        last = error instanceof Error ? error.message : String(error)
+        if (!last.includes('unknown session') || attempt === 7) break
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      }
+    }
+    if (!signal.aborted) {
+      this.patch({
+        phase: 'repair',
+        message: last.includes('unknown session')
+          ? '波波的会话还没进入列表，原记录仍保留。'
+          : last === 'Failed to fetch' || last.includes('NetworkError')
+            ? '连接断开，恢复后会重新同步进展。'
+            : '波波的历史连接需要恢复，原记录仍保留。',
+      })
+    }
+    return null
   }
 
   async refreshTasks(): Promise<void> {
