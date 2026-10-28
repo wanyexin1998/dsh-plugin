@@ -210,7 +210,7 @@ test('E04-01 the fixed entry activates native navigation and reports a failure i
     },
   })
   const button = view.host.querySelector('[data-boop-entry]')
-  assert.ok(button.getAttribute('aria-label').includes('BOOP 主聊天'))
+  assert.ok(button.getAttribute('aria-label').includes('打开波波'))
   button.click()
   await tick()
   assert.equal(outcome, 'called')
