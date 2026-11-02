@@ -1,0 +1,51 @@
+查询当前用户可访问的日程列表。**注意** 不传 --start/--end 时将查询今天的日程（00:00:00 ~ 23:59:59）。
+		**calendar_id**: 不指定calendar_id时，默认查询当前用户主日历下的日程。也可指定calendar_id查询他人共享或者已订阅的日历。calendar_id可通过 dws calendar book list 查询。
+		**权限**：查询共享日历下的日程时，至少要有reader权限。
+
+Usage:
+  dws calendar event list [flags]
+
+Examples:
+  dws calendar event list
+  dws calendar event list --start "2026-03-10T14:00:00+08:00" --end "2026-03-10T18:00:00+08:00"
+  dws calendar event list --start "2026-03-10T00:00:00+08:00" --end "2026-03-31T23:59:59+08:00" --limit 50
+  dws calendar event list --calendar-id primary
+  dws calendar event list --cursor "<nextCursor从上一次查询结果获取>"
+  dws calendar event list --format json
+
+Flags:
+      --calendar-id string   日历 ID (默认 primary 主日历，仅在查询其他日历本时填写)
+      --cursor string        分页游标 (首次查询无需传入，仅翻页时传入上一次返回的 nextCursor)
+      --end string           结束时间 ISO-8601 (例如 2026-03-10T18:00:00+08:00)
+  -h, --help                 help for list
+      --limit int            每页返回条数 (默认 100，最大 100)
+      --start string         开始时间 ISO-8601 (例如 2026-03-10T14:00:00+08:00)
+
+Global Flags:
+      --client-id string       覆盖 OAuth 客户端 ID (钉钉 AppKey)
+      --client-secret string   覆盖 OAuth 客户端密钥 (钉钉 AppSecret)
+      --debug                  显示调试日志
+      --dry-run                预览操作内容，不实际执行
+      --fields string          筛选输出字段 (逗号分隔, 如: name,id,status)
+  -f, --format string          输出格式: json|table|raw|pretty|ndjson|csv (default "json")
+      --jq string              jq 表达式过滤输出 (如: '.items[] | .name')
+      --mock                   使用 Mock 数据 (开发调试用)
+      --profile string         一次性指定组织或账号；支持 corpId/corpName 与 userId/userName 组合，推荐使用 profile list 返回的 corpId:userId；多个按 CSV 逗号分隔
+      --timeout int            HTTP 请求超时时间 (秒) (default 30)
+  -v, --verbose                显示详细日志
+  -y, --yes                    跳过确认提示 (AI Agent 模式)
+
+When to use:
+  - 需要按起止时间检索指定日历本下的日程列表时（未传起止默认查当天）
+
+Avoid when:
+  - 已知 eventId 要详情时改用 dws calendar event get
+  - 要创建日程时改用 dws calendar event create
+
+Safety: effect=read  risk=low  confirmation=not_required  idempotency=idempotent
+
+Related skills:
+  - dingtalk-calendar
+
+Documentation:
+  - 日历与会议室深度指南: https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/main/skills/multi/dingtalk-calendar/references/calendar.md

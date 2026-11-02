@@ -1,0 +1,9 @@
+{
+  "version_check": {
+    "current": "v1.0.66",
+    "status": "skipped"
+  },
+  "success": true,
+  "authenticated": false,
+  "message": "未登录"
+}

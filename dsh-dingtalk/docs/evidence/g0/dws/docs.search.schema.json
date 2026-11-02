@@ -1,0 +1,83 @@
+{
+  "agent_summary": "搜索文档（不传关键词返回最近访问）",
+  "availability": "available",
+  "avoid_when": [
+    "全局搜文件用 dws drive search；指定知识库内搜用 dws wiki node search"
+  ],
+  "canonical_path": "doc.search_documents",
+  "cli_path": "doc search",
+  "confirmation": "not_required",
+  "description": "根据关键词搜索当前用户有权限访问的文档列表。不传关键词则返回最近访问的文档。\n\n支持按扩展名、创建/访问时间范围、创建者、编辑者、@提及用户、知识库等维度过滤。",
+  "effect": "read",
+  "examples": [
+    "dws doc search --query \"会议纪要\" --format json"
+  ],
+  "idempotency": "idempotent",
+  "interface_mode": "mcp",
+  "parameters": {
+    "created-from": {
+      "description": "创建时间起始 (毫秒时间戳，含)",
+      "required": false,
+      "type": "integer"
+    },
+    "created-to": {
+      "description": "创建时间截止 (毫秒时间戳，含)",
+      "required": false,
+      "type": "integer"
+    },
+    "creator-uids": {
+      "description": "按创建者用户 ID 过滤，逗号分隔",
+      "required": false,
+      "type": "array"
+    },
+    "cursor": {
+      "description": "分页游标 (从上次结果的 nextPageToken 获取)",
+      "required": false,
+      "type": "string"
+    },
+    "editor-uids": {
+      "description": "按编辑者用户 ID 过滤，逗号分隔",
+      "required": false,
+      "type": "array"
+    },
+    "extensions": {
+      "description": "按文件扩展名过滤，不含点号，逗号分隔 (如 pdf,docx,png)。支持的在线文档类型后缀名: adoc=文字, axls=表格, appt=演示文稿, awbd=白板, adraw=画板, amind=脑图, able=多维表格, aform=收集表",
+      "required": false,
+      "type": "array"
+    },
+    "limit": {
+      "description": "每页数量 (默认 10，最大 30)",
+      "required": false,
+      "type": "integer"
+    },
+    "mentioned-uids": {
+      "description": "按 @提及的用户 ID 过滤，逗号分隔",
+      "required": false,
+      "type": "array"
+    },
+    "query": {
+      "description": "搜索关键词 (不传则返回最近访问)",
+      "required": false,
+      "type": "string"
+    },
+    "visited-from": {
+      "description": "访问时间起始 (毫秒时间戳，含)",
+      "required": false,
+      "type": "integer"
+    },
+    "visited-to": {
+      "description": "访问时间截止 (毫秒时间戳，含)",
+      "required": false,
+      "type": "integer"
+    },
+    "workspace-ids": {
+      "description": "按知识库 ID 过滤，支持知识库 URL，逗号分隔",
+      "required": false,
+      "type": "array"
+    }
+  },
+  "risk": "low",
+  "use_when": [
+    "兼容入口：按关键词搜文档时（已弃用，日常改用 drive search / wiki node search）"
+  ]
+}
