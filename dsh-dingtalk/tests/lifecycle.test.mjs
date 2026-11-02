@@ -9,20 +9,22 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import * as host from '../lib/host/index.js';
 
 test('real Cordis: host service loads, fails closed, unloads, and reloads cleanly', async () => {
+  const saved = process.env.DSH_DINGTALK_CONFIG_FILE;
+  delete process.env.DSH_DINGTALK_CONFIG_FILE;
   const ctx = new Context();
   try {
     for (let i = 0; i < 2; i++) {
       const fiber = await ctx.plugin(host, { mode: 'local' });
       const service = ctx.get('dingtalkConnection');
-      assert.deepEqual(await service.status(), { state: 'unknown', reasonCode: 'backend_not_ready' });
-      assert.deepEqual(await service.invoke({ operationId: 'identity.getSelf', args: {} }), { status: 'failed', reasonCode: 'backend_not_ready', retryable: false });
+      assert.deepEqual(await service.status(), { state: 'unknown', reasonCode: 'cli_missing' });
+      assert.deepEqual(await service.invoke({ operationId: 'identity.getSelf', args: {} }), { status: 'failed', reasonCode: 'cli_missing', retryable: false });
       await assert.rejects(service.beginAuthorization({}), { reasonCode: 'backend_not_ready' });
       assert.deepEqual(await service.disconnect(), { disconnected: false });
       await fiber.dispose();
       assert.equal(ctx.get('dingtalkConnection'), undefined);
       await assert.rejects(service.status(), { reasonCode: 'service_disposed' });
     }
-  } finally { await ctx.fiber.dispose(); }
+  } finally { await ctx.fiber.dispose(); if (saved !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = saved; }
 });
 
 test('DSH platform Client registers a real settings slot; unloading leaves existing sections intact', async () => {

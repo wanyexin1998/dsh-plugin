@@ -21,7 +21,7 @@ export function createConnectionService(backend: DingtalkBackend): { service: Di
     }
   }
   const service: DingtalkConnectionService = Object.freeze<DingtalkConnectionService>({
-    status: () => execute(async () => { const value = await backend.status(); return project(() => publicStatus(value)); }),
+    status: options => execute(async () => { const value = await backend.status(options); return project(() => publicStatus(value)); }),
     beginAuthorization: context => execute(async () => {
       const value = await backend.beginAuthorization(parseAuthorizationContext(context)); return project(() => publicAuthStart(value));
     }),
@@ -31,8 +31,8 @@ export function createConnectionService(backend: DingtalkBackend): { service: Di
       if (typeof result.disconnected !== 'boolean') throw new ConnectionServiceError('service_unavailable');
       return { disconnected: result.disconnected };
     }),
-    invoke: async input => {
-      try { return await execute(async () => { const value = await backend.invoke(parseInvokeInput(input)); return project(() => publicInvokeResult(value)); }); }
+    invoke: async (input, options) => {
+      try { return await execute(async () => { const value = await backend.invoke(parseInvokeInput(input), options); return project(() => publicInvokeResult(value)); }); }
       catch (error) {
         const reasonCode = error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable';
         return { status: 'failed', reasonCode, retryable: reasonCode === 'service_unavailable' } satisfies InvokeResult;

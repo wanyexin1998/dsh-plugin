@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "classification": "OFFICIAL_BINARY_LOCAL_FIXTURES_ONLY",
+  "dwsVersion": "1.0.66",
+  "platform": "win32-x64",
+  "checks": [
+    "unbound backend does not read the existing default Profile or call MCP",
+    "identity.getSelf: verified official binary + isolated synthetic MCP JSON",
+    "calendar.listEvents: verified official binary + isolated synthetic MCP JSON",
+    "docs.search: verified official binary + isolated synthetic MCP JSON",
+    "bound profile B used for every MCP request; current profile A and its metadata unchanged",
+    "short-lived synthetic token refreshed by official DWS"
+  ],
+  "observedReadOnlyTools": [
+    "get_current_user_profile",
+    "list_calendar_events",
+    "search_documents"
+  ],
+  "realAuthorization": false,
+  "realBusinessData": false,
+  "upstreamLogObservation": {
+    "syntheticSearchQueryPresent": true,
+    "productionLogPrivacyAccepted": false
+  },
+  "limitations": [
+    "No enterprise OAuth or IT permission acceptance",
+    "No Agent Tool or browser UI",
+    "Upstream DWS owns credential and diagnostic-log persistence; production log privacy remains a release review item"
+  ]
+}

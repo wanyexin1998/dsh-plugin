@@ -102,7 +102,7 @@ test('unload prevents a late in-flight result from returning', async () => {
 
 test('stable reason-code snapshot and explicit P0 mode validation', async () => {
   assert.deepEqual(REASON_CODES, JSON.parse(await readFile(new URL('./fixtures/reason-codes.json', import.meta.url), 'utf8')));
-  assert.deepEqual(parseConfig({}), { mode: 'local' });
+  assert.equal(parseConfig({}).mode, 'local');
   assert.throws(() => parseConfig({ mode: 'cellgent' }), /deferred/);
   for (const config of [{ mode: null }, { mode: 'remote' }, { profile: 'other' }, []]) assert.throws(() => parseConfig(config));
 });

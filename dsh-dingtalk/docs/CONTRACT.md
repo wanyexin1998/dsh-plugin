@@ -6,11 +6,11 @@
 
 | 方法 | 输入 | 输出 |
 | --- | --- | --- |
-| `status()` | 无 | `ConnectionStatus` |
+| `status(options?)` | 可选 Host AbortSignal | `ConnectionStatus` |
 | `beginAuthorization(context)` | 可选 sessionRef / callRef | transactionId、HTTPS authorizeUrl、expiresAt |
 | `getAuthorizationStatus(id)` | 单次授权事务 ID | `ConnectionStatus` |
 | `disconnect()` | 无，不可指定用户或 Profile | disconnected 布尔值 |
-| `invoke(input)` | operationId + 严格独立的 args | ok / auth_required / denied / failed |
+| `invoke(input, options?)` | operationId + 严格独立的 args；可选 Host AbortSignal | ok / auth_required / denied / failed |
 
 状态枚举覆盖方案的 11 种状态。稳定 reasonCode 清单位于 `src/shared/models.ts`，由 `tests/fixtures/reason-codes.json` 快照约束；改变错误语义需同步文档和消费端。
 
@@ -30,7 +30,9 @@
 
 `DingtalkBackend` 实现同一接口和 dispose。`createConnectionService()` 包装它，严格校验入参、投影公开结果、遮蔽内部异常，并在卸载后拒绝旧引用及迟到的在途结果。后续执行器仍需在 dispose 内主动终止其进程/订阅。
 
-`local` 与 `cellgent` 两个模拟适配器运行相同的契约测试；测试类只存在于 tests，不会装进归档。生产代码目前只提供 `local` 占位适配器：状态为 `unknown/backend_not_ready`，授权报 backend_not_ready，解绑返回 false，调用明确 failed。它不发起网络、不运行 CLI、不读取个人配置或修改任何 DWS 默认 Profile。
+`local` 与 `cellgent` 两个模拟适配器运行相同的契约测试；测试类只存在于 tests，不会装进归档。当前生产代码实现 LocalBackend，在 Host 私有绑定下执行三项只读白名单；不自动安装 CLI、不读取未绑定的默认 Profile、不改变 DWS 默认账号。未配置 CLI 时状态为 unknown/cli_missing；未绑定 Profile 时为 unlinked/not_connected。授权仍报 backend_not_ready，解绑返回 false，等待 #7。
+
+CallOptions 只携带 Host 执行生命周期的 AbortSignal，属于同进程操作参数，不是模型 JSON、Tool 参数或可序列化 RPC 入参。队列、进程和错误细节见 [LOCAL-BACKEND.md](LOCAL-BACKEND.md)。
 
 配置类型保留 `mode=local|cellgent`。P0 加载时明确拒绝 cellgent，拒绝未知配置和非法 mode，不会静默切回 local。真实远端适配器和 Connector 均未实现；未来增加适配器时保持本服务契约，不在 Tool/Client/Skill 硬编码企业路径或身份。
 
