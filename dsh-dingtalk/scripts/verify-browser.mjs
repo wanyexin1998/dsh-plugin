@@ -7,14 +7,14 @@ import { chromium } from 'playwright-core';
 import { fixture } from './p0-fixture.mjs';
 import { createUIRpc } from '../lib/host/ui-rpc.js';
 
-const f = await fixture();
+const f = await fixture({ automatic: true });
 const routes = new Map();
 const peer = { id: 'browser', principal: { kind: 'owner' } };
 const cleanup = createUIRpc({ browserPeer: peer, admit: () => ({ peer }), fetch: { register(route) { routes.set(route.path, route); return async () => {}; } } }, f.managed, f.service);
 const browserErrors = [], checks = [];
 const source = `import React from 'react';import{createRoot}from'react-dom/client';import{ConnectionSection,ToolView}from'./lib/client/index.js';import{ConnectionStore}from'./lib/client/store.js';
 const store=new ConnectionStore({rpc:{async call(channel,endpoint,payload,signal){return fetch('/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint,payload}),signal}).then(r=>r.json())}}});
-window.harness={store,dispose:()=>{root.unmount();store.dispose()}};const root=createRoot(document.getElementById('app'));root.render(React.createElement('main',null,React.createElement('label',null,'原会话草稿',React.createElement('textarea',{'aria-label':'原会话草稿',defaultValue:'请查询明天的日程'})),React.createElement(ConnectionSection,{store}),...[1,2].map(n=>React.createElement(ToolView,{key:n,store,phase:'result',callId:'call-'+n,sessionId:'session-example',block:{content:[{type:'text',text:'{"status":"auth_required","reasonCode":"not_connected"}'}]}}))));`;
+window.harness={store,dispose:()=>{root.unmount();store.dispose()}};const root=createRoot(document.getElementById('app'));root.render(React.createElement('main',null,React.createElement('label',null,'原会话草稿',React.createElement('textarea',{'aria-label':'原会话草稿',defaultValue:'请查询明天的日程'})),React.createElement(ConnectionSection,{store}),...[1,2].map(n=>React.createElement(ToolView,{key:n,store,phase:'result',callId:'call-'+n,sessionId:'session-example',block:{content:[{type:'text',text:JSON.stringify(n===1?{status:'failed',reasonCode:'authorization_expired'}:{status:'auth_required',reasonCode:'not_connected'})}]}}))));`;
 const compiled = await build({ stdin: { contents: source, resolveDir: process.cwd(), sourcefile: 'browser-harness.ts' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'process.env.NODE_ENV': '"production"' } });
 const server = createServer(async (req, res) => {
   if (req.url === '/app.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(compiled.outputFiles[0].text); return; }
@@ -37,6 +37,7 @@ try {
   const page = await ctx.newPage(); page.on('pageerror', error => browserErrors.push(error.message));
   await page.goto(`${base}/session/example#draft`);
   await page.getByRole('status').first().filter({ hasText: '尚未连接钉钉' }).waitFor();
+  await page.evaluate(() => { window.originalCards = [...document.querySelectorAll('.dsh-dt-card')]; });
   await page.getByRole('textbox', { name: '原会话草稿' }).fill('请查询明天日程，保留这份草稿');
   // Spoofed messages cannot set a UI status; Host readback is required.
   await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { origin: 'https://evil.invalid', data: { type: 'dsh-dingtalk:auth', result: 'connected', transactionId: 'fake' } })));
@@ -48,6 +49,16 @@ try {
   assert.equal(await page.getByRole('status').filter({ hasText: /^(钉钉)?已连接$/ }).count(), 3);
   const cardSize = await page.locator('.dsh-dt-card').first().boundingBox();
   assert.ok(cardSize.width <= 420 && cardSize.height <= 130, 'Conversation card must remain compact');
+  assert.ok(await page.evaluate(() => { const current = [...document.querySelectorAll('.dsh-dt-card')]; return current.length === window.originalCards.length && current.every((node, i) => node === window.originalCards[i]); }));
+  for (const status of [{ state: 'reauth_required', reasonCode: 'authorization_expired' }, { state: 'unknown', reasonCode: 'service_unavailable' }]) {
+    // Test-only synthetic projection verifies React node identity for failure/expiry feedback.
+    await page.evaluate(value => window.harness.store.set({ status: value }), status);
+    await page.waitForTimeout(50);
+    assert.ok(await page.evaluate(() => { const current = [...document.querySelectorAll('.dsh-dt-card')]; return current.length === window.originalCards.length && current.every((node, i) => node === window.originalCards[i]); }));
+  }
+  await page.evaluate(() => window.harness.store.refresh());
+  await page.getByText('钉钉已连接', { exact: true }).first().waitFor();
+  checks.push('connected, expired and failed feedback updates the original card DOM nodes; no new status card inserted');
   assert.equal(await page.getByRole('textbox').inputValue(), '请查询明天日程，保留这份草稿');
   assert.match(page.url(), /session\/example#draft$/);
   await popup.waitForEvent('close', { timeout: 3000 }).catch(() => {});
@@ -55,10 +66,10 @@ try {
   await page.screenshot({ path: 'artifacts/browser/connected-light.png', fullPage: true });
   await page.getByRole('button', { name: '解除连接', exact: true }).click();
   await page.getByRole('dialog').waitFor();
-  assert.equal(await page.evaluate(() => document.activeElement?.textContent), '保留连接');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '保留连接');
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
-  assert.equal(await page.evaluate(() => document.activeElement?.textContent), '解除连接');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '解除连接');
   assert.equal((await f.service.status()).state, 'connected');
   checks.push('unlink requires second confirmation; Escape preserves connection and restores focus');
   await page.evaluate(() => document.documentElement.classList.add('dark'));

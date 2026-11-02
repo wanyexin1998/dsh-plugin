@@ -7,24 +7,27 @@ import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as host from '../lib/host/index.js';
+import { sandbox } from '../scripts/g0/runtime.mjs';
 
 test('real Cordis: host service loads, fails closed, unloads, and reloads cleanly', async () => {
   const saved = process.env.DSH_DINGTALK_CONFIG_FILE;
+  const previousHome = process.env.DSH_HOME;
+  const isolated = await sandbox(); process.env.DSH_HOME = isolated.root;
   delete process.env.DSH_DINGTALK_CONFIG_FILE;
   const ctx = new Context();
   try {
     for (let i = 0; i < 2; i++) {
       const fiber = await ctx.plugin(host, { mode: 'local' });
       const service = ctx.get('dingtalkConnection');
-      assert.deepEqual(await service.status(), { state: 'unknown', reasonCode: 'cli_missing' });
-      assert.deepEqual(await service.invoke({ operationId: 'identity.getSelf', args: {} }), { status: 'failed', reasonCode: 'cli_missing', retryable: false });
-      await assert.rejects(service.beginAuthorization({}), { reasonCode: 'oauth_not_configured' });
-      assert.deepEqual(await service.disconnect(), { disconnected: false });
+      assert.deepEqual(await service.status(), { state: 'unlinked', reasonCode: 'not_connected' });
+      assert.deepEqual(await service.invoke({ operationId: 'identity.getSelf', args: {} }), { status: 'auth_required', reasonCode: 'not_connected' });
+      await assert.rejects(service.beginAuthorization({}), { reasonCode: 'invalid_request' });
+      await assert.rejects(service.disconnect(), { reasonCode: 'invalid_request' });
       await fiber.dispose();
       assert.equal(ctx.get('dingtalkConnection'), undefined);
       await assert.rejects(service.status(), { reasonCode: 'service_disposed' });
     }
-  } finally { await ctx.fiber.dispose(); if (saved !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = saved; }
+  } finally { await ctx.fiber.dispose(); await isolated.dispose(); if (saved !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = saved; if (previousHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = previousHome; }
 });
 
 test('DSH platform Client registers a real settings slot; unloading leaves existing sections intact', async () => {

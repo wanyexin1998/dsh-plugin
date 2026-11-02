@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
-const f = await fixture(); const checks = [];
+const f = await fixture({ automatic: true }); const checks = [];
 const native = new Context();
 try {
   const fromDsh = createRequire(resolve('../.cache/dingtalk-g0/dsh-runtime/package.json'));
@@ -32,6 +32,9 @@ try {
   const connected = await f.authorize();
   assert.equal(connected.state, 'connected', connected.reasonCode);
   assert.ok(connected.checkedAt); assert.ok(!JSON.stringify(connected).includes('test-user'));
+  assert.equal(f.events.filter(e => e.type === 'install').length, 1);
+  assert.equal(f.events.filter(e => e.type === 'discover').length, 1);
+  checks.push('no JSON, app credentials or expected identity: first Connect installs pinned DWS and discovers app; online identity creates binding');
   checks.push('loopback state+cookie callback -> official stdin exchange -> online exact identity -> connected');
   for (const args of [{ operationId: 'identity.getSelf', args: {} }, { operationId: 'calendar.listEvents', args: { limit: 2 } }, { operationId: 'docs.search', args: { query: 'privacy-sentinel-query', limit: 2 } }]) assert.equal((await tool.execute(args, { signal })).status, 'ok');
   for (const args of [{ operationId: 'docs.delete', args: {} }, { operationId: 'docs.search', args: { profile: 'other' } }, { operationId: 'auth.logout', args: {} }]) assert.equal((await tool.execute(args, { signal })).reasonCode, 'invalid_request');

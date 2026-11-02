@@ -4,27 +4,17 @@
 
 ## Host 私有配置
 
-DSH 会向 Client 投影插件配置，因此二进制路径、凭证目录和 Profile 不放在 `cordis.patch.yml`，也不作为 Tool 入参。由启动 Host 的环境变量 `DSH_DINGTALK_CONFIG_FILE` 指向本机私有 JSON 文件，例如：
+默认不需要 JSON。Host 按 DSH Profile 路径摘要创建独立的插件状态目录；点击连接后自动下载并校验官方固定 DWS、获取官方公开 clientId、使用动态 loopback 授权。首次身份来自 DWS 在线验证，后续绑定保存在非 Token 的 binding.json。未绑定时返回 unlinked/not_connected，Tool 不读取既有默认账号。
 
-```json
-{
-  "binaryPath": "C:\\Tools\\dws\\dws.exe",
-  "configDirectory": "C:\\Users\\example\\.dws",
-  "profile": "corp-id:user-id"
-}
-```
+DSH 会向 Client 投影插件配置，因此内部路径、Profile 和身份不放在 cordis.patch.yml，也不作为 Tool 入参。高级维护者可显式设置 DSH_DINGTALK_CONFIG_FILE 使用兼容覆盖，详见 [AUTHORIZATION.md](AUTHORIZATION.md)；普通用户不走此路径。配置最多 16 KiB，拒绝 UNC/网络路径、命令、URL、env、Token 和 AppSecret。managed configDirectory 必须是当前插件 owned 的 dws 子目录，不能指向既有用户配置；人工 profile 只是预期身份断言，不能替代授权。
 
-这些是占位路径/身份。配置只接受 binaryPath、configDirectory、keychainDirectory、profile；不接受命令、URL、env、Token 或 AppSecret。文件最多 16 KiB，路径须为本机绝对路径，拒绝 UNC/网络路径。configDirectory 省略时沿用当前 OS 用户的 DWS 默认目录；keychainDirectory 仅传给官方支持该参数的后端，不能把它当作 Windows 注册表隔离方案。
-
-上例保留底层 #6 测试 seam 的说明；当前生产 managed 入口配置以 [AUTHORIZATION.md](AUTHORIZATION.md) 为准。profile 若显式配置，必须等于 OAuth 预期 corpId:userId；绑定实际由在线身份建立。managed 的 configDirectory 强制为私有 JSON 同级的 dsh-dingtalk-state/dws，不能指向既有用户配置目录。未配置 OAuth 时，生产 Tool 不能仅凭人工 profile 开始读取。
-
-环境变量未提供时不扫描个人配置、不从 PATH 选程序、不猜测用户账号，状态明确为 cli_missing。不要在聊天、Git 或截图中提供私有配置文件或任何授权材料。
+不自动扫描个人配置，不从 PATH 选程序，不猜测用户账号。Windows keychainDirectory 不构成 DPAPI 注册表隔离。不要在聊天、Git 或截图中提供私有配置或授权材料。
 
 ## 版本与执行边界
 
 运行前解析真实文件路径，确认普通可执行文件，按包内 dws.lock.json 核对 SHA256 和 PE 架构；通过后才执行 --version，并核对固定版本和完整 commit。后续每次业务进程调用重新核对二进制哈希。其他版本或损坏制品在执行前拒绝；不能为了诊断版本先运行未验证程序。
 
-用 Node spawn 的 argv 数组执行，shell=false，stdin 关闭；不弹窗。工作目录固定在校验后的 CLI 所在目录，不使用 Agent 项目 cwd。仅继承必要 OS 变量，不继承 DWS/DingTalk 调试端点、代理、AppSecret 或模型密钥变量；受信配置目录按固定键注入。关闭 CLI 更新检查，不使用 debug/verbose，也不自动安装或升级。
+用 Node spawn 的 argv 数组执行，shell=false，普通读取 stdin 关闭、换码仅经 stdin；不弹终端。工作目录固定在校验后的 CLI 所在目录，不使用 Agent 项目 cwd。仅继承必要 OS 变量，不继承 DWS/DingTalk 调试端点、代理、AppSecret 或模型密钥变量；受信配置目录按固定键注入。关闭 CLI 更新检查，不使用 debug/verbose。仅在用户点击连接时首次准备锁定版本，不自动升级。
 
 静态命令映射：
 

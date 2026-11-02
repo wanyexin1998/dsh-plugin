@@ -9,7 +9,7 @@ import { createConnectionService } from '../lib/shared/service.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { sandbox, verifiedBinary, run } from './g0/runtime.mjs';
 export async function freePort() { const server = createServer(); await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.address().port; await new Promise(r => server.close(r)); return port; }
-export async function fixture() {
+export async function fixture({ automatic = false, install = automatic } = {}) {
   const isolated = await sandbox();
   const binary = await verifiedBinary(resolve('../.cache/dingtalk-g0/bin-amd64/dws.exe'));
   const events = [], failures = [];
@@ -49,15 +49,19 @@ export async function fixture() {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const callbackPort = await freePort();
-  const settings = { stateDirectory: join(isolated.root, 'state'), oauth: { clientId: 'synthetic-app', scopes: 'openid', redirectUri: `http://127.0.0.1:${callbackPort}/dsh-dingtalk/callback`, expectedCorpId: 'test-corp', expectedUserId: 'test-user' } };
+  const settings = { stateDirectory: join(isolated.root, 'state'), ...(!automatic ? { oauth: { clientId: 'synthetic-app', scopes: 'openid', redirectUri: `http://127.0.0.1:${callbackPort}/dsh-dingtalk/callback`, expectedCorpId: 'test-corp', expectedUserId: 'test-user' } } : {}) };
   const config = join(settings.stateDirectory, 'dws');
   const env = { ...isolated.env, DWS_AUDIT: '0', DWS_CONFIG_DIR: config, DWS_ALLOW_HTTP_ENDPOINTS: '1', DWS_TRUSTED_DOMAINS: '127.0.0.1', DINGTALK_CONTACT_MCP_URL: `${base}/contact`, DINGTALK_CALENDAR_MCP_URL: `${base}/calendar`, DINGTALK_DOC_MCP_URL: `${base}/doc` };
-  const runtime = { environment: env, spawn(file, args, options) {
+  const runtime = { environment: env,
+    archive: async () => { events.push({ type: 'install' }); return readFile(resolve('../.cache/dingtalk-g0/downloads/dws-windows-amd64.zip')); },
+    discoverClient: async () => { events.push({ type: 'discover' }); return (await (await fetch(`${base}/cli/clientId`)).json()).result; },
+    spawn(file, args, options) {
     assert.equal(options.shell, false); assert.ok(!args.some(value => value.includes('synthetic-code')));
     if (args[0] === 'auth' && args[1] === 'exchange') assert.ok(args.includes('--code-stdin'));
     return spawn(file, args, { ...options, stdio: 'pipe' });
   } };
-  let managed = await createManagedConnection({ binaryPath: binary }, settings, { ...DEFAULT_LIMITS, timeoutMs: 20000 }, runtime, `${base}/authorize`);
+  const local = install ? {} : { binaryPath: binary };
+  let managed = await createManagedConnection(local, settings, { ...DEFAULT_LIMITS, timeoutMs: 20000 }, runtime, `${base}/authorize`);
   await writeFile(join(config, 'mcp_url'), base);
   let owner = createConnectionService(managed.backend);
   const context = { origin: 'http://127.0.0.1:3000', returnPath: '/session/example#draft' };
@@ -82,6 +86,6 @@ export async function fixture() {
     await walk(isolated.root); return values.join('\n');
   }
   return { get managed() { return managed; }, get service() { return owner.service; }, context, base, settings, config, env, binary, state, events, failures, isolated, authorize, defaultAccount, allPlaintext,
-    async restart() { await owner.dispose(); managed = await createManagedConnection({ binaryPath: binary }, settings, { ...DEFAULT_LIMITS, timeoutMs: 20000 }, runtime, `${base}/authorize`); owner = createConnectionService(managed.backend); },
+    async restart() { await owner.dispose(); managed = await createManagedConnection(local, settings, { ...DEFAULT_LIMITS, timeoutMs: 20000 }, runtime, `${base}/authorize`); owner = createConnectionService(managed.backend); },
     async dispose() { await owner.dispose(); server.closeAllConnections(); await new Promise(r => server.close(r)); await isolated.dispose(); } };
 }

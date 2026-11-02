@@ -17,6 +17,7 @@ export const REASON_CODES = [
   'oauth_not_configured', 'invalid_auth_state', 'authorization_busy', 'revocation_failed',
   'privacy_guard_required', 'verification_failed_after_save', 'rate_limited',
   'org_policy_denied', 'scope_authorization_required', 'permission_denied',
+  'connection_preparing',
 ] as const;
 export type ReasonCode = typeof REASON_CODES[number];
 export type BackendMode = 'local' | 'cellgent';
@@ -45,7 +46,7 @@ export type InvokeResult =
 
 export interface DingtalkConnectionService {
   status(options?: CallOptions): Promise<ConnectionStatus>;
-  beginAuthorization(context: AuthorizationContext): Promise<AuthStart>;
+  beginAuthorization(context: AuthorizationContext, options?: CallOptions): Promise<AuthStart>;
   getAuthorizationStatus(transactionId: string): Promise<ConnectionStatus>;
   disconnect(): Promise<{ disconnected: boolean }>;
   invoke(input: InvokeInput, options?: CallOptions): Promise<InvokeResult>;

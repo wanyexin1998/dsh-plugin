@@ -16,6 +16,8 @@ const appBoot = await import(pathToFileURL(requireDsh.resolve('@deepseek-ai/dsh-
 const isolated = await sandbox();
 const checks = [];
 const privateConfig = process.env.DSH_DINGTALK_CONFIG_FILE;
+const previousHome = process.env.DSH_HOME;
+process.env.DSH_HOME = join(isolated.root, 'parent-home');
 delete process.env.DSH_DINGTALK_CONFIG_FILE;
 const artifacts = join(root, 'artifacts');
 try {
@@ -59,7 +61,7 @@ try {
   try {
     const fiber = await ctx.plugin(host, entries[0].config);
     const service = ctx.get('dingtalkConnection');
-    assert.deepEqual(await service.status(), { state: 'unknown', reasonCode: 'cli_missing' });
+    assert.deepEqual(await service.status(), { state: 'unlinked', reasonCode: 'not_connected' });
     await fiber.dispose();
     assert.equal(ctx.get('dingtalkConnection'), undefined);
     await assert.rejects(service.status(), { reasonCode: 'service_disposed' });
@@ -78,4 +80,4 @@ try {
     packageFiles: paths, checks, limitations: ['No real OAuth', 'No assembled Desktop/Web UI or Agent tool', 'No Host-private CLI/profile configured in this archive smoke; G0 remains HOLD'] };
   await writeFile(join(artifacts, 'p0-bundle-report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ success: true, checks: checks.length, archive: pack.filename, classification: report.classification }, null, 2));
-} finally { await isolated.dispose(); if (privateConfig !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = privateConfig; }
+} finally { await isolated.dispose(); if (privateConfig !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = privateConfig; if (previousHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = previousHome; }

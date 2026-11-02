@@ -1,14 +1,22 @@
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { ConnectionServiceError } from '../shared/models.js';
+import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 
 export interface OAuthSettings {
   clientId: string; redirectUri: string; scopes: string; expectedCorpId: string; expectedUserId: string;
 }
 export interface PrivateSettings { oauth?: OAuthSettings; stateDirectory?: string }
-export async function loadPrivateSettings(): Promise<PrivateSettings> {
+export function defaultStateDirectory(profileDirectory?: string): string {
+  const root = process.env.DSH_HOME ? join(resolve(process.env.DSH_HOME), 'plugin-state') : join(process.env.LOCALAPPDATA || join(homedir(), '.local', 'state'), 'dsh-plugin-state');
+  const profile = createHash('sha256').update(profileDirectory || 'default').digest('hex').slice(0, 24);
+  return join(root, 'dsh-dingtalk', profile);
+}
+export async function loadPrivateSettings(profileDirectory?: string): Promise<PrivateSettings> {
   const path = process.env.DSH_DINGTALK_CONFIG_FILE;
-  if (!path) return {};
+  if (!path) return { stateDirectory: defaultStateDirectory(profileDirectory) };
   const fail = (): never => { throw new ConnectionServiceError('local_configuration_invalid'); };
   if (!isAbsolute(path) || /^(\\\\|\/\/)/.test(path)) return fail();
   try {

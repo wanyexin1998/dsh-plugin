@@ -22,8 +22,8 @@ export function createConnectionService(backend: DingtalkBackend): { service: Di
   }
   const service: DingtalkConnectionService = Object.freeze<DingtalkConnectionService>({
     status: options => execute(async () => { const value = await backend.status(options); return project(() => publicStatus(value)); }),
-    beginAuthorization: context => execute(async () => {
-      const value = await backend.beginAuthorization(parseAuthorizationContext(context)); return project(() => publicAuthStart(value));
+    beginAuthorization: (context, options) => execute(async () => {
+      const value = await backend.beginAuthorization(parseAuthorizationContext(context), options); return project(() => publicAuthStart(value));
     }),
     getAuthorizationStatus: id => execute(async () => { const value = await backend.getAuthorizationStatus(transactionId(id)); return project(() => publicStatus(value)); }),
     disconnect: () => execute(async () => {

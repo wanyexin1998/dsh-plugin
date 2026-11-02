@@ -64,13 +64,39 @@ try {
   const section = page.getByText('钉钉连接', { exact: true });
   if (await section.count()) await section.first().click();
   await page.getByRole('heading', { name: '钉钉连接', exact: true }).waitFor({ timeout: 15000 });
-  await page.getByText('尚未配置 DWS', { exact: true }).waitFor({ timeout: 15000 });
+  await page.getByText('尚未连接钉钉', { exact: true }).waitFor({ timeout: 15000 });
+  assert.equal(await page.getByRole('button', { name: '连接钉钉', exact: true }).count(), 1);
   await page.screenshot({ path: 'artifacts/browser/native-web-settings.png', fullPage: true });
   checks.push('official npm DSH 0.2.1-rc.5 boots installed Bundle with zero core source changes');
-  checks.push('assembled native settings renders plugin section and calls actual authenticated Host RPC');
+  checks.push('assembled native settings offers Connect immediately without private JSON and calls actual authenticated Host RPC');
+  // Exercise the installed, unmodified production Host and real public bootstrap.
+  // Stop at the provider URL: no authorization request/account/consent is submitted.
+  let resolveProvider;
+  const providerReady = new Promise(resolve => { resolveProvider = resolve; });
+  await page.context().route(/^http:\/\/127\.0\.0\.1:\d+\/dsh-dingtalk\/start\?/, async route => {
+    const response = await route.fetch({ maxRedirects: 0 });
+    assert.equal(response.status(), 302);
+    resolveProvider(new URL(response.headers().location));
+    await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>授权入口本地验收</title><p>授权入口已到达。真实账号授权留待人工联调。</p>' });
+  });
+  const popupReady = page.waitForEvent('popup');
+  page.on('response', async response => { if (new URL(response.url()).pathname === '/api/dsh-dingtalk/begin') { try { const value = await response.json(); console.log(JSON.stringify({ beginRpc: value.result?.ok === true ? 'ok' : value.result?.error?.code || 'invalid_response' })); } catch {} } });
+  await page.getByRole('button', { name: '连接钉钉', exact: true }).click();
+  const popup = await popupReady;
+  const target = await Promise.race([providerReady, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error('Automatic public bootstrap did not reach the provider within 100 seconds')), 100000); timer.unref(); })]);
+  assert.equal(target.origin, 'https://login.dingtalk.com');
+  assert.ok(target.searchParams.get('client_id'));
+  assert.equal(target.searchParams.get('scope'), 'openid corpid');
+  const callback = new URL(target.searchParams.get('redirect_uri'));
+  assert.equal(callback.hostname, '127.0.0.1'); assert.equal(callback.pathname, '/callback'); assert.ok(Number(callback.port) > 0);
+  await page.getByText('等待钉钉授权', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '取消本次授权', exact: true }).click();
+  await page.getByText('尚未连接钉钉', { exact: true }).waitFor();
+  await popup.close().catch(() => {});
+  checks.push('installed stock Host downloads and verifies official DWS, discovers public clientId and opens correct dynamic-loopback OAuth URL; browser intercept prevents real consent; UI cancel restores unlinked');
   assert.ok(!logs.includes('dsh-dingtalk') || !/dsh-dingtalk[^\n]*(?:failed|Error)/.test(logs));
   assert.deepEqual(errors, []);
-  const report = { success: true, classification: 'OFFICIAL_DSH_WEB_UNCONFIGURED_PROFILE', checks, errors, limitations: ['No production OAuth/LLM credentials supplied', 'No native tool-card transcript replay', 'Desktop shell not exercised'], coreSourceChanges: 0 };
+  const report = { success: true, classification: 'OFFICIAL_DSH_WEB_NO_JSON_PUBLIC_BOOTSTRAP', checks, errors, limitations: ['Provider request intercepted before real authorization; no real enterprise consent or business data', 'No production LLM credentials supplied', 'No native tool-card transcript replay', 'Desktop shell not exercised'], coreSourceChanges: 0 };
   await writeFile('artifacts/p0-dsh-web-report.json', JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report, null, 2));
 } finally {
   if (browser) {

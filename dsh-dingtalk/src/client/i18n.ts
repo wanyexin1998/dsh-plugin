@@ -2,6 +2,11 @@ import { Children, cloneElement, isValidElement } from 'react';
 import type { ReactNode, ReactElement } from 'react';
 export interface LocaleFace { getSnapshot(): { active: string }; subscribe(fn: () => void): () => void }
 const english: Record<string, string> = {
+  '连接': 'Connect', '重连': 'Reconnect', '断开': 'Disconnect',
+  '保留': 'Keep', '解除': 'Disconnect', '解除后需重新授权。': 'Reauthorization will be required.',
+  '请联系 IT 开通数据权限。': 'Ask IT to enable data access.', '请重新授权或联系管理员。': 'Reauthorize or contact your administrator.', '请联系管理员确认权限。': 'Ask your administrator to check permissions.', '请联系 IT 开通 CLI 权限。': 'Ask IT to enable CLI access.', '请联系管理员确认应用权限。': 'Ask your administrator to check app permissions.', '请使用已绑定的账号。': 'Use your connected account.', '连接组件不可用': 'Connection component unavailable', '请重试连接或联系管理员。': 'Reconnect or contact your administrator.', '连接组件校验失败': 'Connection integrity check failed', '请联系管理员修复组件。': 'Ask your administrator to repair the component.', '请联系管理员检查配置。': 'Ask your administrator to check configuration.', '连接环境不可用': 'Connection environment unavailable', '请联系管理员检查运行目录。': 'Ask your administrator to check the runtime directory.',
+  '正在准备连接': 'Preparing connection', '首次使用需下载组件。': 'Downloading required components.', '连接后可查询日程和文档。': 'Connect to query calendars and documents.', '请在新标签页授权。': 'Authorize in the new tab.', '请重新连接。': 'Please reconnect.', '需要时可重新连接。': 'Reconnect when needed.', '可继续查询。': 'Ready to query.', '请刷新状态或稍后重试。': 'Refresh or retry later.', '连接暂不可用': 'Connection unavailable', '请稍后重试。': 'Please try again later.',
+  '正在准备…': 'Preparing…', '正在准备钉钉连接': 'Preparing DingTalk connection', '首次连接会自动准备官方 DWS，请稍候。': 'Preparing official DWS for the first connection. Please wait.',
   '钉钉连接': 'DingTalk connection', '钉钉工具连接': 'DingTalk tool connection', '钉钉': 'DingTalk',
   '钉钉已连接': 'DingTalk connected', '已连接': 'Connected', '连接钉钉': 'Connect DingTalk', '重新授权': 'Reauthorize',
   '刷新状态': 'Refresh status', '解除连接': 'Disconnect', '确认解除连接': 'Confirm disconnect', '保留连接': 'Keep connection',
@@ -51,8 +56,8 @@ export function localize(node: ReactNode, language = 'zh'): ReactNode {
   return Children.map(node, child => {
     if (typeof child === 'string') return translate(child, language);
     if (!isValidElement(child)) return child;
-    const element = child as ReactElement<{ children?: ReactNode; 'aria-label'?: string }>;
+    const element = child as ReactElement<{ children?: ReactNode; 'aria-label'?: string; label?: string; title?: string; caption?: string }>;
     const label = element.props['aria-label'];
-    return cloneElement(element, { ...(label ? { 'aria-label': translate(label, language) } : {}), children: localize(element.props.children, language) });
+    return cloneElement(element, { ...(label ? { 'aria-label': translate(label, language) } : {}), ...(element.props.label ? { label: translate(element.props.label, language) } : {}), ...(element.props.title ? { title: translate(element.props.title, language) } : {}), ...(element.props.caption ? { caption: translate(element.props.caption, language) } : {}), children: localize(element.props.children, language) });
   });
 }

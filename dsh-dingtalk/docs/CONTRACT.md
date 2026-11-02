@@ -7,7 +7,7 @@
 | 方法 | 输入 | 输出 |
 | --- | --- | --- |
 | `status(options?)` | 可选 Host AbortSignal | `ConnectionStatus` |
-| `beginAuthorization(context)` | 可选 sessionRef / callRef；要求 UI 上下文 | transactionId、受控 loopback start URL、expiresAt |
+| `beginAuthorization(context, options?)` | 可选 sessionRef / callRef、Host AbortSignal；要求 UI 上下文 | 自动准备后返回 transactionId、受控 loopback start URL、expiresAt |
 | `getAuthorizationStatus(id)` | 单次授权事务 ID | `ConnectionStatus` |
 | `disconnect()` | 无，不可指定用户或 Profile | disconnected 布尔值 |
 | `invoke(input, options?)` | operationId + 严格独立的 args；可选 Host AbortSignal | ok / auth_required / denied / failed |
@@ -30,7 +30,7 @@
 
 `DingtalkBackend` 实现同一接口和 dispose。`createConnectionService()` 包装它，严格校验入参、投影公开结果、遮蔽内部异常，并在卸载后拒绝旧引用及迟到的在途结果。后续执行器仍需在 dispose 内主动终止其进程/订阅。
 
-`local` 与 `cellgent` 模拟适配器运行相同契约测试，测试类不装进归档。生产入口使用 managed LocalBackend：缺少 OAuth 配置时 begin 返回 oauth_not_configured，invoke 阻断既有默认账号读取。已配置时从在线核验的精确身份建立绑定；status 不能仅靠缓存返回 connected，重启后重新在线确认。
+`local` 与 `cellgent` 模拟适配器运行相同契约测试，测试类不装进归档。生产入口使用 managed LocalBackend：无私有配置即可加载，未绑定时返回 unlinked/not_connected，invoke 阻断既有默认账号读取。只有 UI begin 才准备锁定 DWS、发现官方应用并启动动态 loopback；准备中返回 authorizing/connection_preparing。首次从在线核验的身份建立绑定，后续重授权核对绑定；status 不能仅靠缓存返回 connected，重启后重新在线确认。
 
 CallOptions 只携带 Host 执行生命周期的 AbortSignal，属于同进程操作参数，不是模型 JSON、Tool 参数或可序列化 RPC 入参。队列、进程和错误细节见 [LOCAL-BACKEND.md](LOCAL-BACKEND.md)。
 

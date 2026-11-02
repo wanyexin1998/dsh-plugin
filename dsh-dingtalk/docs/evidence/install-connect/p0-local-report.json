@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "classification": "OFFICIAL_BINARY_SYNTHETIC_ENDPOINTS_ONLY",
+  "checks": [
+    "official DSH ToolRuntime registers, executes and renders canonical auth_required; unload removes Tool",
+    "unbound Tool cannot read default credentials or invoke UI authorization/revocation",
+    "no JSON, app credentials or expected identity: first Connect installs pinned DWS and discovers app; online identity creates binding",
+    "loopback state+cookie callback -> official stdin exchange -> online exact identity -> connected",
+    "all three read-only Tool operations succeed; writes, arbitrary Profile and auth Tool requests rejected",
+    "official DWS success/error paths create no diagnostic log or plaintext query/code/Token",
+    "restart re-verifies binding; cancelled and pre-save failed reauthorization preserve existing working binding",
+    "official pre-save wrong-account rejection leaves the existing expected binding usable",
+    "post-save verification failure blocks reads rather than claiming rollback/success; explicit reauthorization recovers",
+    "exact Profile logout blocks later reads and leaves other Profile/default unchanged",
+    "revoked binding survives restart; tampered privacy guard fails closed"
+  ],
+  "realAuthorization": false,
+  "realBusinessData": false,
+  "g1": "BLOCKED",
+  "limitations": [
+    "Enterprise enabled/disabled account test pending",
+    "Real LLM intent selection pending",
+    "Desktop shell acceptance pending",
+    "Post-save verification failure cannot restore previous DWS credentials"
+  ]
+}

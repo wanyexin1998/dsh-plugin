@@ -9,5 +9,5 @@
   "business_verification_required", "token_refresh_pending",
   "oauth_not_configured", "invalid_auth_state", "authorization_busy", "revocation_failed",
   "privacy_guard_required", "verification_failed_after_save", "rate_limited",
-  "org_policy_denied", "scope_authorization_required", "permission_denied"
+  "org_policy_denied", "scope_authorization_required", "permission_denied", "connection_preparing"
 ]

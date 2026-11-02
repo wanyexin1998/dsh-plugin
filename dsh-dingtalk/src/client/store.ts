@@ -1,6 +1,6 @@
 import type { AuthorizationContext, AuthStart, ConnectionStatus, ReasonCode } from '../shared/models.js';
 export interface ClientConnection { rpc: { call(channel: '/api', endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{ ok: boolean; value?: unknown; error?: { code: string } }> } }
-export interface Snapshot { status: ConnectionStatus; pending: boolean; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
+export interface Snapshot { status: ConnectionStatus; pending: boolean; preparing?: boolean; actionRevision?: number; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
 const key = 'dsh-dingtalk-ui-v1';
 export class ConnectionStore {
   private listeners = new Set<() => void>();
@@ -9,6 +9,7 @@ export class ConnectionStore {
   private callbackOrigin = '';
   private timer: ReturnType<typeof setTimeout> | undefined;
   private controller = new AbortController();
+  private beginController: AbortController | undefined;
   private popup: Window | null = null;
   private closed = false;
   private generation = 0;
@@ -32,8 +33,8 @@ export class ConnectionStore {
   };
   private set(update: Partial<Snapshot>) { if (this.closed) return; this.snapshot = { ...this.snapshot, ...update }; for (const fn of this.listeners) fn(); }
   private persist() { try { sessionStorage.setItem(key, JSON.stringify({ browserId: this.browserId, transaction: this.snapshot.transaction })); } catch {} }
-  private async raw(method: string, payload: object): Promise<unknown> {
-    const result = await this.connection.rpc.call('/api', `dsh-dingtalk/${method}`, payload, this.controller.signal);
+  private async raw(method: string, payload: object, signal = this.controller.signal): Promise<unknown> {
+    const result = await this.connection.rpc.call('/api', `dsh-dingtalk/${method}`, payload, signal);
     if (!result.ok) throw Object.assign(new Error('连接请求未完成'), { reasonCode: result.error?.code || 'service_unavailable' });
     return result.value;
   }
@@ -44,9 +45,9 @@ export class ConnectionStore {
     })().catch(error => { this.bootstrapPromise = undefined; throw error; });
     await this.bootstrapPromise;
   }
-  private async call(method: string, payload: object = {}): Promise<unknown> {
+  private async call(method: string, payload: object = {}, signal?: AbortSignal): Promise<unknown> {
     await this.bootstrap();
-    try { return await this.raw(method, { ...payload, browserId: this.browserId }); }
+    try { return await this.raw(method, { ...payload, browserId: this.browserId }, signal); }
     catch (error) {
       if ((error as { reasonCode?: string }).reasonCode === 'invalid_auth_state') {
         this.browserId = ''; this.bootstrapPromise = undefined;
@@ -56,7 +57,8 @@ export class ConnectionStore {
     }
   }
   private failure(error: unknown) { this.set({ error: (error as { reasonCode?: ReasonCode })?.reasonCode || 'service_unavailable', pending: false }); }
-  async refresh() {
+  async refresh(manual = false) {
+    if (manual) this.set({ actionRevision: (this.snapshot.actionRevision || 0) + 1 });
     try { await this.bootstrap(); if (this.snapshot.transaction) await this.poll(); else { const generation = this.generation; const status = await this.call('status') as ConnectionStatus; if (generation === this.generation && !this.snapshot.transaction) this.set({ status, error: undefined }); } }
     catch (error) { this.failure(error); }
     if (!this.snapshot.transaction && this.listeners.size && !this.closed) { clearTimeout(this.timer); this.timer = setTimeout(() => { void this.refresh(); }, 15000); }
@@ -81,18 +83,23 @@ export class ConnectionStore {
     if (this.snapshot.pending || this.snapshot.transaction) return;
     this.popup = window.open('about:blank', '_blank');
     const popup = this.popup, generation = ++this.generation;
-    this.set({ pending: true, error: undefined });
+    if (popup) { try { popup.document.title = '钉钉连接'; popup.document.body.textContent = '正在准备连接，请稍候…'; popup.document.body.style.cssText = 'font:15px system-ui;max-width:28rem;margin:18vh auto;padding:24px;line-height:1.7;color:#475569'; } catch {} }
+    const controller = this.beginController = new AbortController();
+    this.set({ pending: true, preparing: true, actionRevision: (this.snapshot.actionRevision || 0) + 1, error: undefined });
     try {
-      const tx = await this.call('begin', { context }) as AuthStart;
+      const tx = await this.call('begin', { context }, AbortSignal.any([controller.signal, this.controller.signal, AbortSignal.timeout(100000)])) as AuthStart;
       if (this.closed || generation !== this.generation) { popup?.close(); return; }
       const target = new URL(tx.authorizeUrl);
-      if (target.origin !== this.callbackOrigin || target.pathname !== '/dsh-dingtalk/start') throw new Error();
-      this.set({ pending: false, status: { state: 'authorizing', reasonCode: 'authorization_pending' }, transaction: tx, fallback: popup ? undefined : tx.authorizeUrl }); this.persist();
-      if (popup) popup.location.href = tx.authorizeUrl;
+      if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.username || target.password || target.pathname !== '/dsh-dingtalk/start') throw new Error();
+      this.callbackOrigin = target.origin;
+      this.set({ pending: false, preparing: false, status: { state: 'authorizing', reasonCode: 'authorization_pending' }, transaction: tx, fallback: popup && !popup.closed ? undefined : tx.authorizeUrl }); this.persist();
+      if (popup && !popup.closed) popup.location.href = tx.authorizeUrl;
       this.schedule();
-    } catch (error) { popup?.close(); this.failure(error); }
+    } catch (error) { popup?.close(); if (generation === this.generation) { this.set({ preparing: false }); this.failure(error); } }
+    finally { if (this.beginController === controller) this.beginController = undefined; }
   }
   async cancel() {
+    if (this.snapshot.preparing) { this.beginController?.abort(); this.generation++; this.popup?.close(); this.set({ pending: false, preparing: false, error: 'user_cancelled' }); return; }
     const tx = this.snapshot.transaction;
     if (!tx) return;
     try {

@@ -13,6 +13,10 @@ import { OAuthController } from './oauth.js';
 import type { BrowserContext } from './oauth.js';
 import type { PrivateSettings } from './private-settings.js';
 import { provisionPrivateRuntime, verifyPrivacyGuard } from './privacy.js';
+import { ensureDws, officialClient } from './bootstrap.js';
+import type { BootstrapRuntime } from './bootstrap.js';
+import { defaultStateDirectory } from './private-settings.js';
+import { join } from 'node:path';
 
 interface UIContext { browser: string; context: BrowserContext }
 export interface ManagedConnection {
@@ -23,7 +27,7 @@ export interface ManagedConnection {
   callbackOrigin?: string;
 }
 export async function createManagedConnection(local: LocalSettings, options: PrivateSettings, limits: ExecutionLimits,
-  runtime: LocalRuntime = {}, providerForTest?: string): Promise<ManagedConnection> {
+  runtime: LocalRuntime & BootstrapRuntime = {}, providerForTest?: string): Promise<ManagedConnection> {
   const scope = new AsyncLocalStorage<UIContext>();
   let epoch = 0, closed = false, busy = false;
   let mutationTail = Promise.resolve();
@@ -35,35 +39,48 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
     try { return await action(); } finally { release(); }
   }
   const ui = <T>(browser: string, context: BrowserContext, action: () => Promise<T>) => scope.run({ browser, context }, action);
-  if (!options.oauth || !options.stateDirectory) {
-    const base = createLocalBackend(local, limits, runtime);
-    return {
-      ui, revision: () => epoch,
-      cancel() { throw new ConnectionServiceError('oauth_not_configured'); },
-      backend: { ...base,
-        beginAuthorization: async () => { throw new ConnectionServiceError('oauth_not_configured'); },
-        invoke: async () => local.binaryPath ? { status: 'auth_required', reasonCode: 'not_connected' } : { status: 'failed', reasonCode: 'cli_missing', retryable: false },
-      },
-    };
-  }
-  const config = options.oauth;
-  const expected = `${config.expectedCorpId}:${config.expectedUserId}`;
-  const directory = await provisionPrivateRuntime(options.stateDirectory);
+  const stateDirectory = options.stateDirectory || defaultStateDirectory();
+  const config = options.oauth || { clientId: '', redirectUri: 'http://127.0.0.1:0/callback', scopes: 'openid corpid', expectedCorpId: '', expectedUserId: '' };
+  let expected: string | undefined = options.oauth ? `${config.expectedCorpId}:${config.expectedUserId}` : local.profile;
+  const directory = await provisionPrivateRuntime(stateDirectory);
   if (local.configDirectory && local.configDirectory !== directory) throw new ConnectionServiceError('privacy_guard_required');
-  if (local.profile && local.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
-  const settings: LocalSettings = { ...local, configDirectory: directory };
-  const store = new BindingStore(options.stateDirectory);
+  if (local.profile && expected && local.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
+  const autoInstall = !local.binaryPath;
+  const settings: LocalSettings = { ...local, binaryPath: local.binaryPath || join(stateDirectory, 'bin', 'dws.exe'), configDirectory: directory };
+  const store = new BindingStore(stateDirectory);
   let record = await store.read();
-  if (record.profile && record.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
+  if (record.profile && expected && record.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
+  expected = record.profile || expected;
   let reader: DingtalkBackend | undefined;
-  const makeReader = () => createLocalBackend({ ...settings, profile: expected }, limits, runtime);
+  const makeReader = (profile = expected) => {
+    if (!profile) throw new ConnectionServiceError('identity_mismatch');
+    return createLocalBackend({ ...settings, profile }, limits, runtime);
+  };
   if (!record.revoked && !record.verificationPending && record.profile) reader = makeReader();
   const control = new ExecutionQueue(limits);
   const executor = new DwsExecutor(settings, limits, runtime);
+  const lifetime = new AbortController();
+  let preparing = false, preparation: Promise<void> | undefined, pendingProfile: string | undefined;
   async function save(value: BindingRecord): Promise<void> { await store.write(value); record = value; }
   const check = async (): Promise<void> => { if (closed) throw new ConnectionServiceError('service_disposed'); await verifyPrivacyGuard(directory); };
+  async function prepare(signal?: AbortSignal) {
+    if (!preparation) preparation = (async () => {
+      preparing = true;
+      const combined = AbortSignal.any([lifetime.signal, ...(signal ? [signal] : [])]);
+      try {
+        if (autoInstall) await ensureDws(settings.binaryPath!, combined, runtime);
+        await control.run(inner => executor.check(inner), combined);
+        if (!config.clientId) config.clientId = await officialClient(combined, runtime);
+        await check();
+        if (combined.aborted) throw new ConnectionServiceError('execution_cancelled');
+      } finally { preparing = false; }
+    })().catch(error => { preparation = undefined; throw error; });
+    await preparation;
+    if (signal?.aborted) throw new ConnectionServiceError('execution_cancelled');
+  }
   async function status(call: CallOptions = {}): Promise<ConnectionStatus> {
     await check();
+    if (preparing) return { state: 'authorizing', reasonCode: 'connection_preparing' };
     if (busy) return { state: 'authorizing', reasonCode: 'authorization_pending' };
     if (record.revocationPending) return { state: 'unknown', reasonCode: 'revocation_failed' };
     if (record.verificationPending) return { state: 'unknown', reasonCode: 'verification_failed_after_save' };
@@ -83,17 +100,21 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
       if (busy || revision !== epoch) throw new ConnectionServiceError('invalid_auth_state');
       busy = true;
       let saved = false;
+      let exchangedProfile: string | undefined;
       const previous = record;
       try {
         await reader?.dispose(); reader = undefined;
         const result = await control.run(async inner => {
           await check();
-          return executor.execute(['auth', 'exchange', '--code-stdin', `--client-id=${config.clientId}`, `--expected-corp-id=${config.expectedCorpId}`, `--expected-user-id=${config.expectedUserId}`, '--format=json'], inner, code);
+          const identity = expected?.split(':');
+          return executor.execute(['auth', 'exchange', '--code-stdin', `--client-id=${config.clientId}`, ...(identity ? [`--expected-corp-id=${identity[0]}`, `--expected-user-id=${identity[1]}`] : []), '--format=json'], inner, code);
         }, signal) as { success?: boolean; data?: { dwsProfile?: string; corpId?: string; userId?: string; clientId?: string } };
         saved = true;
+        const profile = result.data?.dwsProfile;
+        if (result.success !== true || typeof profile !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(profile) || profile !== `${result.data?.corpId}:${result.data?.userId}` || (expected && profile !== expected) || result.data?.clientId !== config.clientId) throw new ConnectionServiceError('identity_mismatch');
+        exchangedProfile = profile; pendingProfile = profile;
         if (closed || revision !== epoch || signal.aborted) throw new ConnectionServiceError('invalid_auth_state');
-        if (result.success !== true || result.data?.dwsProfile !== expected || result.data.corpId !== config.expectedCorpId || result.data.userId !== config.expectedUserId || result.data.clientId !== config.clientId) throw new ConnectionServiceError('identity_mismatch');
-        const candidate = makeReader();
+        const candidate = makeReader(profile);
         reader = candidate;
         const verified = await candidate.invoke({ operationId: 'identity.getSelf', args: {} }, { signal });
         if (verified.status !== 'ok') throw new ConnectionServiceError(verified.reasonCode);
@@ -101,13 +122,13 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
         const connected = await candidate.status();
         if (connected.state !== 'connected') throw new ConnectionServiceError('verification_failed_after_save');
         if (closed || revision !== epoch || signal.aborted) throw new ConnectionServiceError('invalid_auth_state');
-        await save({ version: 1, revoked: false, profile: expected });
+        await save({ version: 1, revoked: false, profile }); expected = profile; pendingProfile = undefined;
         epoch++;
         return { ...connected, account: { organizationName: '已验证企业', displayName: '已授权账号' } };
       } catch (error) {
         await reader?.dispose(); reader = undefined;
         if (!closed && revision === epoch) {
-          if (saved) await save({ version: 1, revoked: false, profile: expected, verificationPending: true });
+          if (saved) { const profile = exchangedProfile || previous.profile; await save({ version: 1, revoked: !profile, ...(profile ? { profile } : {}), verificationPending: true }); expected = profile; }
           else if (!previous.revoked && !previous.verificationPending && previous.profile) reader = makeReader();
         }
         if (saved) throw new ConnectionServiceError('verification_failed_after_save');
@@ -122,10 +143,15 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
       try { return await status(call); }
       catch (error) { return { state: 'unknown', reasonCode: error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable' }; }
     },
-    async beginAuthorization() {
+    async beginAuthorization(_context, call: CallOptions = {}) {
       await check();
       const caller = scope.getStore();
       if (!caller) throw new ConnectionServiceError('invalid_request');
+      if (busy) throw new ConnectionServiceError('authorization_busy');
+      if (record.revocationPending) throw new ConnectionServiceError('revocation_failed');
+      const revision = epoch;
+      await prepare(call.signal);
+      if (revision !== epoch) throw new ConnectionServiceError('invalid_auth_state');
       return oauth.begin(caller.browser, caller.context);
     },
     async getAuthorizationStatus(id) {
@@ -145,18 +171,21 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
       return mutate(async () => {
       await check();
       const old = reader; reader = undefined;
-      await save({ version: 1, revoked: true, ...(record.profile ? { profile: record.profile } : {}), revocationPending: !!record.profile });
+      const target = record.profile || pendingProfile;
+      await save({ version: 1, revoked: true, ...(target ? { profile: target } : {}), revocationPending: !!target });
       await old?.dispose();
-      if (record.profile) {
+      if (target) {
         try {
-          await control.run(async signal => { await check(); return executor.execute(['auth', 'logout', `--profile=${expected}`, '--format=json'], signal, '', false); });
+          if (autoInstall) await ensureDws(settings.binaryPath!, lifetime.signal, runtime);
+          await control.run(async signal => { await check(); return executor.execute(['auth', 'logout', `--profile=${target}`, '--format=json'], signal, '', false); });
         } catch { throw new ConnectionServiceError('revocation_failed'); }
       }
       await save({ version: 1, revoked: true });
+      expected = options.oauth ? `${config.expectedCorpId}:${config.expectedUserId}` : undefined; pendingProfile = undefined;
       return { disconnected: true };
       });
     },
-    async dispose() { closed = true; epoch++; oauth.invalidate(); await control.dispose(); await reader?.dispose(); await mutationTail; await oauth.dispose(); },
+    async dispose() { closed = true; lifetime.abort(); epoch++; oauth.invalidate(); await preparation?.catch(() => {}); await control.dispose(); await reader?.dispose(); await mutationTail; await oauth.dispose(); },
   };
-  return { backend, ui, revision: () => epoch, callbackOrigin: new URL(config.redirectUri).origin, cancel: (id, browser) => oauth.cancel(id, browser) };
+  return { backend, ui, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };
 }

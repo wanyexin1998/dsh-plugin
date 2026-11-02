@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "classification": "OFFICIAL_DSH_WEB_NO_JSON_PUBLIC_BOOTSTRAP",
+  "checks": [
+    "official npm DSH 0.2.1-rc.5 boots installed Bundle with zero core source changes",
+    "assembled native settings offers Connect immediately without private JSON and calls actual authenticated Host RPC",
+    "installed stock Host downloads and verifies official DWS, discovers public clientId and opens correct dynamic-loopback OAuth URL; browser intercept prevents real consent; UI cancel restores unlinked"
+  ],
+  "errors": [],
+  "limitations": [
+    "Provider request intercepted before real authorization; no real enterprise consent or business data",
+    "No production LLM credentials supplied",
+    "No native tool-card transcript replay",
+    "Desktop shell not exercised"
+  ],
+  "coreSourceChanges": 0
+}

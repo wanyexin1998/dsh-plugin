@@ -17,7 +17,8 @@ export const name = 'dsh-dingtalk';
 export const provide = ['dingtalkConnection'];
 export async function apply(ctx: Context, config: unknown): Promise<void> {
   const parsed = parseConfig(config);
-  const managed = await createManagedConnection(await loadLocalSettings(), await loadPrivateSettings(), parsed.execution);
+  const profile = ctx.get('profileContext') as { dir?: string } | undefined;
+  const managed = await createManagedConnection(await loadLocalSettings(), await loadPrivateSettings(profile?.dir), parsed.execution);
   const owner = createConnectionService(managed.backend);
   ctx.effect(() => () => owner.dispose());
   ctx.provide('dingtalkConnection', owner.service);

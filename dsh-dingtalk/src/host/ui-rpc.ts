@@ -47,7 +47,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
         let value: unknown;
         switch (method) {
           case 'status': value = await service.status({ signal }); break;
-          case 'begin': value = await service.beginAuthorization(data.context === undefined ? {} : data.context as {}); break;
+          case 'begin': value = await service.beginAuthorization(data.context === undefined ? {} : data.context as {}, { signal }); break;
           case 'transaction':
             if (typeof data.transactionId !== 'string') throw new ConnectionServiceError('invalid_request');
             value = await service.getAuthorizationStatus(data.transactionId); break;

@@ -32,6 +32,7 @@ export function browserContext(input: unknown): BrowserContext {
 }
 const escapeHtml = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 export class OAuthController {
+  get origin() { return this.callback.origin; }
   private transactions = new Map<string, Transaction>();
   private server: Server | undefined;
   private listening: Promise<void> | undefined;
@@ -52,6 +53,8 @@ export class OAuthController {
     try {
       this.listening = new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(Number(this.callback.port), '127.0.0.1', resolve); });
       await this.listening;
+      const address = server.address();
+      if (address && typeof address !== 'string') this.callback.port = String(address.port);
     } catch { this.server = undefined; server.close(); throw new ConnectionServiceError('service_unavailable'); }
   }
   async begin(owner: string, context: BrowserContext): Promise<AuthStart> {
@@ -97,12 +100,12 @@ export class OAuthController {
       const tx = [...this.transactions.values()].find(item => item.ticket === url.searchParams.get('t'));
       if (!tx || tx.started || tx.consumed || tx.expires <= this.clock()) { res.writeHead(400); res.end('授权链接已失效。'); return; }
       tx.started = true;
-      res.setHeader('Set-Cookie', `dsh_dt_${tx.id.slice(0, 16)}=${tx.proof}; HttpOnly; SameSite=Lax; Path=/dsh-dingtalk; Max-Age=120`);
+      res.setHeader('Set-Cookie', `dsh_dt_${tx.id.slice(0, 16)}=${tx.proof}; HttpOnly; SameSite=Lax; Path=${this.callback.pathname}; Max-Age=120`);
       const target = new URL(this.provider);
-      for (const [key, value] of Object.entries({ client_id: this.config.clientId, redirect_uri: this.config.redirectUri, response_type: 'code', scope: this.config.scopes, state: tx.state, nonce: tx.nonce, prompt: 'consent' })) target.searchParams.set(key, value);
+      for (const [key, value] of Object.entries({ client_id: this.config.clientId, redirect_uri: this.callback.href, response_type: 'code', scope: this.config.scopes, state: tx.state, nonce: tx.nonce, prompt: 'consent' })) target.searchParams.set(key, value);
       res.writeHead(302, { Location: target.href }); res.end(); return;
     }
-    if (url.pathname !== '/dsh-dingtalk/callback') { res.writeHead(404); res.end(); return; }
+    if (url.pathname !== this.callback.pathname) { res.writeHead(404); res.end(); return; }
     if (req.headers.origin && ![this.callback.origin, this.provider.origin].includes(req.headers.origin)) { res.writeHead(403); res.end(); return; }
     if ([...url.searchParams.keys()].some(key => !['state', 'authCode', 'code', 'error', 'error_description'].includes(key)) || url.searchParams.getAll('state').length !== 1) { res.writeHead(400); res.end(); return; }
     const tx = [...this.transactions.values()].find(item => item.state === url.searchParams.get('state'));
@@ -111,7 +114,7 @@ export class OAuthController {
     const codes = [...url.searchParams.getAll('authCode'), ...url.searchParams.getAll('code')];
     if (url.searchParams.getAll('error').length > 1 || (url.searchParams.has('error') ? codes.length !== 0 : codes.length !== 1 || !codes[0] || codes[0].length > 8192 || /[\u0000-\u001f\u007f]/.test(codes[0]))) { res.writeHead(400); res.end(); return; }
     tx.consumed = true; // Atomic replay fence before any asynchronous exchange.
-    res.setHeader('Set-Cookie', `dsh_dt_${tx.id.slice(0, 16)}=; HttpOnly; SameSite=Lax; Path=/dsh-dingtalk; Max-Age=0`);
+    res.setHeader('Set-Cookie', `dsh_dt_${tx.id.slice(0, 16)}=; HttpOnly; SameSite=Lax; Path=${this.callback.pathname}; Max-Age=0`);
     if (url.searchParams.has('error')) tx.result = url.searchParams.get('error') === 'access_denied' ? { state: 'user_cancelled', reasonCode: 'user_cancelled' } : { state: 'unknown', reasonCode: 'connection_unknown' };
     else {
       try {

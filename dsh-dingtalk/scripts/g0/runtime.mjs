@@ -39,7 +39,7 @@ export async function sandbox() {
       const cleanup = await run('pwsh.exe', ['-NoProfile', '-File', join(pluginRoot, 'scripts/g0/cleanup-test-keychain.ps1'), '-Namespace', root], { env, cwd: root });
       if (cleanup.code !== 0) throw new Error('Test registry cleanup failed');
     }
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   } };
 }
 
