@@ -1,0 +1,14 @@
+{
+  "pluginVersion": "0.1.0-dev.4",
+  "classification": "AUTOMATED_LOCAL_TESTS",
+  "date": "2026-11-02T18:19:43.6787159+08:00",
+  "build": true,
+  "typecheck": true,
+  "tests": 34,
+  "passed": 34,
+  "failed": 0,
+  "skipped": 0,
+  "uiRetestPassed": 2,
+  "realAuthorization": false,
+  "realBusinessData": false
+}

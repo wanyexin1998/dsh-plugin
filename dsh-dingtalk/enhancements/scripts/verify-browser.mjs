@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { build } from 'esbuild';
+import { chromium } from 'playwright-core';
+import { fixture } from './p0-fixture.mjs';
+import { createUIRpc } from '../lib/host/ui-rpc.js';
+
+const f = await fixture({ automatic: true });
+const routes = new Map();
+const peer = { id: 'browser', principal: { kind: 'owner' } };
+const cleanup = createUIRpc({ browserPeer: peer, admit: () => ({ peer }), fetch: { register(route) { routes.set(route.path, route); return async () => {}; } } }, f.managed, f.service);
+const browserErrors = [], checks = [];
+const source = `import React from 'react';import{createRoot}from'react-dom/client';import{ConnectionSection,ToolView,AuthorizationTail}from'./lib/client/index.js';import{ConnectionStore}from'./lib/client/store.js';
+const store=new ConnectionStore({rpc:{async call(channel,endpoint,payload,signal){return fetch('/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint,payload}),signal}).then(r=>r.json())}}});
+const root=createRoot(document.getElementById('app'));const results=[{status:'failed',reasonCode:'authorization_expired'},{status:'auth_required',reasonCode:'not_connected'}];
+let thoughts=false;
+const useChat=selector=>selector({nodes:{values:()=>results.map((result,n)=>({kind:'tool-call',anchorSeq:n,visibility:'hidden',location:{kind:'step',turn:{turn:1}},data:{root:{kind:'tool-result',name:'dingtalk_call',callId:'call-'+n,content:[{type:'text',text:JSON.stringify(result)}]}}}))}});
+function render(){root.render(React.createElement('main',null,React.createElement('label',null,'原会话草稿',React.createElement('textarea',{'aria-label':'原会话草稿',defaultValue:'请查询明天的日程'})),React.createElement(ConnectionSection,{store}),React.createElement('section',{id:'thinking'},thoughts?results.map((result,n)=>React.createElement(ToolView,{key:n,store,phase:'result',callId:'call-'+n,sessionId:'session-example',block:{content:[{type:'text',text:JSON.stringify(result)}]}})):null),React.createElement('p',{id:'final-answer'},'连接钉钉后可查询。'),React.createElement(AuthorizationTail,{store,sessionId:'session-example',turn:{turn:1},useChat})));}
+window.harness={store,add:result=>{results.push(result);render()},toggleThoughts:()=>{thoughts=!thoughts;render()},dispose:()=>{root.unmount();store.dispose()}};render();`;
+const compiled = await build({ stdin: { contents: source, resolveDir: process.cwd(), sourcefile: 'browser-harness.ts' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'process.env.NODE_ENV': '"production"' } });
+const server = createServer(async (req, res) => {
+  if (req.url === '/app.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(compiled.outputFiles[0].text); return; }
+  if (req.url === '/rpc' && req.method === 'POST') {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    const { endpoint, payload } = JSON.parse(raw);
+    const reply = await routes.get(`/api/${endpoint}`).fetch(new Request(`http://127.0.0.1/api/${endpoint}`, { method: 'POST', body: JSON.stringify({ type: 'client-request', rpcId: 'browser-test', method: endpoint, payload }) }));
+    const { result } = await reply.json();
+    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result)); return;
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end('<!doctype html><html lang="zh-CN"><meta name="viewport" content="width=device-width"><title>钉钉本地验收 Harness</title><style>body{font:16px system-ui;margin:24px;color:#202838;background:#fafbfc}main{max-width:750px;margin:auto;display:grid;gap:20px}textarea{display:block;width:90%;padding:12px}html.dark{color-scheme:dark}html.dark body{color:#e5e7eb;background:#171a21}</style><div id="app"></div><script src="/app.js"></script></html>');
+});
+let browser;
+try {
+  await mkdir('artifacts/browser', { recursive: true });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  browser = await chromium.launch({ executablePath: process.env.DSH_TEST_BROWSER || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+  const page = await ctx.newPage(); page.on('pageerror', error => browserErrors.push(error.message));
+  await page.goto(`${base}/session/example#draft`);
+  await page.getByRole('status').first().filter({ hasText: '尚未连接钉钉' }).waitFor();
+  await page.locator('.dsh-dt-card').waitFor();
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
+  assert.equal(await page.locator('#thinking .dsh-dt-card').count(), 0);
+  assert.ok(await page.evaluate(() => !!(document.getElementById('final-answer').compareDocumentPosition(document.querySelector('.dsh-dt-card')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  await page.evaluate(() => { for(let n=0;n<4;n++) window.harness.add({status:'auth_required',reasonCode:'not_connected'}); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
+  await page.evaluate(() => { window.originalCards = [...document.querySelectorAll('.dsh-dt-card')]; window.harness.toggleThoughts(); });
+  await page.getByRole('textbox', { name: '原会话草稿' }).fill('请查询明天日程，保留这份草稿');
+  // Spoofed messages cannot set a UI status; Host readback is required.
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', { origin: 'https://evil.invalid', data: { type: 'dsh-dingtalk:auth', result: 'connected', transactionId: 'fake' } })));
+  assert.equal(await page.getByText('钉钉已连接', { exact: true }).count(), 0);
+  let releaseBegin;
+  const loadingGate = new Promise(resolve => { releaseBegin = resolve; });
+  await page.route('**/rpc', async route => {
+    if (route.request().postDataJSON()?.endpoint?.endsWith('/begin')) await loadingGate;
+    await route.continue();
+  });
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: '连接钉钉', exact: true }).first().click();
+  const popup = await popupPromise;
+  await popup.getByRole('status').filter({hasText:'正在连接钉钉…'}).waitFor();
+  const spinner = popup.locator('.spinner');
+  assert.equal(await spinner.evaluate(el=>getComputedStyle(el).animationName),'turn');
+  const before = await spinner.evaluate(el=>getComputedStyle(el).transform);
+  await popup.waitForTimeout(120);
+  assert.notEqual(await spinner.evaluate(el=>getComputedStyle(el).transform),before);
+  await popup.screenshot({path:'artifacts/browser/loading-light.png'});
+  await popup.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'});
+  await popup.setViewportSize({width:390,height:844});
+  assert.equal(await spinner.evaluate(el=>getComputedStyle(el).animationName),'none');
+  assert.ok(await spinner.evaluate(el=>{const r=el.getBoundingClientRect();return Math.abs(r.left+r.width/2-innerWidth/2)<1;}));
+  assert.ok(await popup.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await popup.screenshot({path:'artifacts/browser/loading-dark-mobile.png'});
+  checks.push('real preparation popup has a centered animated spinner, dark/mobile layout and reduced-motion fallback; provider navigation resumes after preparation');
+  releaseBegin();
+
+  await page.getByText('钉钉已连接', { exact: true }).first().waitFor({ timeout: 30000 });
+  assert.equal(await page.getByRole('status').filter({ hasText: /^(钉钉)?已连接$/ }).count(), 2);
+  const cardSize = await page.locator('.dsh-dt-card').first().boundingBox();
+  assert.ok(cardSize.width <= 440 && cardSize.height <= 130, 'Conversation card must remain compact');
+  assert.ok(await page.evaluate(() => { const current = [...document.querySelectorAll('.dsh-dt-card')]; return current.length === window.originalCards.length && current.every((node, i) => node === window.originalCards[i]); }));
+  for (const status of [{ state: 'reauth_required', reasonCode: 'authorization_expired' }, { state: 'unknown', reasonCode: 'service_unavailable' }]) {
+    // Test-only synthetic projection verifies React node identity for failure/expiry feedback.
+    await page.evaluate(value => window.harness.store.set({ status: value }), status);
+    await page.waitForTimeout(50);
+    assert.ok(await page.evaluate(() => { const current = [...document.querySelectorAll('.dsh-dt-card')]; return current.length === window.originalCards.length && current.every((node, i) => node === window.originalCards[i]); }));
+  }
+  await page.evaluate(() => window.harness.store.refresh());
+  await page.getByText('钉钉已连接', { exact: true }).first().waitFor();
+  checks.push('connected, expired and failed feedback updates the original card DOM nodes; no new status card inserted');
+  assert.equal(await page.getByRole('textbox').inputValue(), '请查询明天日程，保留这份草稿');
+  assert.match(page.url(), /session\/example#draft$/);
+  await popup.waitForEvent('close', { timeout: 3000 }).catch(() => {});
+  checks.push('authorization card is after final prose while thinking ToolViews are unmounted; expanding thinking does not duplicate it');
+  checks.push('six auth-required Tool calls share one original card; callback updates settings + that card; original URL/draft preserved; spoof ignored');
+  await page.evaluate(() => { window.harness.add({status:'ok',data:{items:[]}});window.harness.add({status:'failed',reasonCode:'invalid_cli_output',retryable:false});window.harness.add({status:'failed',reasonCode:'queue_timeout',retryable:true}); });
+  await page.getByText('钉钉 · 已完成', { exact: true }).waitFor();
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
+  assert.equal(await page.locator('details').count(), 0);
+  assert.equal(await page.getByRole('button', { name: '连接钉钉', exact: true }).count(), 0);
+  checks.push('success and query failures render plain rows; an already-authorized session does not receive new connection cards');
+  await page.screenshot({ path: 'artifacts/browser/connected-light.png', fullPage: true });
+  await page.getByRole('button', { name: '连接管理', exact: true }).click();
+  await page.getByRole('button', { name: '解除连接', exact: true }).click();
+  await page.getByRole('dialog').waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '保留连接');
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '连接管理');
+  assert.equal((await f.service.status()).state, 'connected');
+  checks.push('unlink requires second confirmation; Escape preserves connection and restores focus');
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  await page.screenshot({ path: 'artifacts/browser/connected-dark-mobile.png', fullPage: true });
+  for (const width of [1280,390]) {
+    await page.setViewportSize({width,height:1000});
+    const aligned = await page.locator('.dsh-dt-card').evaluate(el => { const c=el.getBoundingClientRect(); return ['.dsh-dt-symbol','.dsh-dt-copy','.dsh-dt-actions'].every(selector => { const r=el.querySelector(selector).getBoundingClientRect(); return Math.abs((r.top+r.height/2)-(c.top+c.height/2))<1; }); });
+    assert.ok(aligned, 'Card icon, copy and actions share the same horizontal centerline');
+  }
+  checks.push('light/dark inheritance, keyboard focus and 390px layout without horizontal overflow; card icon/copy/actions vertically aligned');
+  await page.getByRole('button', { name: '连接管理', exact: true }).click();
+  await page.getByRole('button', { name: '解除连接', exact: true }).click();
+  await page.getByRole('button', { name: '确认解除连接', exact: true }).click();
+  await page.getByText('尚未连接钉钉', { exact: true }).first().waitFor({ timeout: 30000 });
+  assert.equal(await page.getByRole('status').filter({ hasText: '尚未连接钉钉' }).count(), 2);
+  checks.push('confirmed precise logout synchronizes all subscribed views');
+  // Browser popup blocking: user receives an explicit link; polling is sufficient.
+  await page.evaluate(() => { window.open = () => null; });
+  await page.getByRole('button', { name: '连接钉钉', exact: true }).first().click();
+  const fallback = page.getByRole('link', { name: /浏览器拦截/ }).first();
+  await fallback.waitFor(); const target = await fallback.getAttribute('href');
+  const detached = await ctx.newPage(); await detached.goto(target);
+  await page.getByText('钉钉已连接', { exact: true }).first().waitFor({ timeout: 30000 });
+  await detached.close();
+  checks.push('blocked popup fallback + no opener completion recovered by bounded 2-second polling');
+  f.state.cancel = true;
+  await page.getByRole('button', { name: '连接管理', exact: true }).click();
+  await page.getByRole('button', { name: '重新授权', exact: true }).first().click();
+  const cancelledLink = page.getByRole('link', { name: /浏览器拦截/ }).first(); await cancelledLink.waitFor();
+  const cancelledPage = await ctx.newPage(); await cancelledPage.goto(await cancelledLink.getAttribute('href'));
+  await page.getByText('已取消本次授权', { exact: true }).first().waitFor({ timeout: 30000 });
+  assert.equal((await f.service.status()).state, 'connected'); await cancelledPage.close();
+  checks.push('cancelled reauthorization keeps working Host binding and reports cancellation');
+  await page.reload();
+  await page.getByText('钉钉已连接', { exact: true }).first().waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('.dsh-dt-card').count(), 0, 'Historical auth-required blocks must not create a card on an already-connected reload');
+  await page.evaluate(() => window.harness.dispose());
+  assert.equal(await page.locator('.dsh-dt').count(), 0);
+  assert.deepEqual(browserErrors, []); assert.deepEqual(f.failures, []);
+  checks.push('page reload refreshes Host truth; unload removes React views/subscriptions without browser errors');
+  const report = { success: true, classification: 'REACT_AND_REAL_HOST_RPC_HARNESS', browser: await browser.version(), checks, limitations: ['Not the assembled DSH Web/Desktop shell', 'Synthetic OAuth/MCP only; no real LLM or enterprise authorization'], screenshots: ['browser/connected-light.png', 'browser/connected-dark-mobile.png', 'browser/loading-light.png', 'browser/loading-dark-mobile.png'] };
+  await writeFile('artifacts/p0-browser-report.json', JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify(report, null, 2));
+} catch (error) {
+  const page = browser?.contexts()[0]?.pages()[0];
+  if (page) { await page.screenshot({path:'artifacts/browser/failure.png',fullPage:true}).catch(()=>{}); console.error(JSON.stringify({ui:await page.getByRole('status').allTextContents(),browserErrors,fixtureFailures:f.failures})); }
+  throw error;
+} finally { await browser?.close(); await cleanup(); server.closeAllConnections(); await new Promise(r => server.close(r)); await f.dispose(); }

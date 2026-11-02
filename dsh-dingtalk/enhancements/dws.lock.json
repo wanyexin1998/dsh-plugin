@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "product": "dsh-dingtalk",
+  "phase": "G0",
+  "dws": {
+    "repository": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli",
+    "version": "1.0.66",
+    "tag": "v1.0.66",
+    "commit": "f215043e676d6889e1ddce3464828d8b1ec40c31",
+    "binaryChecksums": {
+      "win32-x64": "0db4ed09c0a9524b39980878d4b51a020a32a127bad757b852ec1173b149ec74"
+    },
+    "releaseUrl": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/tag/v1.0.66",
+    "publishedAt": "2026-10-28T07:59:55Z",
+    "checksums": {
+      "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/checksums.txt",
+      "sha256": "bc7ae590d2e1a0b2e78359e6bc74310b7ad1b9ce98c77a906389ee38fb66ef47"
+    },
+    "assets": [
+      {
+        "platform": "darwin-amd64",
+        "filename": "dws-darwin-amd64.tar.gz",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-darwin-amd64.tar.gz",
+        "sha256": "313b64b136b3e9d41cbfaaa25677f1ba79d51223527e870a9ac6d34f0747d741",
+        "size": 18562585
+      },
+      {
+        "platform": "darwin-arm64",
+        "filename": "dws-darwin-arm64.tar.gz",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-darwin-arm64.tar.gz",
+        "sha256": "5dabdf00c849c512c65150853a9c8c2d677ab9d809242d4b6304b2433049e7cb",
+        "size": 16850423
+      },
+      {
+        "platform": "linux-amd64",
+        "filename": "dws-linux-amd64.tar.gz",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-linux-amd64.tar.gz",
+        "sha256": "27cd2821e1f6523d1eeaf5688c23502bddbdd858cf82e32c197853065418bef8",
+        "size": 19396103
+      },
+      {
+        "platform": "linux-arm64",
+        "filename": "dws-linux-arm64.tar.gz",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-linux-arm64.tar.gz",
+        "sha256": "4d6bd477d5b47d2595baa9adf718e3d38f6d2532614873e4f670cd84adf88096",
+        "size": 18187912
+      },
+      {
+        "platform": "windows-amd64",
+        "filename": "dws-windows-amd64.zip",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-windows-amd64.zip",
+        "sha256": "64dcf850b32db1e07861ba971a9a251d1ed95a86bbe5bb248866377a67520d53",
+        "size": 21025934
+      },
+      {
+        "platform": "windows-arm64",
+        "filename": "dws-windows-arm64.zip",
+        "url": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-windows-arm64.zip",
+        "sha256": "fbc64fc0b28e7ec27d13c8f9eba76f10f963fb3e20d833d9ca40270449555362",
+        "size": 18429506
+      }
+    ],
+    "operations": [
+      {
+        "operationId": "identity.getSelf",
+        "cliPath": [
+          "contact",
+          "user",
+          "get-self"
+        ],
+        "schemaPath": "contact.user.get-self",
+        "canonicalPath": "contact.get_current_user_profile",
+        "schemaSha256": "635e4c0ca4a7b682c4d8ee1261155c267694b94acf54364569a6955ed5259354"
+      },
+      {
+        "operationId": "calendar.listEvents",
+        "cliPath": [
+          "calendar",
+          "event",
+          "list"
+        ],
+        "schemaPath": "calendar.event.list",
+        "canonicalPath": "calendar.list_calendar_events",
+        "schemaSha256": "ffa5111289273e93902a7bc2f12abb555a9c9424033b200e98716c47ff24e982"
+      },
+      {
+        "operationId": "docs.search",
+        "cliPath": [
+          "doc",
+          "search"
+        ],
+        "schemaPath": "doc.search",
+        "canonicalPath": "doc.search_documents",
+        "schemaSha256": "d158629adef52761bc568d58eac3e41ba449999486b6456ee5cfd561bb237e48",
+        "compatibilityNote": "Upstream compact use_when marks doc search deprecated; retain the reviewed P0 mapping until a replacement is validated."
+      }
+    ],
+    "upstreamSmoke": {
+      "path": "scripts/dev/test-auth-exchange-local.py",
+      "sourceUrl": "https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/f215043e676d6889e1ddce3464828d8b1ec40c31/scripts/dev/test-auth-exchange-local.py",
+      "sourceSha256LF": "ac8e090a7be2149a3e17e1418ee8214704c8d88a2adb04e464a5d1022a1d1fb8",
+      "adaptation": "Windows test namespace per isolated directory; update check disabled; all upstream assertions unchanged"
+    }
+  },
+  "gate": {
+    "realEnterpriseOAuth": "PENDING_USER_TEST",
+    "decision": "HOLD",
+    "note": "Release integrity and local fixtures do not establish enterprise OAuth, permissions, or DSH browser compatibility."
+  },
+  "dsh": {
+    "apiTestedVersion": "0.2.1-rc.5",
+    "package": "@deepseek-ai/dsh",
+    "publishedTarball": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+    "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+    "classification": "PUBLISHED_RUNTIME_API_ONLY",
+    "packages": [
+      {
+        "name": "@deepseek-ai/dsh",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "b10673ea6c4e20cc10da6ef20130b6ece3142cba8003b50e0d5ded25fc388b5b"
+      },
+      {
+        "name": "@deepseek-ai/cordis",
+        "version": "4.0.5",
+        "manifestSha256": "b73831b926b16cbd684aa1b277461e7800a2b35e2dd351ad3c2c8c0db158589d"
+      },
+      {
+        "name": "@deepseek-ai/dsh-system-prompt",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "75e7c7017fe435443f08f71f5fcb3c72dc3a0ce959d8b6d18bd8d90be0246414"
+      },
+      {
+        "name": "@deepseek-ai/dsh-tools",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "5ebfb49032068284f7ac422d01dc31833fea778b80fcf433d54c4866a32fb8b5"
+      },
+      {
+        "name": "@deepseek-ai/dsh-client-ui-slots",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "f86b039b759d3295194a263491b2df1315da8cd50bd39c5f5a5b03dda3b5571d"
+      },
+      {
+        "name": "@deepseek-ai/dsh-client-ui-tool",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "7803ffeead92641957c8e0bc1a6cbce3618adf60182942717ee5f51ac04346b9"
+      },
+      {
+        "name": "@deepseek-ai/dsh-client-ui-settings",
+        "version": "0.2.1-rc.5",
+        "manifestSha256": "4962d0501925d45aebcc3cf5901ee26a0acb99b6bc4bf6b8d2cecd24af207108"
+      }
+    ],
+    "slotContractChecks": [
+      {
+        "package": "@deepseek-ai/dsh-client-ui-tool",
+        "key": "tool.call.toolview",
+        "path": "lib/types/client/contract/slots.d.ts",
+        "sha256": "76219790bee8d6b66c685bf56d18b55d2c3e3cedafb7b4ed093133f65ab943b3"
+      },
+      {
+        "package": "@deepseek-ai/dsh-client-ui-settings",
+        "key": "settings.section",
+        "path": "lib/types/client/contract/slots.d.ts",
+        "sha256": "2f7d23b648e50ddd3d71bdd3cb8863c06598533bebfb17538c3a8b5f2da453b4"
+      }
+    ],
+    "browserAndDesktopAcceptance": "PENDING",
+    "minimumSupportedVersion": null
+  },
+  "verifiedOn": "2026-11-02"
+}

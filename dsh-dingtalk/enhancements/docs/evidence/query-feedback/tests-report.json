@@ -1,0 +1,9 @@
+{
+  "pluginVersion": "0.1.0-dev.6",
+  "tests": 38,
+  "passed": 38,
+  "failed": 0,
+  "skipped": 0,
+  "typecheck": true,
+  "classification": "AUTOMATED_LOCAL_TESTS"
+}
