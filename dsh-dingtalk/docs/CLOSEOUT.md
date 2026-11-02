@@ -15,17 +15,16 @@
 - 干净目录依赖安装：`pnpm install --frozen-lockfile` 通过。
 - `pnpm run ci` 通过：敏感内容扫描、格式、TypeScript、基础测试 334 通过 / 51 条件跳过、Web 测试 50 通过、tarball 边界检查通过。
 - `pnpm run verify:browser` 通过：明暗主题、窄屏、对齐、加载动画、原位授权状态及回复尾部提示。
-- 实际 DSH `0.2.1-rc.5` 安装与 Web 启动通过；无改动宿主源码。最后的公网授权入口发现请求返回 `service_unavailable`，该项未通过，需恢复网络后重跑 `npm run verify:dsh-web`。
+- 网络恢复后重跑 `npm run verify:dsh-web` 通过：实际 DSH `0.2.1-rc.5` 安装、Web 启动、34 个技能与 1540 命令目录注册、公网 CLI 下载及校验、授权页面跳转、取消后恢复未连接均通过。无改动宿主源码；测试在钉钉授权页面前拦截，未提交真实账号授权。
 - 本次没有将真实企业全部业务、真实机器人私聊/群聊或跨入口身份一致性记为验收通过。
 
 本机详细日志位于大仓库 `.cache/migration-20261103/`，不随源码提交。
 
-## 远程待完成
+## 远程交付约定
 
-本轮 GitHub API、Git HTTPS 及连接器出现网络/TLS 连接失败，尚未修改远程设置、推送分支、创建或合并 PR。执行顺序保持如下，不跳过本地收尾：
+先完成全部本地验证，再按以下顺序交付；不配置或触发 GitHub Actions，不发布 NPM。远程执行结果以本次 PR 记录为准。
 
-1. 恢复网络，补验公网授权入口。
-2. 确认并关闭 `wanyexin1998/dsh-plugin` 与 `wanyexin1998/dsh-dingtalk` 的 Actions。
-3. 推送 fork 的备份分支；fork main 继续跟踪官方，不合入定制改动。
-4. 推送大仓库新分支，创建 PR，检查最终差异及准确 head SHA 后合并 main。
-5. 将本地 main 快进到合并结果，更新本记录的远程状态。不得发布 NPM。
+1. 确认并关闭 `wanyexin1998/dsh-plugin` 与 `wanyexin1998/dsh-dingtalk` 的 Actions。
+2. 推送 fork 的备份分支；fork main 继续跟踪官方，不合入定制改动。
+3. 推送大仓库新分支，创建 PR，检查最终差异及准确 head SHA 后合并 main。
+4. 将本地 main 快进到合并结果。不得发布 NPM。
