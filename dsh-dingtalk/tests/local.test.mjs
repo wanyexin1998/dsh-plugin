@@ -94,6 +94,23 @@ test('unregistered model fields/writes are rejected without spawning a process',
   } finally { await f.dispose(); }
 });
 
+test('official root-level document output supports Chinese and empty searches without invalidating a working binding', async () => {
+  const f = await fixture({ flatDocuments: true });
+  try {
+    for (const args of [{ query: '合成中文' }, {}]) {
+      const result = await f.backend.invoke({ operationId: 'docs.search', args });
+      assert.equal(result.status, 'ok'); assert.equal(result.data.documents[0].name, '合成中文文档');
+      assert.equal(result.data.hasMore, false); assert.equal((await f.backend.status()).state, 'connected');
+    }
+    const path = join(f.isolated.root, 'control.json'), saved = JSON.parse(await readFile(path, 'utf8'));
+    await writeFile(path, JSON.stringify({ ...saved, emptyDocuments: true }));
+    const empty = await f.backend.invoke(input); assert.equal(empty.status, 'ok'); assert.deepEqual(empty.data.documents, []);
+    await writeFile(path, JSON.stringify({ ...saved, badDocuments: true }));
+    const malformed = await f.backend.invoke(input); assert.equal(malformed.reasonCode, 'invalid_cli_output'); assert.equal(malformed.retryable, false);
+    assert.equal((await f.backend.status()).state, 'connected', 'a query decoding failure must not revoke a verified identity');
+  } finally { await f.dispose(); }
+});
+
 test('inconclusive snapshot does not become logout or attempt business calls; expiry may refresh in DWS', async () => {
   const f = await fixture({ inconclusive: true });
   try {

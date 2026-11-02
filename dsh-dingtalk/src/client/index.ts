@@ -63,16 +63,29 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
     confirmation ? h(DisconnectDialog, { store, confirmation, close: () => setConfirmation(undefined), language }) : null), language);
 }
 interface ToolProps { phase: string; sessionId?: string; callId: string; block?: { content?: readonly { type: string; text?: string }[] } }
+function AuthorizationFeedback({ store, language, sessionId = 'current', callId, reason }: { store: ConnectionStore; language: string; sessionId?: string | undefined; callId: string; reason: import('../shared/models.js').ReasonCode }) {
+  const snap = useSyncExternalStore(store.subscribe, store.get, store.get);
+  useSyncExternalStore(store.prompts.subscribe, store.prompts.snapshot, store.prompts.snapshot);
+  const [shown, setShown] = useState(false), [dismissed, setDismissed] = useState(false);
+  useEffect(() => store.prompts.register(sessionId, callId, reason), [store, sessionId, callId, reason]);
+  const prompt = store.prompts.get(sessionId);
+  const owner = prompt.owner === callId;
+  const needs = ['unlinked', 'reauth_required'].includes(snap.status.state) || snap.status.reasonCode === 'verification_failed_after_save' || !!snap.transaction || !!snap.preparing || prompt.reason === 'scope_authorization_required';
+  useEffect(() => { if (owner && needs) setShown(true); }, [owner, needs]);
+  if (!owner || dismissed || (!needs && !shown)) return null;
+  return h(ConnectionSection, { store, compact: true, language, dismiss: () => setDismissed(true),
+    errorReason: prompt.reason === 'scope_authorization_required' ? prompt.reason : undefined,
+    context: { sessionRef: sessionId, callRef: callId } });
+}
 export function ToolView({ store, language = 'zh', ...props }: ToolProps & { store: ConnectionStore; language?: string }): ReactNode {
-  const [hidden, setHidden] = useState(false);
   const text = props.block?.content?.filter(item => item.type === 'text').map(item => item.text).join('\n') || '';
   let result: { status?: string; reasonCode?: import('../shared/models.js').ReasonCode } = {};
   try { result = JSON.parse(text); } catch {}
-  if (hidden) return localize(h('button', { type: 'button', className: 'dsh-dt-row', onClick: () => setHidden(false) }, '钉钉 · 显示连接'), language);
   if (props.phase !== 'result') return localize(h('div', { className: 'dsh-dt-row', role: 'status' }, h('style', null, cardCss), '钉钉 · 正在读取…'), language);
-  if (result.status === 'ok') return localize(h('details', { className: 'dsh-dt-card' }, h('style', null, cardCss), h('summary', null, '钉钉 · 查询完成'), h('pre', null, text)), language);
-  return h(ConnectionSection, { store, compact: true, language, dismiss: () => setHidden(true), errorReason: ['failed', 'denied'].includes(result.status || '') ? result.reasonCode || 'connection_unknown' : undefined,
-    context: { callRef: props.callId, ...(props.sessionId ? { sessionRef: props.sessionId } : {}) } });
+  if (result.status === 'ok') return localize(h('div', { className: 'dsh-dt-row', role: 'status' }, h('style', null, cardCss), '钉钉 · 查询完成'), language);
+  if (result.status === 'auth_required' || result.reasonCode === 'authorization_expired') return h(AuthorizationFeedback, { store, language, sessionId: props.sessionId, callId: props.callId, reason: result.reasonCode || 'not_connected' });
+  const detail = result.reasonCode === 'invalid_cli_output' ? '查询结果暂时无法读取。' : ['queue_timeout', 'queue_full'].includes(result.reasonCode || '') ? '查询繁忙，请稍后重试。' : result.status === 'denied' ? messageFor(result.reasonCode).title : '查询暂未完成，请稍后重试。';
+  return localize(h('div', { className: 'dsh-dt-row', role: 'status' }, h('style', null, cardCss), '钉钉 · ', detail), language);
 }
 function LocalizedView({ locale, render }: { locale: LocaleFace; render(language: string): ReactNode }) {
   const language = useSyncExternalStore(fn => locale.subscribe(fn), () => locale.getSnapshot(), () => locale.getSnapshot()).active;

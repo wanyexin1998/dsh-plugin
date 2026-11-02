@@ -21,9 +21,13 @@ test('settings and compact cards cover structured states without exposing intern
   const html = renderToStaticMarkup(React.createElement(ConnectionSection, { store: store({ state: 'unknown', reasonCode: 'connection_unknown' }), language: 'en' }));
   assert.match(html, /Connection could not be verified/); assert.match(html, /Connect DingTalk/);
 });
-test('result cards default to collapsed text, escape remote markup, and do not render connection management', () => {
+test('successful and ordinary failed queries use quiet inline feedback, never connection cards or raw results', () => {
   const html = renderToStaticMarkup(React.createElement(ToolView, { store: store({ state: 'connected' }), phase: 'result', callId: 'test', block: { content: [{ type: 'text', text: JSON.stringify({ status: 'ok', data: '<script>malicious()</script>' }) }] } }));
-  assert.match(html, /<details/); assert.ok(!html.includes('<details open'));
-  assert.ok(!html.includes('<script>malicious')); assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /查询完成/); assert.ok(!html.includes('<details')); assert.ok(!html.includes('dsh-dt-card"'));
+  assert.ok(!html.includes('malicious'));
   assert.ok(!html.includes('连接钉钉')); assert.ok(!html.includes('解除连接'));
+  for (const reasonCode of ['invalid_cli_output', 'queue_timeout', 'execution_timeout', 'service_unavailable']) {
+    const failed = renderToStaticMarkup(React.createElement(ToolView, { store: store({ state: 'connected' }), phase: 'result', callId: reasonCode, block: { content: [{ type: 'text', text: JSON.stringify({ status: 'failed', reasonCode, retryable: false }) }] } }));
+    assert.ok(!failed.includes('dsh-dt-card"')); assert.ok(!failed.includes('<button')); assert.ok(!failed.includes('连接钉钉'));
+  }
 });

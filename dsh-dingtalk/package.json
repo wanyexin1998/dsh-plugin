@@ -1,6 +1,6 @@
 {
   "name": "dsh-dingtalk",
-  "version": "0.1.0-dev.5",
+  "version": "0.1.0-dev.6",
   "private": true,
   "description": "DSH DingTalk: local OAuth and read-only identity, calendar and document tools",
   "type": "module",
@@ -53,6 +53,7 @@
     "docs/AUTHORIZATION.md",
     "docs/INSTALL-CONNECT-ACCEPTANCE.md",
     "docs/OAUTH-CALLBACK-ACCEPTANCE.md",
+    "docs/QUERY-FEEDBACK-ACCEPTANCE.md",
     "docs/SECURITY-REVIEW.md",
     "docs/G0-feasibility.md",
     "docs/G0-local-validation.md",

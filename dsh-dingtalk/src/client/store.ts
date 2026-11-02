@@ -1,10 +1,12 @@
 import type { AuthorizationContext, AuthStart, ConnectionStatus, ReasonCode } from '../shared/models.js';
+import { PromptRegistry } from './prompts.js';
 export interface ClientConnection { rpc: { call(channel: '/api', endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{ ok: boolean; value?: unknown; error?: { code: string } }> } }
 export interface Snapshot { status: ConnectionStatus; pending: boolean; preparing?: boolean; actionRevision?: number; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
 const key = 'dsh-dingtalk-ui-v1';
 export class ConnectionStore {
   private listeners = new Set<() => void>();
   private snapshot: Snapshot = { status: { state: 'unknown' }, pending: false };
+  readonly prompts = new PromptRegistry(() => this.snapshot.actionRevision || 0);
   private browserId = '';
   private callbackOrigin = '';
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -14,6 +16,8 @@ export class ConnectionStore {
   private closed = false;
   private generation = 0;
   private bootstrapPromise: Promise<void> | undefined;
+  private refreshPromise: Promise<void> | undefined;
+  private pollPromise: Promise<void> | undefined;
   private channel: BroadcastChannel | undefined;
   private focus = () => { if (this.listeners.size) void this.refresh(); };
   private message = (event: MessageEvent) => {
@@ -57,25 +61,41 @@ export class ConnectionStore {
     }
   }
   private failure(error: unknown) { this.set({ error: (error as { reasonCode?: ReasonCode })?.reasonCode || 'service_unavailable', pending: false }); }
-  async refresh(manual = false) {
-    if (manual) this.set({ actionRevision: (this.snapshot.actionRevision || 0) + 1 });
-    try { await this.bootstrap(); if (this.snapshot.transaction) await this.poll(); else { const generation = this.generation; const status = await this.call('status') as ConnectionStatus; if (generation === this.generation && !this.snapshot.transaction) this.set({ status, error: undefined }); } }
-    catch (error) { this.failure(error); }
+  private async readStatus() {
+    const generation = this.generation;
+    const status = await this.call('status') as ConnectionStatus;
+    if (generation === this.generation && !this.snapshot.transaction) this.set({ status, error: undefined });
+  }
+  private scheduleStatus() {
     if (!this.snapshot.transaction && this.listeners.size && !this.closed) { clearTimeout(this.timer); this.timer = setTimeout(() => { void this.refresh(); }, 15000); }
+  }
+  refresh(manual = false): Promise<void> {
+    if (manual) this.set({ actionRevision: (this.snapshot.actionRevision || 0) + 1 });
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      try { await this.bootstrap(); if (this.snapshot.transaction) await this.poll(); else await this.readStatus(); }
+      catch (error) { this.failure(error); }
+    })().finally(() => { this.refreshPromise = undefined; this.scheduleStatus(); });
+    return this.refreshPromise;
   }
   private schedule() {
     clearTimeout(this.timer);
     if (this.snapshot.transaction && Date.parse(this.snapshot.transaction.expiresAt) <= Date.now()) { this.set({ transaction: undefined, fallback: undefined, status: { state: 'auth_timeout', reasonCode: 'auth_timeout' } }); this.persist(); return; }
     if (!this.closed && this.listeners.size && this.snapshot.transaction && Date.parse(this.snapshot.transaction.expiresAt) > Date.now()) this.timer = setTimeout(() => { void this.poll(); }, 2000);
   }
-  async poll() {
+  poll(): Promise<void> {
+    if (this.pollPromise) return this.pollPromise;
+    this.pollPromise = this.pollOnce().finally(() => { this.pollPromise = undefined; this.scheduleStatus(); });
+    return this.pollPromise;
+  }
+  private async pollOnce() {
     const tx = this.snapshot.transaction;
     if (!tx || this.closed) return;
     try {
       const result = await this.call('transaction', { transactionId: tx.transactionId }) as ConnectionStatus;
       if (this.snapshot.transaction !== tx) return;
       if (result.state === 'authorizing' && Date.parse(tx.expiresAt) > Date.now()) this.set({ status: result });
-      else { this.set({ transaction: undefined, fallback: undefined, status: result }); this.persist(); this.channel?.postMessage('changed'); if (result.state === 'connected' || result.state === 'user_cancelled') { await this.refresh(); if (result.state === 'user_cancelled') this.set({ error: 'user_cancelled' }); } }
+      else { this.set({ transaction: undefined, fallback: undefined, status: result }); this.persist(); this.channel?.postMessage('changed'); if (result.state === 'connected' || result.state === 'user_cancelled') { await this.readStatus(); if (result.state === 'user_cancelled') this.set({ error: 'user_cancelled' }); } }
     } catch (error) { this.failure(error); if ((error as { reasonCode?: string }).reasonCode === 'invalid_auth_state') { this.set({ transaction: undefined, fallback: undefined }); this.persist(); } }
     this.schedule();
   }
@@ -118,5 +138,5 @@ export class ConnectionStore {
     catch (error) { this.failure(error); }
     finally { this.set({ pending: false }); }
   }
-  dispose() { this.closed = true; this.generation++; this.controller.abort(); clearTimeout(this.timer); window.removeEventListener('message', this.message); window.removeEventListener('focus', this.focus); this.channel?.close(); this.listeners.clear(); this.popup = null; }
+  dispose() { this.closed = true; this.generation++; this.controller.abort(); clearTimeout(this.timer); window.removeEventListener('message', this.message); window.removeEventListener('focus', this.focus); this.channel?.close(); this.prompts.dispose(); this.listeners.clear(); this.popup = null; }
 }

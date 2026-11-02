@@ -2,6 +2,7 @@ import { Children, cloneElement, isValidElement } from 'react';
 import type { ReactNode, ReactElement } from 'react';
 export interface LocaleFace { getSnapshot(): { active: string }; subscribe(fn: () => void): () => void }
 const english: Record<string, string> = {
+  '查询结果暂时无法读取。': 'Query results could not be read.', '查询繁忙，请稍后重试。': 'Query busy. Try again later.', '查询暂未完成，请稍后重试。': 'Query incomplete. Try again later.',
   '连接': 'Connect', '重连': 'Reconnect', '断开': 'Disconnect',
   '保留': 'Keep', '解除': 'Disconnect', '解除后需重新授权。': 'Reauthorization will be required.',
   '请联系 IT 开通数据权限。': 'Ask IT to enable data access.', '请重新授权或联系管理员。': 'Reauthorize or contact your administrator.', '请联系管理员确认权限。': 'Ask your administrator to check permissions.', '请联系 IT 开通 CLI 权限。': 'Ask IT to enable CLI access.', '请联系管理员确认应用权限。': 'Ask your administrator to check app permissions.', '请使用已绑定的账号。': 'Use your connected account.', '连接组件不可用': 'Connection component unavailable', '请重试连接或联系管理员。': 'Reconnect or contact your administrator.', '连接组件校验失败': 'Connection integrity check failed', '请联系管理员修复组件。': 'Ask your administrator to repair the component.', '请联系管理员检查配置。': 'Ask your administrator to check configuration.', '连接环境不可用': 'Connection environment unavailable', '请联系管理员检查运行目录。': 'Ask your administrator to check the runtime directory.',

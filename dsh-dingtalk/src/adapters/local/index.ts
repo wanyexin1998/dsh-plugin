@@ -36,11 +36,17 @@ export function createLocalBackend(settings: LocalSettings = {}, limits: Executi
     if (!verified.size) return { state: 'unknown', reasonCode: 'business_verification_required' };
     return { state: 'connected', ...(verifiedAt ? { checkedAt: verifiedAt } : {}), capabilitySummary: [...verified] };
   }
-  function businessResult(value: unknown): unknown {
+  function businessResult(value: unknown, operationId?: InvokeInput['operationId']): unknown {
     const result = object(value);
     if (result.success !== true || result.isError === true || result.error !== undefined) throw new ConnectionServiceError('cli_failed');
     if ('result' in result) return result.result;
     if ('data' in result) return result.data;
+    // Official document search projects its successful payload at the root.
+    // This is operation-specific; arbitrary success-only objects remain invalid.
+    if (operationId === 'docs.search' && Array.isArray(result.documents)) {
+      if ((result.hasMore !== undefined && typeof result.hasMore !== 'boolean') || (result.nextPageToken !== undefined && typeof result.nextPageToken !== 'string')) throw new ConnectionServiceError('invalid_cli_output');
+      return { documents: result.documents, ...(result.hasMore !== undefined ? { hasMore: result.hasMore } : {}), ...(result.nextPageToken !== undefined ? { nextPageToken: result.nextPageToken } : {}) };
+    }
     throw new ConnectionServiceError('invalid_cli_output');
   }
   function verifyIdentity(value: unknown): unknown {
@@ -74,15 +80,15 @@ export function createLocalBackend(settings: LocalSettings = {}, limits: Executi
           }
           const self = await executor.execute(operationArguments({ operationId: 'identity.getSelf', args: {} }, binding.profile), signal);
           const identity = verifyIdentity(self);
-          const data = request.operationId === 'identity.getSelf' ? identity : businessResult(await executor.execute(operationArguments(request, binding.profile), signal));
+          const data = request.operationId === 'identity.getSelf' ? identity : businessResult(await executor.execute(operationArguments(request, binding.profile), signal), request.operationId);
           const result = redactData(data);
           verified.add('identity.getSelf'); verified.add(request.operationId);
           verifiedAt = new Date().toISOString();
           return { status: 'ok', data: result };
         }, options.signal);
       } catch (error) {
-        verified.clear();
         const reasonCode = failure(error);
+        if (['identity_mismatch', 'authorization_expired', 'not_connected', 'connection_unknown'].includes(reasonCode)) verified.clear();
         if (['org_policy_denied', 'permission_denied', 'app_permission_denied'].includes(reasonCode)) return { status: 'denied', reasonCode, retryable: false };
         if (reasonCode === 'scope_authorization_required') return { status: 'auth_required', reasonCode };
         if (reasonCode === 'identity_mismatch') { verified.clear(); return { status: 'denied', reasonCode, retryable: false }; }

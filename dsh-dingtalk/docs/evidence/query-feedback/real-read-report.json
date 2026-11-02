@@ -1,0 +1,14 @@
+{
+  "pluginVersion": "0.1.0-dev.6",
+  "classification": "REAL_AUTHORIZED_READ_ONLY_ADAPTER_CHECK",
+  "operationId": "docs.search",
+  "inputClass": "non_ascii_query",
+  "status": "ok",
+  "documentsArray": true,
+  "connectionState": "connected",
+  "capturedBusinessContent": false,
+  "limitations": [
+    "One already-authorized account and one read-only document query",
+    "Not enterprise disabled-account or complete LLM acceptance"
+  ]
+}

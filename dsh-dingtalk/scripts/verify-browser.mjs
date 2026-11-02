@@ -14,7 +14,9 @@ const cleanup = createUIRpc({ browserPeer: peer, admit: () => ({ peer }), fetch:
 const browserErrors = [], checks = [];
 const source = `import React from 'react';import{createRoot}from'react-dom/client';import{ConnectionSection,ToolView}from'./lib/client/index.js';import{ConnectionStore}from'./lib/client/store.js';
 const store=new ConnectionStore({rpc:{async call(channel,endpoint,payload,signal){return fetch('/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({endpoint,payload}),signal}).then(r=>r.json())}}});
-window.harness={store,dispose:()=>{root.unmount();store.dispose()}};const root=createRoot(document.getElementById('app'));root.render(React.createElement('main',null,React.createElement('label',null,'原会话草稿',React.createElement('textarea',{'aria-label':'原会话草稿',defaultValue:'请查询明天的日程'})),React.createElement(ConnectionSection,{store}),...[1,2].map(n=>React.createElement(ToolView,{key:n,store,phase:'result',callId:'call-'+n,sessionId:'session-example',block:{content:[{type:'text',text:JSON.stringify(n===1?{status:'failed',reasonCode:'authorization_expired'}:{status:'auth_required',reasonCode:'not_connected'})}]}}))));`;
+const root=createRoot(document.getElementById('app'));const results=[{status:'failed',reasonCode:'authorization_expired'},{status:'auth_required',reasonCode:'not_connected'}];
+function render(){root.render(React.createElement('main',null,React.createElement('label',null,'原会话草稿',React.createElement('textarea',{'aria-label':'原会话草稿',defaultValue:'请查询明天的日程'})),React.createElement(ConnectionSection,{store}),...results.map((result,n)=>React.createElement(ToolView,{key:n,store,phase:'result',callId:'call-'+n,sessionId:'session-example',block:{content:[{type:'text',text:JSON.stringify(result)}]}}))));}
+window.harness={store,add:result=>{results.push(result);render()},dispose:()=>{root.unmount();store.dispose()}};render();`;
 const compiled = await build({ stdin: { contents: source, resolveDir: process.cwd(), sourcefile: 'browser-harness.ts' }, bundle: true, write: false, format: 'iife', platform: 'browser', define: { 'process.env.NODE_ENV': '"production"' } });
 const server = createServer(async (req, res) => {
   if (req.url === '/app.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(compiled.outputFiles[0].text); return; }
@@ -37,6 +39,11 @@ try {
   const page = await ctx.newPage(); page.on('pageerror', error => browserErrors.push(error.message));
   await page.goto(`${base}/session/example#draft`);
   await page.getByRole('status').first().filter({ hasText: '尚未连接钉钉' }).waitFor();
+  await page.locator('.dsh-dt-card').waitFor();
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
+  await page.evaluate(() => { for(let n=0;n<4;n++) window.harness.add({status:'auth_required',reasonCode:'not_connected'}); });
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
   await page.evaluate(() => { window.originalCards = [...document.querySelectorAll('.dsh-dt-card')]; });
   await page.getByRole('textbox', { name: '原会话草稿' }).fill('请查询明天日程，保留这份草稿');
   // Spoofed messages cannot set a UI status; Host readback is required.
@@ -46,7 +53,7 @@ try {
   await page.getByRole('button', { name: '连接钉钉', exact: true }).first().click();
   const popup = await popupPromise;
   await page.getByText('钉钉已连接', { exact: true }).first().waitFor({ timeout: 30000 });
-  assert.equal(await page.getByRole('status').filter({ hasText: /^(钉钉)?已连接$/ }).count(), 3);
+  assert.equal(await page.getByRole('status').filter({ hasText: /^(钉钉)?已连接$/ }).count(), 2);
   const cardSize = await page.locator('.dsh-dt-card').first().boundingBox();
   assert.ok(cardSize.width <= 420 && cardSize.height <= 130, 'Conversation card must remain compact');
   assert.ok(await page.evaluate(() => { const current = [...document.querySelectorAll('.dsh-dt-card')]; return current.length === window.originalCards.length && current.every((node, i) => node === window.originalCards[i]); }));
@@ -62,7 +69,13 @@ try {
   assert.equal(await page.getByRole('textbox').inputValue(), '请查询明天日程，保留这份草稿');
   assert.match(page.url(), /session\/example#draft$/);
   await popup.waitForEvent('close', { timeout: 3000 }).catch(() => {});
-  checks.push('click opens new tab; callback readback updates settings + 2 cards; original URL/draft preserved; spoof ignored');
+  checks.push('six auth-required Tool calls share one original card; callback updates settings + that card; original URL/draft preserved; spoof ignored');
+  await page.evaluate(() => { window.harness.add({status:'ok',data:{items:[]}});window.harness.add({status:'failed',reasonCode:'invalid_cli_output',retryable:false});window.harness.add({status:'failed',reasonCode:'queue_timeout',retryable:true}); });
+  await page.getByText('钉钉 · 查询完成', { exact: true }).waitFor();
+  assert.equal(await page.locator('.dsh-dt-card').count(), 1);
+  assert.equal(await page.locator('details').count(), 0);
+  assert.equal(await page.getByRole('button', { name: '连接钉钉', exact: true }).count(), 0);
+  checks.push('success and query failures render plain rows; an already-authorized session does not receive new connection cards');
   await page.screenshot({ path: 'artifacts/browser/connected-light.png', fullPage: true });
   await page.getByRole('button', { name: '解除连接', exact: true }).click();
   await page.getByRole('dialog').waitFor();
@@ -80,7 +93,7 @@ try {
   await page.getByRole('button', { name: '解除连接', exact: true }).click();
   await page.getByRole('button', { name: '确认解除连接', exact: true }).click();
   await page.getByText('尚未连接钉钉', { exact: true }).first().waitFor({ timeout: 30000 });
-  assert.equal(await page.getByRole('status').filter({ hasText: '尚未连接钉钉' }).count(), 3);
+  assert.equal(await page.getByRole('status').filter({ hasText: '尚未连接钉钉' }).count(), 2);
   checks.push('confirmed precise logout synchronizes all subscribed views');
   // Browser popup blocking: user receives an explicit link; polling is sufficient.
   await page.evaluate(() => { window.open = () => null; });
@@ -100,6 +113,7 @@ try {
   checks.push('cancelled reauthorization keeps working Host binding and reports cancellation');
   await page.reload();
   await page.getByText('钉钉已连接', { exact: true }).first().waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('.dsh-dt-card').count(), 0, 'Historical auth-required blocks must not create a card on an already-connected reload');
   await page.evaluate(() => window.harness.dispose());
   assert.equal(await page.locator('.dsh-dt').count(), 0);
   assert.deepEqual(browserErrors, []); assert.deepEqual(f.failures, []);

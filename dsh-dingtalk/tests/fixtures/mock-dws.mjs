@@ -14,6 +14,8 @@ if (stage === 'version') {
   }));
 } else if (stage === 'contact user get-self') {
   console.log(JSON.stringify({ success: true, result: [{ orgEmployeeModel: { corpId: 'test-corp', userId: control.wrongIdentity ? 'wrong-user' : 'test-user' } }] }));
+} else if (control.flatDocuments && stage === 'doc search') {
+  console.log(JSON.stringify({ success: true, documents: control.badDocuments ? null : control.emptyDocuments ? [] : [{ name: '合成中文文档', nodeId: 'synthetic-node' }], hasMore: false, nextPageToken: '' }));
 } else if (control.pat) {
   process.stderr.write(JSON.stringify({ success: false, code: control.pat, data: { uri: 'https://untrusted.invalid/never-follow' } }));
   process.exitCode = 4;
