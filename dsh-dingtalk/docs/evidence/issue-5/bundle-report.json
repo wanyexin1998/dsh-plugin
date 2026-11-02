@@ -1,0 +1,45 @@
+{
+  "success": true,
+  "classification": "ISOLATED_PROFILE_AND_RUNTIME",
+  "dshVersion": "0.2.1-rc.5",
+  "pluginVersion": "0.1.0-dev.1",
+  "archive": "dsh-dingtalk-0.1.0-dev.1.tgz",
+  "archiveSha256": "93121cd5964e80e49c15028216dc20c4a67c5e6c2b1ca599929e92d515d9da2c",
+  "packageFiles": [
+    "LICENSE",
+    "README.md",
+    "cordis.patch.yml",
+    "docs/CONTRACT.md",
+    "docs/INSTALL.md",
+    "dws.lock.json",
+    "lib/adapters/local/index.d.ts",
+    "lib/adapters/local/index.js",
+    "lib/client.js",
+    "lib/client/index.d.ts",
+    "lib/client/index.js",
+    "lib/host/index.d.ts",
+    "lib/host/index.js",
+    "lib/shared/config.d.ts",
+    "lib/shared/config.js",
+    "lib/shared/index.d.ts",
+    "lib/shared/index.js",
+    "lib/shared/models.d.ts",
+    "lib/shared/models.js",
+    "lib/shared/service.d.ts",
+    "lib/shared/service.js",
+    "lib/shared/validation.d.ts",
+    "lib/shared/validation.js",
+    "package.json"
+  ],
+  "checks": [
+    "npm archive contains Host/Client/types/patch/lock/manuals; excludes credentials, tests and CLI binaries",
+    "official dsh plugin add activates the archive Bundle in an isolated clean Profile",
+    "installed archive Host loads and unloads on real Cordis without DSH source changes",
+    "official remove eliminates the dependency and composed entry, preserving the user patch"
+  ],
+  "limitations": [
+    "No real OAuth",
+    "No assembled Desktop/Web UI or business tool",
+    "Local backend deliberately unavailable; G0 remains HOLD"
+  ]
+}

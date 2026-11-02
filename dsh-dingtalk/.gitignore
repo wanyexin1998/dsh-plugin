@@ -1,0 +1,4 @@
+lib/
+.build/
+artifacts/
+__pycache__/
