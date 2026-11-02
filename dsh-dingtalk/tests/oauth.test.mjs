@@ -64,6 +64,26 @@ test('return targets reject cross-origin/control/credential injection', () => {
   for (const value of [{ ...context, origin: 'https://evil.invalid' }, { ...context, returnPath: '//evil.invalid' }, { ...context, returnPath: '/?token=private' }, { ...context, returnPath: '/\\evil.invalid' }, { ...context, extra: true }]) assert.throws(() => browserContext(value));
   assert.deepEqual(browserContext({ origin: 'null', returnPath: '/desktop' }), { origin: 'null', returnPath: '' });
 });
+
+test('DingTalk identical code aliases exchange once; duplicate keys and conflicting aliases are rejected', async () => {
+  let calls = 0;
+  const oauth = new OAuthController({ clientId: 'app', scopes: 'openid corpid', redirectUri: 'http://127.0.0.1:0/callback', expectedCorpId: '', expectedUserId: '' }, {
+    revision: () => 0, exchange: async code => { assert.equal(code, 'synthetic-code'); calls++; return { state: 'connected' }; },
+  });
+  try {
+    const a = await start(oauth);
+    const back = `${a.target.searchParams.get('redirect_uri')}?state=${a.target.searchParams.get('state')}`;
+    for (const query of ['&code=synthetic-code&authCode=different', '&code=synthetic-code&code=synthetic-code', '&authCode=synthetic-code&authCode=synthetic-code', '&code=&authCode=synthetic-code', '&code=synthetic-code&authCode=', '&error=access_denied&code=synthetic-code&authCode=synthetic-code']) {
+      assert.equal(await get(back + query, { Cookie: a.cookie }), 400);
+      assert.equal(calls, 0);
+    }
+    const callback = back + '&code=synthetic-code&authCode=synthetic-code';
+    const response = await fetch(callback, { headers: { Cookie: a.cookie } });
+    assert.equal(response.status, 200); assert.ok(!(await response.text()).includes('synthetic-code'));
+    assert.equal(oauth.status(a.tx.transactionId, 'browser-a').state, 'connected');
+    assert.equal(await get(callback, { Cookie: a.cookie }), 400); assert.equal(calls, 1);
+  } finally { await oauth.dispose(); }
+});
 test('cancellation wins over a late exchange result even when a test operation ignores Abort', async () => {
   const port = await freePort(); let release, entered;
   const waiting = new Promise(resolve => { entered = resolve; });

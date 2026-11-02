@@ -21,6 +21,7 @@ export async function fixture({ automatic = false, install = automatic } = {}) {
         const back = new URL(url.searchParams.get('redirect_uri'));
         back.searchParams.set('state', url.searchParams.get('state'));
         back.searchParams.set(state.cancel ? 'error' : 'authCode', state.cancel ? 'access_denied' : 'synthetic-code');
+        if (!state.cancel) back.searchParams.set('code', 'synthetic-code');
         res.writeHead(302, { Location: back.href }); res.end(); return;
       }
       let raw = ''; for await (const chunk of req) raw += chunk;

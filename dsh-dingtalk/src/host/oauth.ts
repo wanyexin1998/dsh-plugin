@@ -111,8 +111,11 @@ export class OAuthController {
     const tx = [...this.transactions.values()].find(item => item.state === url.searchParams.get('state'));
     const proof = (req.headers.cookie ?? '').split(';').map(item => item.trim()).find(item => item.startsWith(`dsh_dt_${tx?.id.slice(0, 16)}=`))?.split('=')[1] ?? '';
     if (!tx || !tx.started || tx.consumed || tx.expires <= this.clock() || !timingSafeEqual(digest(proof), digest(tx.proof))) { res.writeHead(400); res.end('授权校验失败，请返回原会话重试。'); return; }
-    const codes = [...url.searchParams.getAll('authCode'), ...url.searchParams.getAll('code')];
-    if (url.searchParams.getAll('error').length > 1 || (url.searchParams.has('error') ? codes.length !== 0 : codes.length !== 1 || !codes[0] || codes[0].length > 8192 || /[\u0000-\u001f\u007f]/.test(codes[0]))) { res.writeHead(400); res.end(); return; }
+    const authCodes = url.searchParams.getAll('authCode'), legacyCodes = url.searchParams.getAll('code');
+    const codes = [...authCodes, ...legacyCodes];
+    // DingTalk can return both aliases for the same code. Reject repeated keys
+    // and conflicting values, while exchanging one identical value only once.
+    if (url.searchParams.getAll('error').length > 1 || authCodes.length > 1 || legacyCodes.length > 1 || (url.searchParams.has('error') ? codes.length !== 0 : !codes[0] || codes[0].length > 8192 || /[\u0000-\u001f\u007f]/.test(codes[0]) || codes.some(code => code !== codes[0]))) { res.writeHead(400); res.end(); return; }
     tx.consumed = true; // Atomic replay fence before any asynchronous exchange.
     res.setHeader('Set-Cookie', `dsh_dt_${tx.id.slice(0, 16)}=; HttpOnly; SameSite=Lax; Path=${this.callback.pathname}; Max-Age=0`);
     if (url.searchParams.has('error')) tx.result = url.searchParams.get('error') === 'access_denied' ? { state: 'user_cancelled', reasonCode: 'user_cancelled' } : { state: 'unknown', reasonCode: 'connection_unknown' };
