@@ -41,6 +41,14 @@ async function waitFor(predicate) {
 }
 const gone = pid => { try { process.kill(pid, 0); return false; } catch { return true; } };
 
+test('reviewed PAT protocol distinguishes org policy, missing scope and generic data permission without exposing upstream links', async () => {
+  for (const [pat, status, reasonCode] of [['PAT_ORG_POLICY_DENIED', 'denied', 'org_policy_denied'], ['PAT_SCOPE_AUTH_REQUIRED', 'auth_required', 'scope_authorization_required'], ['PAT_NO_PERMISSION', 'denied', 'permission_denied']]) {
+    const f = await fixture({ pat });
+    try { const value = await f.backend.invoke(input); assert.equal(value.status, status); assert.equal(value.reasonCode, reasonCode); assert.ok(!JSON.stringify(value).includes('untrusted.invalid')); }
+    finally { await f.dispose(); }
+  }
+});
+
 test('production discovery rejects absent/tampered binaries; no PATH fallback or private environment inheritance', async () => {
   const isolated = await sandbox();
   try {
@@ -52,6 +60,8 @@ test('production discovery rejects absent/tampered binaries; no PATH fallback or
     const old = process.env.DWS_CLIENT_SECRET; process.env.DWS_CLIENT_SECRET = 'never-inherit';
     try { assert.equal(processEnvironment({}).DWS_CLIENT_SECRET, undefined); }
     finally { if (old === undefined) delete process.env.DWS_CLIENT_SECRET; else process.env.DWS_CLIENT_SECRET = old; }
+    assert.equal(processEnvironment({}).DWS_AUDIT, '0');
+    assert.equal(processEnvironment({}).DWS_KEYCHAIN_TEST_NAMESPACE, undefined);
   } finally { await isolated.dispose(); }
 });
 

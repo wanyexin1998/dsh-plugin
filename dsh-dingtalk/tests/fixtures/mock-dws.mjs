@@ -14,6 +14,9 @@ if (stage === 'version') {
   }));
 } else if (stage === 'contact user get-self') {
   console.log(JSON.stringify({ success: true, result: [{ orgEmployeeModel: { corpId: 'test-corp', userId: control.wrongIdentity ? 'wrong-user' : 'test-user' } }] }));
+} else if (control.pat) {
+  process.stderr.write(JSON.stringify({ success: false, code: control.pat, data: { uri: 'https://untrusted.invalid/never-follow' } }));
+  process.exitCode = 4;
 } else if (control.hang || control.spawnChild) {
   if (control.spawnChild) {
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });

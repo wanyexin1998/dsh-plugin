@@ -84,7 +84,8 @@ export function publicAuthStart(value: unknown): AuthStart {
   const data = record(value);
   const authorizeUrl = text(data.authorizeUrl, 4096);
   const url = new URL(authorizeUrl);
-  if (url.protocol !== 'https:' || url.username || url.password || url.hash) return invalid();
+  const localStart = url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.pathname === '/dsh-dingtalk/start';
+  if ((url.protocol !== 'https:' && !localStart) || url.username || url.password || url.hash) return invalid();
   for (const key of url.searchParams.keys()) {
     if (/^(code|authcode|token|accesstoken|refreshtoken|clientsecret|appsecret)$/i.test(key.replaceAll('_', '').replaceAll('-', ''))) return invalid();
   }

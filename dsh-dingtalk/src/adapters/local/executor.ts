@@ -4,6 +4,7 @@ import type { LocalSettings } from './settings.js';
 import { verifyExecutable } from './executable.js';
 import { processEnvironment, runProcess, spawnDws } from './process.js';
 import type { SpawnFactory } from './process.js';
+import { normalizeDwsError } from './errors.js';
 
 /** Internal test seam, not a plugin config field or an Agent/Client API. */
 export interface LocalRuntime {
@@ -29,20 +30,14 @@ export class DwsExecutor {
     return { binary, env };
   }
   async check(signal: AbortSignal): Promise<void> { await this.ready(signal); }
-  async execute(args: string[], signal: AbortSignal): Promise<unknown> {
+  async execute(args: string[], signal: AbortSignal, input = '', json = true): Promise<unknown> {
     const { binary, env } = await this.ready(signal);
-    const result = await runProcess(binary, args, env, this.limits, signal, this.runtime.spawn ?? spawnDws);
+    const result = await runProcess(binary, args, env, this.limits, signal, this.runtime.spawn ?? spawnDws, input);
     if (result.code !== 0) {
       // Never return raw stdout/stderr, hints, stack traces or private config paths.
-      for (const channel of [result.stderr, result.stdout]) {
-        try {
-          const value = JSON.parse(channel) as { error?: { category?: unknown; code?: unknown } };
-          // Reviewed DWS category/exit pair; not evidence of IT denial or terminal expiry.
-          if (result.code === 2 && value?.error?.category === 'auth' && value.error.code === 2) throw new ConnectionServiceError('connection_unknown');
-        } catch (error) { if (error instanceof ConnectionServiceError) throw error; }
-      }
-      throw new ConnectionServiceError('cli_failed');
+      throw new ConnectionServiceError(normalizeDwsError(result.code, result.stderr, result.stdout));
     }
+    if (!json) return null;
     try { return JSON.parse(result.stdout); } catch { throw new ConnectionServiceError('invalid_cli_output'); }
   }
 }

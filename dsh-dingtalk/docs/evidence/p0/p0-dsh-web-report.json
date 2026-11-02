@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "classification": "OFFICIAL_DSH_WEB_UNCONFIGURED_PROFILE",
+  "checks": [
+    "official npm DSH 0.2.1-rc.5 boots installed Bundle with zero core source changes",
+    "assembled native settings renders plugin section and calls actual authenticated Host RPC"
+  ],
+  "errors": [],
+  "limitations": [
+    "No production OAuth/LLM credentials supplied",
+    "No native tool-card transcript replay",
+    "Desktop shell not exercised"
+  ],
+  "coreSourceChanges": 0
+}

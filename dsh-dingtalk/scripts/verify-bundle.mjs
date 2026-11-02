@@ -26,7 +26,7 @@ try {
   const [pack] = JSON.parse(packed.stdout);
   assert.equal(pack.name, 'dsh-dingtalk');
   const paths = pack.files.map(file => file.path);
-  for (const required of ['lib/host/index.js', 'lib/host/index.d.ts', 'lib/shared/index.js', 'lib/shared/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'dws.lock.json', 'docs/INSTALL.md', 'docs/CONTRACT.md']) assert.ok(paths.includes(required), `Missing package file: ${required}`);
+  for (const required of ['lib/host/index.js', 'lib/host/index.d.ts', 'lib/shared/index.js', 'lib/shared/index.d.ts', 'lib/client.js', 'cordis.patch.yml', 'dws.lock.json', 'docs/INSTALL.md', 'docs/CONTRACT.md', 'docs/AUTHORIZATION.md', 'docs/P0-ACCEPTANCE.md', 'skills/dingtalk-readonly/SKILL.md', 'skills/dingtalk-readonly/LICENSE', 'skills/dingtalk-readonly/NOTICE']) assert.ok(paths.includes(required), `Missing package file: ${required}`);
   assert.ok(paths.every(path => !/(^|\/)(node_modules|tests|src|\.cache)(\/|$)|\.(exe|zip|log|py)$|\.env/.test(path)));
   checks.push('npm archive contains Host/Client/types/patch/lock/manuals; excludes credentials, tests and CLI binaries');
   const archive = join(artifacts, pack.filename);
@@ -76,6 +76,6 @@ try {
   const report = { success: true, classification: 'ISOLATED_PROFILE_AND_RUNTIME', dshVersion: JSON.parse(await readFile(dshManifest, 'utf8')).version,
     pluginVersion: pack.version, archive: pack.filename, archiveSha256: createHash('sha256').update(await readFile(archive)).digest('hex'),
     packageFiles: paths, checks, limitations: ['No real OAuth', 'No assembled Desktop/Web UI or Agent tool', 'No Host-private CLI/profile configured in this archive smoke; G0 remains HOLD'] };
-  await writeFile(join(artifacts, 'issue-6-bundle-report.json'), JSON.stringify(report, null, 2) + '\n');
+  await writeFile(join(artifacts, 'p0-bundle-report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ success: true, checks: checks.length, archive: pack.filename, classification: report.classification }, null, 2));
 } finally { await isolated.dispose(); if (privateConfig !== undefined) process.env.DSH_DINGTALK_CONFIG_FILE = privateConfig; }

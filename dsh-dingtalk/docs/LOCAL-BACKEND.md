@@ -1,6 +1,6 @@
 # LocalBackend / DWS-03
 
-对应 [Issue #6](https://github.com/wanyexin1998/dsh-plugin/issues/6)。当前验证平台为 Windows x64，官方 DWS `1.0.66`、完整 commit `f215043e676d6889e1ddce3464828d8b1ec40c31`。其他平台目前只有发行制品元数据，不承诺二进制运行已验收。
+对应 #6 执行器与 #7–#13 managed 入口。当前验证平台为 Windows x64，官方 DWS `1.0.66`、完整 commit `f215043e676d6889e1ddce3464828d8b1ec40c31`。其他平台目前只有发行制品元数据，不承诺二进制运行已验收。
 
 ## Host 私有配置
 
@@ -16,7 +16,7 @@ DSH 会向 Client 投影插件配置，因此二进制路径、凭证目录和 P
 
 这些是占位路径/身份。配置只接受 binaryPath、configDirectory、keychainDirectory、profile；不接受命令、URL、env、Token 或 AppSecret。文件最多 16 KiB，路径须为本机绝对路径，拒绝 UNC/网络路径。configDirectory 省略时沿用当前 OS 用户的 DWS 默认目录；keychainDirectory 仅传给官方支持该参数的后端，不能把它当作 Windows 注册表隔离方案。
 
-profile 必须是可信的 **corpId:userId**，不接受组织名/员工名别名、仅组织选择、CSV 多账号或模型传入值。#7 后续将从真实回调的在线身份建立绑定；当前只允许人工在测试环境绑定已经获准使用的本机 Profile。修改配置后重载测试插件/实例。
+上例保留底层 #6 测试 seam 的说明；当前生产 managed 入口配置以 [AUTHORIZATION.md](AUTHORIZATION.md) 为准。profile 若显式配置，必须等于 OAuth 预期 corpId:userId；绑定实际由在线身份建立。managed 的 configDirectory 强制为私有 JSON 同级的 dsh-dingtalk-state/dws，不能指向既有用户配置目录。未配置 OAuth 时，生产 Tool 不能仅凭人工 profile 开始读取。
 
 环境变量未提供时不扫描个人配置、不从 PATH 选程序、不猜测用户账号，状态明确为 cli_missing。不要在聊天、Git 或截图中提供私有配置文件或任何授权材料。
 
@@ -61,7 +61,7 @@ profile 必须是可信的 **corpId:userId**，不接受组织名/员工名别�
 
 ## 上游日志的已知边界
 
-插件自身不记录 stdout/stderr、Code/Token 或业务正文。但官方 DWS 会在自己的配置目录写诊断日志。本地合成测试确认搜索关键词会进入该日志；固定版源码 `internal/logging/transport.go` 的 LogResponseBody 还在错误路径记录截断响应体。不能把插件输出脱敏等同于上游磁盘日志已满足隐私要求。
+旧 #6 对照测试确认官方 DWS 默认诊断日志保留搜索关键词，错误路径还记录响应片段；默认 audit 也保留参数。新 managed 入口只创建新的插件目录，将 logs 设为零字节普通文件，让固定上游 Setup 的 MkdirAll 失败进入 no-op logger；调用前检查固定 marker、文件类型和大小。子进程固定 DWS_AUDIT=0，剥离继承的日志/审计转发变量。官方二进制合成成功/失败路径的全目录哨兵扫描确认未落盘 query/code/Token/错误正文。不删除或修改既有用户日志；升级 DWS 必须重验这一行为。
 
 未修改/复制 DWS Go 源码，未擅自删除或篡改用户日志；将此项保留在 #12 / 发布前安全验收中，真实企业联调和上线前必须解决日志策略。当前测试仅用合成身份/数据，临时目录和测试注册表命名空间结束后清理。
 
@@ -71,4 +71,4 @@ profile 必须是可信的 **corpId:userId**，不接受组织名/员工名别�
 
 `npm test` 使用真实 Node 子进程夹具验证命令、错误、队列与进程清理。`npm run verify:local` 使用已校验官方 DWS 与仅监听 loopback 的本地 MCP/OAuth 夹具验证三项只读调用、绑定 B 而默认 A 不变，以及 Token 刷新。调试端点/测试环境注入仅存在于可信内部测试 seam，不是生产配置或 Agent API。
 
-这些通过均不代表真实企业 OAuth、IT 权限、应用 scope、Agent 工具或浏览器流程验收通过。授权/重授权/精确解绑由 #7 完成；#4 G0 仍为 HOLD。
+这些通过不代表真实企业 OAuth、IT 权限或应用 scope 通过。当前三种 Tool、授权/重授权/精确解绑及浏览器交互另有本地集成报告；#4 G0 保持 HOLD，G1 状态见 P0-ACCEPTANCE.md。

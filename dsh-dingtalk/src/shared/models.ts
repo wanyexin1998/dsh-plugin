@@ -14,6 +14,9 @@ export const REASON_CODES = [
   'local_configuration_invalid', 'execution_timeout', 'execution_cancelled', 'queue_full',
   'queue_timeout', 'output_limit_exceeded', 'invalid_cli_output', 'cli_failed',
   'business_verification_required', 'token_refresh_pending',
+  'oauth_not_configured', 'invalid_auth_state', 'authorization_busy', 'revocation_failed',
+  'privacy_guard_required', 'verification_failed_after_save', 'rate_limited',
+  'org_policy_denied', 'scope_authorization_required', 'permission_denied',
 ] as const;
 export type ReasonCode = typeof REASON_CODES[number];
 export type BackendMode = 'local' | 'cellgent';

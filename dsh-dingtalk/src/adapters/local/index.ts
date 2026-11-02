@@ -83,6 +83,8 @@ export function createLocalBackend(settings: LocalSettings = {}, limits: Executi
       } catch (error) {
         verified.clear();
         const reasonCode = failure(error);
+        if (['org_policy_denied', 'permission_denied', 'app_permission_denied'].includes(reasonCode)) return { status: 'denied', reasonCode, retryable: false };
+        if (reasonCode === 'scope_authorization_required') return { status: 'auth_required', reasonCode };
         if (reasonCode === 'identity_mismatch') { verified.clear(); return { status: 'denied', reasonCode, retryable: false }; }
         return { status: 'failed', reasonCode, retryable: ['service_unavailable', 'execution_timeout', 'queue_full', 'queue_timeout'].includes(reasonCode) };
       }

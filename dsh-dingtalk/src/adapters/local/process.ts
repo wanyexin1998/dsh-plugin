@@ -13,6 +13,9 @@ export function processEnvironment(settings: LocalSettings): NodeJS.ProcessEnv {
     'userprofile', 'appdata', 'localappdata', 'programfiles', 'programfiles(x86)', 'programdata', 'os']);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => allowed.has(key.toLowerCase())));
   env.DWS_NO_UPDATE_CHECK = '1'; env.DWS_LANG = 'zh';
+  // Official audit records command parameters, including search terms. This plugin
+  // never persists business arguments; an inherited forwarding URL is also stripped.
+  env.DWS_AUDIT = '0';
   if (settings.configDirectory) env.DWS_CONFIG_DIR = settings.configDirectory;
   if (settings.keychainDirectory) env.DWS_KEYCHAIN_DIR = settings.keychainDirectory;
   return env;
@@ -31,7 +34,7 @@ async function killTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   });
 }
 export async function runProcess(binary: string, args: string[], env: NodeJS.ProcessEnv, limits: ExecutionLimits,
-  signal: AbortSignal, launch: SpawnFactory = spawnDws): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  signal: AbortSignal, launch: SpawnFactory = spawnDws, input = ''): Promise<{ code: number | null; stdout: string; stderr: string }> {
   if (signal.aborted) throw new ConnectionServiceError(signal.reason === 'execution_timeout' ? 'execution_timeout' : 'execution_cancelled');
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
@@ -60,6 +63,6 @@ export async function runProcess(binary: string, args: string[], env: NodeJS.Pro
       } catch { reject(new ConnectionServiceError('invalid_cli_output')); }
     });
     child.stdin.on('error', () => {});
-    child.stdin.end();
+    child.stdin.end(input);
   });
 }

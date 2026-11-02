@@ -31,6 +31,8 @@ export async function loadLocalSettings(): Promise<LocalSettings> {
     if (!info.isFile() || info.size > 16384) throw new Error();
     const text = await readFile(file, 'utf8');
     if (Buffer.byteLength(text) > 16384) throw new Error();
-    return parseLocalSettings(JSON.parse(text));
+    const input = JSON.parse(text) as Record<string, unknown>;
+    const { oauth: _oauth, ...local } = input;
+    return parseLocalSettings(local);
   } catch { throw new ConnectionServiceError('local_configuration_invalid'); }
 }
