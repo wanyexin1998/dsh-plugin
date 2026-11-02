@@ -7,7 +7,7 @@
 - 官方仓库：<https://github.com/DingTalk-Real-AI/dsh-dingtalk>。
 - 独立跟踪 fork：<https://github.com/wanyexin1998/dsh-dingtalk>，`main` 跟随官方。
 - 本次导入的官方基线：`137ea79505e6317d98c1db643f0fbae138e016c8`。
-- 定制开发起点：`850a1b0e533cfd1bcec08e20c1280cab23dc1c18`；收尾前的工作树已保存为本地 fork 的 `archive/custom-web-20261103` 分支，备份提交 `e05c9fb102cab22d86a14bf1e688bb2b57310d66`。远程推送状态见 [收尾记录](CLOSEOUT.md)。
+- 定制开发起点：`850a1b0e533cfd1bcec08e20c1280cab23dc1c18`；收尾前的工作树已推送到独立 fork 的 `archive/custom-web-20261103` 分支，备份提交 `e05c9fb102cab22d86a14bf1e688bb2b57310d66`。交付状态见 [收尾记录](CLOSEOUT.md)。
 - 早期自研授权代码来源：`dsh-plugin@b11df21abd85a7011eac1d85c60063912eca2e31`。旧开发分支保留。
 - 官方 MIT 许可和声明保留；DWS 目录与技能的 Apache-2.0 许可、NOTICE、版本与校验锁保留。
 - `enhancements/` 保留授权、Host/Client、紧凑前端、工具名称、DWS 目录、执行边界和测试资产。包名及导出不变。

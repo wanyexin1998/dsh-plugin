@@ -22,6 +22,8 @@
 
 ## 远程交付约定
 
+交付记录：[dsh-plugin PR #18](https://github.com/wanyexin1998/dsh-plugin/pull/18)。两个仓库的 Actions 已通过 API 设置并回读确认为 `enabled: false`；[独立 fork 备份分支](https://github.com/wanyexin1998/dsh-dingtalk/tree/archive/custom-web-20261103) 已推送。最终合并提交以 PR 记录为准，主分支通过 PR 更新。
+
 先完成全部本地验证，再按以下顺序交付；不配置或触发 GitHub Actions，不发布 NPM。远程执行结果以本次 PR 记录为准。
 
 1. 确认并关闭 `wanyexin1998/dsh-plugin` 与 `wanyexin1998/dsh-dingtalk` 的 Actions。
