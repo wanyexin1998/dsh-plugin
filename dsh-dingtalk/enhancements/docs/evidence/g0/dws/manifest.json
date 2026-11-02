@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.66",
+  "sourceCommit": "f215043e676d6889e1ddce3464828d8b1ec40c31",
+  "binarySha256": "0db4ed09c0a9524b39980878d4b51a020a32a127bad757b852ec1173b149ec74",
+  "peMachine": 34404,
+  "platform": "win32",
+  "arch": "x64",
+  "environment": "isolated; no real credentials; update check disabled",
+  "classification": "LOCAL_DECLARATION_ONLY",
+  "filesystemEntries": [
+    "logs",
+    "logs/dws.log"
+  ],
+  "credentialWrites": false,
+  "commands": [
+    {
+      "name": "version",
+      "args": [
+        "--version"
+      ],
+      "exitCode": 0,
+      "file": "version.txt",
+      "sha256": "0adb955a93d1cf2834379b44aea47ebd828758d6f6fa676239d4c22fcc703027",
+      "stderr": "版本检查: 当前 v1.0.66，未执行版本检查（已关闭检查、开发版本或宿主托管）。\n"
+    },
+    {
+      "name": "auth-exchange-help",
+      "args": [
+        "auth",
+        "exchange",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "auth-exchange-help.txt",
+      "sha256": "7a0882a07aa3bf7a5e06e9a712eededed823edffaa3dc1d7f937a1198595324d",
+      "stderr": null
+    },
+    {
+      "name": "auth-login-help",
+      "args": [
+        "auth",
+        "login",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "auth-login-help.txt",
+      "sha256": "b4e64be5922aecdc6ca0760649a4cd6751d5cd59ccc5c8616995e85254f87431",
+      "stderr": null
+    },
+    {
+      "name": "auth-status-help",
+      "args": [
+        "auth",
+        "status",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "auth-status-help.txt",
+      "sha256": "26d80b834624dc575fa5baf1d442e388017f6b9c6e0c60aab0891625ef575021",
+      "stderr": null
+    },
+    {
+      "name": "auth-logout-help",
+      "args": [
+        "auth",
+        "logout",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "auth-logout-help.txt",
+      "sha256": "d2bc3042db43c77adbf3d9c5e4f45f43095b57d0cbc266c5395238a0dbc8f09e",
+      "stderr": null
+    },
+    {
+      "name": "auth-exchange-dry-run",
+      "args": [
+        "auth",
+        "exchange",
+        "--code-stdin",
+        "--client-id",
+        "default",
+        "--dry-run",
+        "--format",
+        "json"
+      ],
+      "exitCode": 0,
+      "file": "auth-exchange-dry-run.json",
+      "sha256": "73a79eec640242126363fc5a06094066227151e0ed7055f2ca14b9955b1236b0",
+      "stderr": null
+    },
+    {
+      "name": "auth-status-empty",
+      "args": [
+        "auth",
+        "status",
+        "--readonly",
+        "--format",
+        "json"
+      ],
+      "exitCode": 0,
+      "file": "auth-status-empty.json",
+      "sha256": "ddedad163a2af580cf570b7cb538a912a1709584ebb000f738e69d65e8d14ed2",
+      "stderr": null
+    },
+    {
+      "name": "identity.getSelf.help",
+      "args": [
+        "contact",
+        "user",
+        "get-self",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "identity.getSelf.help.txt",
+      "sha256": "25f9c7e40f49e0e0a1067481c94ecb951f6fc8c4a66e76993feffe983970208d",
+      "stderr": null
+    },
+    {
+      "name": "identity.getSelf.schema",
+      "args": [
+        "schema",
+        "contact.user.get-self",
+        "--compact"
+      ],
+      "exitCode": 0,
+      "file": "identity.getSelf.schema.json",
+      "sha256": "635e4c0ca4a7b682c4d8ee1261155c267694b94acf54364569a6955ed5259354",
+      "stderr": null
+    },
+    {
+      "name": "calendar.listEvents.help",
+      "args": [
+        "calendar",
+        "event",
+        "list",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "calendar.listEvents.help.txt",
+      "sha256": "ca2e75aa9f4caa3d3b5c4986833cccf6edeab38f25404f15d5fb8fed8c6e59df",
+      "stderr": null
+    },
+    {
+      "name": "calendar.listEvents.schema",
+      "args": [
+        "schema",
+        "calendar.event.list",
+        "--compact"
+      ],
+      "exitCode": 0,
+      "file": "calendar.listEvents.schema.json",
+      "sha256": "ffa5111289273e93902a7bc2f12abb555a9c9424033b200e98716c47ff24e982",
+      "stderr": null
+    },
+    {
+      "name": "docs.search.help",
+      "args": [
+        "doc",
+        "search",
+        "--help"
+      ],
+      "exitCode": 0,
+      "file": "docs.search.help.txt",
+      "sha256": "ada891073637f423dd500152f47db63035d5deef2f72e43216dc096330144653",
+      "stderr": null
+    },
+    {
+      "name": "docs.search.schema",
+      "args": [
+        "schema",
+        "doc.search",
+        "--compact"
+      ],
+      "exitCode": 0,
+      "file": "docs.search.schema.json",
+      "sha256": "d158629adef52761bc568d58eac3e41ba449999486b6456ee5cfd561bb237e48",
+      "stderr": null
+    }
+  ]
+}

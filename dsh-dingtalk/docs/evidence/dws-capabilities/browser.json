@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "classification": "REACT_AND_REAL_HOST_RPC_HARNESS",
+  "browser": "156.0.8078.74",
+  "checks": [
+    "real preparation popup has a centered animated spinner, dark/mobile layout and reduced-motion fallback; provider navigation resumes after preparation",
+    "connected, expired and failed feedback updates the original card DOM nodes; no new status card inserted",
+    "authorization card is after final prose while thinking ToolViews are unmounted; expanding thinking does not duplicate it",
+    "six auth-required Tool calls share one original card; callback updates settings + that card; original URL/draft preserved; spoof ignored",
+    "success and query failures render plain rows; an already-authorized session does not receive new connection cards",
+    "unlink requires second confirmation; Escape preserves connection and restores focus",
+    "light/dark inheritance, keyboard focus and 390px layout without horizontal overflow; card icon/copy/actions vertically aligned",
+    "confirmed precise logout synchronizes all subscribed views",
+    "blocked popup fallback + no opener completion recovered by bounded 2-second polling",
+    "cancelled reauthorization keeps working Host binding and reports cancellation",
+    "page reload refreshes Host truth; unload removes React views/subscriptions without browser errors"
+  ],
+  "limitations": [
+    "Not the assembled DSH Web/Desktop shell",
+    "Synthetic OAuth/MCP only; no real LLM or enterprise authorization"
+  ],
+  "screenshots": [
+    "browser/connected-light.png",
+    "browser/connected-dark-mobile.png",
+    "browser/loading-light.png",
+    "browser/loading-dark-mobile.png"
+  ]
+}

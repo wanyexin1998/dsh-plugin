@@ -1,0 +1,68 @@
+{
+  "success": true,
+  "classification": "PUBLISHED_RUNTIME_API_ONLY",
+  "packages": [
+    {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "b10673ea6c4e20cc10da6ef20130b6ece3142cba8003b50e0d5ded25fc388b5b"
+    },
+    {
+      "name": "@deepseek-ai/cordis",
+      "version": "4.0.5",
+      "manifestSha256": "b73831b926b16cbd684aa1b277461e7800a2b35e2dd351ad3c2c8c0db158589d"
+    },
+    {
+      "name": "@deepseek-ai/dsh-system-prompt",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "75e7c7017fe435443f08f71f5fcb3c72dc3a0ce959d8b6d18bd8d90be0246414"
+    },
+    {
+      "name": "@deepseek-ai/dsh-tools",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "5ebfb49032068284f7ac422d01dc31833fea778b80fcf433d54c4866a32fb8b5"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-slots",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "f86b039b759d3295194a263491b2df1315da8cd50bd39c5f5a5b03dda3b5571d"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-tool",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "7803ffeead92641957c8e0bc1a6cbce3618adf60182942717ee5f51ac04346b9"
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings",
+      "version": "0.2.1-rc.5",
+      "manifestSha256": "4962d0501925d45aebcc3cf5901ee26a0acb99b6bc4bf6b8d2cecd24af207108"
+    }
+  ],
+  "checks": [
+    "published DSH CLI boots --version with isolated DSH_HOME",
+    "real ToolRuntime registers and executes a synthetic auth_required tool",
+    "disposing the Cordis owner unregisters the tool",
+    "real SlotCore supports keyed tool cards and list settings; disposers clear both"
+  ],
+  "contractChecks": [
+    {
+      "package": "@deepseek-ai/dsh-client-ui-tool",
+      "key": "tool.call.toolview",
+      "path": "lib/types/client/contract/slots.d.ts",
+      "sha256": "76219790bee8d6b66c685bf56d18b55d2c3e3cedafb7b4ed093133f65ab943b3"
+    },
+    {
+      "package": "@deepseek-ai/dsh-client-ui-settings",
+      "key": "settings.section",
+      "path": "lib/types/client/contract/slots.d.ts",
+      "sha256": "2f7d23b648e50ddd3d71bdd3cb8863c06598533bebfb17538c3a8b5f2da453b4"
+    }
+  ],
+  "limitations": [
+    "No desktop application launched",
+    "No assembled browser UI or OAuth callback tested",
+    "No model/provider requested",
+    "No user Profile modified",
+    "Not a G0/G1 acceptance PASS"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "classification": "LOCAL_FIXTURE_ONLY",
+  "success": true,
+  "checks": [
+    "online expected corp/user assertions accepted before saving exact profile A",
+    "adding profile B preserves current profile A",
+    "identity mismatch rejected; existing profiles unchanged",
+    "dry-run does not read stdin, contact the fixture, or consume a code",
+    "HTTP 403 exchange failure preserves existing profiles; no credential output",
+    "corrupt local snapshot reports inconclusive reason; readonly check does not repair/delete it"
+  ],
+  "observations": {
+    "enterpriseDenyError": {
+      "exitCode": 2,
+      "stdout": null,
+      "stderr": {
+        "error": {
+          "actions": [
+            "dws doctor --json"
+          ],
+          "category": "auth",
+          "code": 2,
+          "message": "managed token exchange failed"
+        }
+      }
+    },
+    "inconclusiveStatus": {
+      "version_check": {
+        "current": "v1.0.66",
+        "status": "skipped"
+      },
+      "success": true,
+      "authenticated": false,
+      "message": "无法安全读取所选身份的本地登录态，无法判断登录状态",
+      "reason": "local_state_unreadable",
+      "hint": "检查 --profile 和本地凭证存储；可运行 dws auth status（不加 --readonly）进一步诊断。"
+    },
+    "cliPermissionEndpointCalled": false,
+    "realOrganizationPermissionEvidence": false
+  }
+}

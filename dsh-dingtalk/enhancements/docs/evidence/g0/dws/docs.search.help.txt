@@ -1,0 +1,57 @@
+根据关键词搜索当前用户有权限访问的文档列表。不传关键词则返回最近访问的文档。
+
+支持按扩展名、创建/访问时间范围、创建者、编辑者、@提及用户、知识库等维度过滤。
+
+Usage:
+  dws doc search [flags]
+
+Examples:
+  dws doc search --query "会议纪要"
+  dws doc search
+  dws doc search --extensions pdf,docx
+  dws doc search --query "方案" --created-from 1700000000000 --created-to 1710000000000
+  dws doc search --creator-uids uid1,uid2
+  dws doc search --workspace-ids wsId1,wsId2
+
+Flags:
+      --created-from int         创建时间起始 (毫秒时间戳，含)
+      --created-to int           创建时间截止 (毫秒时间戳，含)
+      --creator-uids strings     按创建者用户 ID 过滤，逗号分隔
+      --cursor string            分页游标 (从上次结果的 nextPageToken 获取)
+      --editor-uids strings      按编辑者用户 ID 过滤，逗号分隔
+      --extensions strings       按文件扩展名过滤，不含点号，逗号分隔 (如 pdf,docx,png)。支持的在线文档类型后缀名: adoc=文字, axls=表格, appt=演示文稿, awbd=白板, adraw=画板, amind=脑图, able=多维表格, aform=收集表
+  -h, --help                     help for search
+      --limit int                每页数量 (默认 10，最大 30)
+      --mentioned-uids strings   按 @提及的用户 ID 过滤，逗号分隔
+      --query string             搜索关键词 (不传则返回最近访问)
+      --visited-from int         访问时间起始 (毫秒时间戳，含)
+      --visited-to int           访问时间截止 (毫秒时间戳，含)
+      --workspace-ids strings    按知识库 ID 过滤，支持知识库 URL，逗号分隔
+
+Global Flags:
+      --client-id string       覆盖 OAuth 客户端 ID (钉钉 AppKey)
+      --client-secret string   覆盖 OAuth 客户端密钥 (钉钉 AppSecret)
+      --debug                  显示调试日志
+      --dry-run                预览操作内容，不实际执行
+      --fields string          筛选输出字段 (逗号分隔, 如: name,id,status)
+  -f, --format string          输出格式: json|table|raw|pretty|ndjson|csv (default "json")
+      --jq string              jq 表达式过滤输出 (如: '.items[] | .name')
+      --mock                   使用 Mock 数据 (开发调试用)
+      --profile string         一次性指定组织或账号；支持 corpId/corpName 与 userId/userName 组合，推荐使用 profile list 返回的 corpId:userId；多个按 CSV 逗号分隔
+      --timeout int            HTTP 请求超时时间 (秒) (default 30)
+  -v, --verbose                显示详细日志
+  -y, --yes                    跳过确认提示 (AI Agent 模式)
+
+When to use:
+  - 兼容入口：按关键词搜文档时（已弃用，日常改用 drive search / wiki node search）
+
+Avoid when:
+  - 全局搜文件用 dws drive search；指定知识库内搜用 dws wiki node search
+
+Safety: effect=read  risk=low  confirmation=not_required  idempotency=idempotent
+
+Related skills:
+  - dingtalk-doc
+
+Documentation:
+  - 钉钉文档深度指南: https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/main/skills/multi/dingtalk-doc/references/doc.md

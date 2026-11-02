@@ -1,0 +1,40 @@
+import type { ReasonCode } from './models.js';
+export const messages: Partial<Record<ReasonCode, { title: string; detail: string; admin?: boolean }>> = {
+  outcome_unknown: { title: '结果待确认，请先查询，勿重复提交。', detail: '操作可能已生效。' },
+  confirmation_required: { title: '此操作需要确认。', detail: '请在支持确认的会话中执行。' },
+  confirmation_rejected: { title: '已取消操作。', detail: '未执行本次操作。' },
+  file_access_denied: { title: '请使用会话工作区内的文件。', detail: '文件路径不可用。' },
+  command_unavailable: { title: '官方暂未开放此功能。', detail: '请选择其他功能。' },
+  host_managed_operation: { title: '请在设置或管理员工具中管理。', detail: '此操作不通过对话执行。' },
+  unknown_command: { title: '未找到此功能。', detail: '请先查询功能目录。' },
+  job_not_found: { title: '当前会话未找到此任务。', detail: '请查看任务列表。' },
+  job_limit: { title: '后台任务已满。', detail: '请先停止不再需要的任务。' },
+  connection_preparing: { title: '正在准备连接', detail: '首次使用需下载组件。' },
+  org_policy_denied: { title: '组织数据权限策略限制', detail: '请联系 IT 开通数据权限。', admin: true },
+  scope_authorization_required: { title: '需要补充数据授权', detail: '请重新授权或联系管理员。' },
+  permission_denied: { title: '当前数据访问未获授权', detail: '请联系管理员确认权限。' },
+  rate_limited: { title: '请求过于频繁', detail: '请稍后重试。' },
+  invalid_auth_state: { title: '授权请求已失效', detail: '请重新连接。' },
+  authorization_busy: { title: '正在处理授权', detail: '请完成或取消本次授权后重试。' },
+  not_connected: { title: '尚未连接钉钉', detail: '连接后即可使用钉钉功能。' },
+  authorization_pending: { title: '等待钉钉授权', detail: '请在新标签页授权。' },
+  authorization_expired: { title: '授权已失效', detail: '请重新连接。' },
+  org_cli_disabled: { title: '企业尚未开通 CLI 权限', detail: '请联系 IT 开通 CLI 权限。', admin: true },
+  app_permission_denied: { title: '应用权限不足', detail: '请联系管理员确认应用权限。' },
+  identity_mismatch: { title: '授权账号不一致', detail: '请使用已绑定的账号。' },
+  user_cancelled: { title: '已取消本次授权', detail: '需要时可重新连接。' },
+  auth_timeout: { title: '授权已超时', detail: '请重新连接。' },
+  cli_missing: { title: '连接组件不可用', detail: '请重试连接或联系管理员。' },
+  cli_integrity_failed: { title: '连接组件校验失败', detail: '请联系管理员修复组件。' },
+  cli_version_unsupported: { title: 'DWS 版本不兼容', detail: '请使用当前插件兼容矩阵中的版本。' },
+  cli_platform_unsupported: { title: '当前平台尚未验收', detail: '请查看插件兼容矩阵。' },
+  oauth_not_configured: { title: '授权配置尚未就绪', detail: '请联系管理员检查配置。' },
+  privacy_guard_required: { title: '连接环境不可用', detail: '请联系管理员检查运行目录。' },
+  revocation_failed: { title: '连接已阻断，撤销尚未完成', detail: '后续调用已停止，请重试解除连接。' },
+  verification_failed_after_save: { title: '授权尚未完成业务验证', detail: '请重新授权或联系管理员。' },
+  connection_unknown: { title: '暂无法确认连接', detail: '请刷新状态或稍后重试。' },
+};
+export function messageFor(reason: ReasonCode | undefined) {
+  return (reason && messages[reason]) || { title: '连接暂不可用', detail: '请稍后重试。' };
+}
+export const IT_REQUEST = '请协助核查并开通我的钉钉 DWS CLI 数据访问权限；同时确认企业 CLI 开关、账号范围、渠道限制及应用授权范围。谢谢。';

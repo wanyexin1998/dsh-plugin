@@ -1,0 +1,41 @@
+使用在其他设备或服务中取得的授权码登录，无需本机已有主管身份。
+--client-id default 选择当前服务环境的官方默认授权应用；具体 ID 必须与 code 所属应用一致。
+省略 client-id 时沿用已配置应用，无配置时使用官方默认应用。已有匹配的 ClientID/ClientSecret
+配置继续使用普通 OAuth；其他应用使用服务端托管凭证。不会跨应用或路由试兑一次性 code。
+必须通过新 Token 在线核验 corpId/userId 才保存 Profile。首次登录设为默认；已有默认身份时保留。
+已持有 agentUuid、需主管取码时用 dingtalk-tag manage login；接入本地 DSH 时用 dingtalk-tag connect。
+--dry-run 仅检查参数并输出步骤，不读取 stdin、不联网、不写入凭证。
+
+Usage:
+  dws auth exchange [flags]
+
+Examples:
+  dws auth exchange --code-stdin --client-id default --format json
+  dws auth exchange --code-stdin --client-id <dwsClientId> --format json
+
+Flags:
+      --authorize-url string      Compatibility flag
+      --client-id string          default 使用官方默认应用；具体 ID 使用对应授权应用；省略沿用配置或默认应用
+      --code string               外部授权码；建议通过 --code-stdin 传递
+      --code-stdin                从标准输入读取授权码（与 --code 互斥）
+      --expected-corp-id string   预期 corpId，仅作在线身份一致性校验
+      --expected-user-id string   预期 userId，仅作在线身份一致性校验
+  -h, --help                      help for exchange
+      --redirect-url string       Compatibility flag
+      --refresh-url string        Compatibility flag
+      --scopes string             Compatibility flag
+      --token-url string          Compatibility flag
+      --uid string                预期 userId（同 --expected-user-id，不会覆盖在线身份）
+
+Global Flags:
+      --client-secret string   覆盖 OAuth 客户端密钥 (钉钉 AppSecret)
+      --debug                  显示调试日志
+      --dry-run                预览操作内容，不实际执行
+      --fields string          筛选输出字段 (逗号分隔, 如: name,id,status)
+  -f, --format string          输出格式: json|table|raw|pretty|ndjson|csv (default "json")
+      --jq string              jq 表达式过滤输出 (如: '.items[] | .name')
+      --mock                   使用 Mock 数据 (开发调试用)
+      --profile string         一次性指定组织或账号；支持 corpId/corpName 与 userId/userName 组合，推荐使用 profile list 返回的 corpId:userId；多个按 CSV 逗号分隔
+      --timeout int            HTTP 请求超时时间 (秒) (default 30)
+  -v, --verbose                显示详细日志
+  -y, --yes                    跳过确认提示 (AI Agent 模式)

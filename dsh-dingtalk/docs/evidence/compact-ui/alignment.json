@@ -1,0 +1,438 @@
+{
+  "success": true,
+  "cases": 48,
+  "results": [
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "unlinked",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "authorizing",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "connected",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "reauth_required",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "org_cli_disabled",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "app_permission_denied",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "identity_mismatch",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "user_cancelled",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "auth_timeout",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "zh",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "unlinked",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "authorizing",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "connected",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "reauth_required",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "org_cli_disabled",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "app_permission_denied",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "identity_mismatch",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "user_cancelled",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "auth_timeout",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 1280,
+      "language": "en",
+      "state": "unknown",
+      "height": 70,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "unlinked",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "authorizing",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "connected",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "reauth_required",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "org_cli_disabled",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "app_permission_denied",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "identity_mismatch",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "user_cancelled",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "auth_timeout",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "unknown",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "unknown",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "zh",
+      "state": "unknown",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "unlinked",
+      "height": 78,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "authorizing",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "connected",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "reauth_required",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "org_cli_disabled",
+      "height": 80,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "app_permission_denied",
+      "height": 96,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "identity_mismatch",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "user_cancelled",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "auth_timeout",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "unknown",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "unknown",
+      "height": 74,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    },
+    {
+      "width": 390,
+      "language": "en",
+      "state": "unknown",
+      "height": 96,
+      "centered": true,
+      "fits": true,
+      "pageFits": true
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  '@octokit/request': 10.0.13

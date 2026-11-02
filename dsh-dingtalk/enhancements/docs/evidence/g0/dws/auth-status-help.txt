@@ -1,0 +1,36 @@
+查看当前或指定组织 profile 的认证状态。
+
+指定 --profile 时只读取并刷新被选中的 token slot，不会修改 currentProfile。
+使用 --readonly 只读本地快照，不获取认证锁、不访问认证服务、不刷新、不迁移或修复。
+普通模式检查 CLI 最新版本（24 小时缓存）；--readonly 仅读取已有版本缓存，不联网或写入。
+只读模式与普通模式使用相同输出字段，但不执行刷新，可能返回不同的 token 有效性。
+并发更新时可能读到旧快照或无法判断的状态；系统 Keychain 读取仍可能等待。
+
+Usage:
+  dws auth status [flags]
+
+Examples:
+  dws auth status
+  dws auth status --profile <corpId>
+  dws auth status --profile <corpId>:<userId>
+  dws auth status --profile "钉钉:孙博文"
+  dws auth status --profile <corpId> --format json
+  dws auth status --readonly --format json
+
+Flags:
+  -h, --help             help for status
+      --profile string   指定组织或账号：corpId、corpName、corpId:userId、corpId:userName、corpName:userId、corpName:userName 或本地 profile 名
+      --readonly         只读本地登录态，不获取认证锁、不刷新、不迁移或修复
+
+Global Flags:
+      --client-id string       覆盖 OAuth 客户端 ID (钉钉 AppKey)
+      --client-secret string   覆盖 OAuth 客户端密钥 (钉钉 AppSecret)
+      --debug                  显示调试日志
+      --dry-run                预览操作内容，不实际执行
+      --fields string          筛选输出字段 (逗号分隔, 如: name,id,status)
+  -f, --format string          输出格式: json|table|raw|pretty|ndjson|csv (default "json")
+      --jq string              jq 表达式过滤输出 (如: '.items[] | .name')
+      --mock                   使用 Mock 数据 (开发调试用)
+      --timeout int            HTTP 请求超时时间 (秒) (default 30)
+  -v, --verbose                显示详细日志
+  -y, --yes                    跳过确认提示 (AI Agent 模式)

@@ -1,0 +1,22 @@
+{
+  "agent_summary": "获取当前登录用户资料与 userId",
+  "availability": "available",
+  "avoid_when": [
+    "查他人详情用 contact user get 或先搜索"
+  ],
+  "canonical_path": "contact.get_current_user_profile",
+  "cli_path": "contact user get-self",
+  "confirmation": "not_required",
+  "description": "获取当前登录用户的 userId 与基本信息。\n\n触发词：我是谁 / 我的信息 / 我的 userId / 当前用户 / 本人 / self / me / whoami / current。\n别名：self / me / whoami / current 均等价于 get-self。\n无需参数；禁止用 `dws contact user get --ids me/self` 代替（会返回空数据的假成功）。",
+  "effect": "read",
+  "examples": [
+    "dws contact user get-self --format json"
+  ],
+  "idempotency": "idempotent",
+  "interface_mode": "mcp",
+  "parameters": {},
+  "risk": "low",
+  "use_when": [
+    "用户问我是谁/我的 userId/当前账号信息"
+  ]
+}

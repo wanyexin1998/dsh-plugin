@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "environment": "localhost fixtures only",
+  "checks": [
+    "default: exchange -> online identity -> save -> auth status -> refresh -> get-self (default and exact profile)",
+    "custom: exchange -> online identity -> save -> auth status -> refresh -> get-self (default and exact profile)",
+    "omitted: exchange -> online identity -> save -> auth status -> refresh -> get-self (default and exact profile)",
+    "dry-run and invalid arguments: no network or profile writes",
+    "9 binary redaction cases: success/failure/dry-run x --code VALUE/--code=VALUE/stdin; stdout, stderr, perf report",
+    "missing online userId: rejected without saving profile"
+  ],
+  "adaptation": "Windows test namespace per isolated directory; update check disabled; all upstream assertions unchanged",
+  "classification": "LOCAL_FIXTURE_ONLY"
+}

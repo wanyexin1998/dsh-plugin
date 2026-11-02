@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0-phase1.1",
+  "classification": "LOCAL_PHASE1_VERIFICATION",
+  "upstream": {
+    "skipped": 51,
+    "passed": 334,
+    "failed": 0,
+    "tests": 385
+  },
+  "web": {
+    "skipped": 0,
+    "passed": 38,
+    "failed": 0,
+    "tests": 38
+  },
+  "realDshToolBoundary": true,
+  "realEnterpriseAuthorization": false,
+  "realDingTalkMessages": false
+}

@@ -1,0 +1,140 @@
+{
+  "name": "@wanyexin1998/dsh-dingtalk",
+  "version": "0.2.0-dev.2",
+  "description": "DingTalk connector fork with local DSH Web authorization",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./a2ui": {
+      "types": "./lib/a2ui.d.ts",
+      "import": "./lib/a2ui.js"
+    },
+    "./web": {
+      "types": "./enhancements/lib/host/index.d.ts",
+      "import": "./enhancements/lib/host/index.js"
+    },
+    "./client": {
+      "types": "./enhancements/lib/client/index.d.ts",
+      "default": "./enhancements/lib/client.js"
+    }
+  },
+  "bin": {
+    "dsh-dingtalk": "lib/bin.js"
+  },
+  "license": "MIT",
+  "author": "DingTalk Real Team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wanyexin1998/dsh-plugin.git",
+    "directory": "dsh-dingtalk"
+  },
+  "homepage": "https://github.com/wanyexin1998/dsh-plugin/tree/main/dsh-dingtalk",
+  "bugs": {
+    "url": "https://github.com/wanyexin1998/dsh-plugin/issues"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "files": [
+    "docs/CLOSEOUT.md",
+    "docs/REPOSITORY.md",
+    "docs/PHASE1.md",
+    "docs/DWS-CAPABILITIES.md",
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "README.md",
+    "README.zh-CN.md",
+    "enhancements/lib",
+    "enhancements/dws.lock.json",
+    "enhancements/skills",
+    "enhancements/LICENSE"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "pnpm run clean && tsc -p tsconfig.json && node enhancements/scripts/build.mjs",
+    "postbuild": "node -e \"require('node:fs').chmodSync('lib/bin.js', 0o755)\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p enhancements/tsconfig.test.json",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "pnpm run build && node --experimental-test-module-mocks --test --test-concurrency=1 test/*.test.mjs",
+    "test:pack": "pnpm run build && node scripts/check-pack.mjs",
+    "scan:secrets": "node scripts/check-secrets.mjs",
+    "ci": "pnpm run scan:secrets && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run test:web && pnpm run test:pack",
+    "prepack": "pnpm run build",
+    "test:web": "cd enhancements && node --test --test-concurrency=1 tests/*.test.mjs",
+    "verify:bundle": "node enhancements/scripts/verify-bundle.mjs",
+    "verify:dsh-web": "node enhancements/scripts/verify-dsh-web.mjs",
+    "verify:browser": "cd enhancements && node scripts/verify-browser.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "dingtalk",
+    "channel",
+    "im-bot",
+    "cordis"
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "cross-spawn": "7.0.6",
+    "dingtalk-stream": "^2.1.4",
+    "qrcode-terminal": "^0.12.0",
+    "yaml": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/github": "^11.0.6",
+    "@semantic-release/npm": "^13.1.4",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@types/node": "22.20.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
+    "prettier": "^3.6.2",
+    "semantic-release": "^25.0.9",
+    "typescript": "6.0.3",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.5",
+    "@types/react": "18.3.12",
+    "esbuild": "0.25.12",
+    "playwright-core": "1.56.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest",
+    "provenance": true
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-client-ui-chat"
+      ],
+      "platform": "web"
+    }
+  },
+  "private": true
+}

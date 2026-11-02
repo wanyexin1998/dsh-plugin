@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0-dev.1",
+  "dwsVersion": "1.0.66",
+  "catalog": {
+    "products": 33,
+    "entries": 1540,
+    "executable": 1476,
+    "hostManaged": 33,
+    "upstreamUnavailable": 31
+  },
+  "checks": {
+    "rootTests": {
+      "passed": 334,
+      "skipped": 51,
+      "failed": 0
+    },
+    "webTests": {
+      "passed": 50,
+      "failed": 0
+    },
+    "typecheck": "passed",
+    "format": "passed",
+    "secretScan": "passed",
+    "package": {
+      "passed": true,
+      "files": 335,
+      "unpackedBytes": 4075632
+    },
+    "nativeHostSkills": 34,
+    "nativeWeb": "passed",
+    "browser": "passed",
+    "installedCoreHashes": "matched"
+  },
+  "limits": [
+    "Root tests include 51 conditional skips; see test configuration.",
+    "Official CLI read/write integration uses synthetic OAuth/MCP endpoints.",
+    "All real enterprise capabilities have not been individually accepted.",
+    "Native approval API availability and adapter behavior verified; real human confirmation remains user acceptance.",
+    "IM identity unification is outside this phase."
+  ]
+}

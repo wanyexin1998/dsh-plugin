@@ -1,0 +1,11 @@
+node_modules/
+lib/
+*.tgz
+.npm-cache/
+.cache/
+.tmp/
+*.log
+.DS_Store
+artifacts/
+
+enhancements/artifacts/

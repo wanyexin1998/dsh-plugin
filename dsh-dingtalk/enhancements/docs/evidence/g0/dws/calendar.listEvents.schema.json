@@ -1,0 +1,52 @@
+{
+  "agent_summary": "查询当前用户日程列表",
+  "availability": "available",
+  "avoid_when": [
+    "已知 eventId 要详情时改用 dws calendar event get",
+    "要创建日程时改用 dws calendar event create"
+  ],
+  "canonical_path": "calendar.list_calendar_events",
+  "cli_path": "calendar event list",
+  "confirmation": "not_required",
+  "description": "查询当前用户可访问的日程列表。**注意** 不传 --start/--end 时将查询今天的日程（00:00:00 ~ 23:59:59）。\n\t\t**calendar_id**: 不指定calendar_id时，默认查询当前用户主日历下的日程。也可指定calendar_id查询他人共享或者已订阅的日历。calendar_id可通过 dws calendar book list 查询。\n\t\t**权限**：查询共享日历下的日程时，至少要有reader权限。",
+  "effect": "read",
+  "examples": [
+    "dws calendar event list --start \"2026-03-10T14:00:00+08:00\" --end \"2026-03-10T18:00:00+08:00\"",
+    "dws calendar event list --calendar-id primary"
+  ],
+  "idempotency": "idempotent",
+  "interface_mode": "mcp",
+  "parameters": {
+    "calendar-id": {
+      "description": "日历 ID (默认 primary 主日历，仅在查询其他日历本时填写)",
+      "required": false,
+      "type": "string"
+    },
+    "cursor": {
+      "description": "分页游标 (首次查询无需传入，仅翻页时传入上一次返回的 nextCursor)",
+      "required": false,
+      "type": "string"
+    },
+    "end": {
+      "description": "结束时间 ISO-8601 (例如 2026-03-10T18:00:00+08:00)",
+      "format": "date-time",
+      "required": false,
+      "type": "string"
+    },
+    "limit": {
+      "description": "每页返回条数 (默认 100，最大 100)",
+      "required": false,
+      "type": "integer"
+    },
+    "start": {
+      "description": "开始时间 ISO-8601 (例如 2026-03-10T14:00:00+08:00)",
+      "format": "date-time",
+      "required": false,
+      "type": "string"
+    }
+  },
+  "risk": "low",
+  "use_when": [
+    "需要按起止时间检索指定日历本下的日程列表时（未传起止默认查当天）"
+  ]
+}
