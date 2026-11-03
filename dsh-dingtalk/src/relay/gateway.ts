@@ -58,7 +58,13 @@ export class Gateway {
   })
   private sockets = new WebSocketServer({ server: this.server, path: '/relay', maxPayload: 30 * 1024 * 1024 })
   private timer: NodeJS.Timeout
+  private transportError = false
   constructor(private options: GatewayOptions) {
+    // ws forwards the attached HTTP server's errors before start() can reject.
+    // Handle both emitters: a recoverable bind failure must not terminate the Host.
+    this.sockets.on('error', () => {
+      this.transportError = true
+    })
     this.login = options.login ? new GatewayLogin(options.login) : undefined
     this.bindings = readState(options.stateFile, [])
     this.seen = readState(`${options.stateFile}.seen`, {})
@@ -180,6 +186,7 @@ export class Gateway {
   }
   status() {
     return {
+      transportError: this.transportError,
       boundUsers: this.bindings.length,
       onlineUsers: this.online.size,
       requests: this.requests.size,

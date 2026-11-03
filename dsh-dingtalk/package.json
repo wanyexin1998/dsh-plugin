@@ -1,6 +1,6 @@
 {
   "name": "@wanyexin1998/dsh-dingtalk",
-  "version": "0.2.0-dev.9",
+  "version": "0.2.0-dev.12",
   "description": "DingTalk connector fork with local DSH Web authorization",
   "type": "module",
   "main": "lib/index.js",
@@ -59,7 +59,8 @@
     "enhancements/dws.lock.json",
     "enhancements/skills",
     "enhancements/LICENSE",
-    "docs/PHASE3.md"
+    "docs/PHASE3.md",
+    "docs/ROBOT-INSTALLATION.md"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",

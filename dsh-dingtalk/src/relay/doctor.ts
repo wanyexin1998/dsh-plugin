@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse } from 'yaml'
+import { enterpriseConnection, profileRobotDirectory } from './connection-config.js'
 import { Config } from '../config.js'
 import { feedbackEvents } from '../feedback.js'
 import type { DoctorReport, DoctorMode, DoctorCheck } from '../doctor-report.js'
@@ -47,17 +48,36 @@ export async function relayDoctor(
     return undefined
   }
   const entry = Array.isArray(entries) ? entries.find((x) => x?.id === 'dingtalk-channel') : undefined
-  if (entry?.config?.relay !== true) return undefined
+  const robot = entry?.config?.robotConnection
+  const directory = profileRobotDirectory(state, join(home, 'profiles', profile))
+  const personal = await json(join(directory, 'personal.json'))
+  const profileRuntime = await json(join(directory, 'relay-runtime.json'))
+  if (
+    !entry ||
+    (entry.config?.relay !== true && robot === undefined && !personal.clientId && !profileRuntime.observedAt)
+  )
+    return undefined
+  if (robot !== undefined || personal.clientId || profileRuntime.observedAt) state = directory
+  let configurationValid = true
+  try {
+    enterpriseConnection(robot)
+  } catch {
+    configurationValid = false
+  }
   const cfg = Config(entry.config)
   const runtime = await json(join(state, 'relay-runtime.json'))
   const current = Date.now() - runtime.observedAt < 30000 && runtime.observedAt <= Date.now()
-  const connected = current && runtime.status === 'connected' && entry.disabled !== true
+  const connected = configurationValid && current && runtime.status === 'connected' && entry.disabled !== true
   const checks: DoctorCheck[] = [
     {
       id: 'relay',
-      status: connected ? 'pass' : 'warning',
+      status: !configurationValid ? 'fail' : connected ? 'pass' : 'warning',
       code: connected ? 'relay.connected' : 'relay.unverified',
-      message: connected ? '共享网关连接正常' : '共享网关连接未就绪或状态已过期',
+      message: connected
+        ? '共享网关连接正常'
+        : !configurationValid
+          ? '企业机器人配置有误'
+          : '共享网关连接未就绪或状态已过期',
     },
   ]
   const feedback = safeFeedback(await json(join(state, 'accounts/shared/feedback.json')))
@@ -79,15 +99,15 @@ export async function relayDoctor(
     schemaVersion: 1,
     kind: 'doctor-report',
     mode,
-    result: cardFailed ? 'fail' : !connected ? 'warning' : cardVerified ? 'pass' : 'unverified',
+    result: cardFailed || !configurationValid ? 'fail' : !connected ? 'warning' : cardVerified ? 'pass' : 'unverified',
     checks,
     accounts: [],
     digitalEmployees: [],
     summary: {
       total: 2,
       pass: (connected ? 1 : 0) + (!cardFailed && cardVerified ? 1 : 0),
-      warning: connected ? 0 : 1,
-      fail: cardFailed ? 1 : 0,
+      warning: !connected && configurationValid ? 1 : 0,
+      fail: (cardFailed ? 1 : 0) + (!configurationValid ? 1 : 0),
       error: 0,
       unverified: !cardFailed && !cardVerified ? 1 : 0,
     },

@@ -513,3 +513,46 @@ test('doctor selects the shared-gateway profile without inspecting stale web cre
   assert.equal(report.feedback.gateway['card.stream'].success, 2)
   assert.doesNotMatch(JSON.stringify(report), /secret|untrusted/)
 })
+
+test('doctor uses enterprise profile state and rejects invalid preconfiguration without leaking its values', async (t) => {
+  const { profileRobotDirectory } = await import('../lib/relay/connection-config.js')
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dt-enterprise-doctor-'))
+  t.after(() => import('node:fs/promises').then((fs) => fs.rm(root, { recursive: true, force: true })))
+  const profile = path.join(root, 'profiles', 'employee')
+  const state = profileRobotDirectory(root, profile)
+  await mkdir(profile, { recursive: true })
+  await mkdir(state, { recursive: true })
+  const configuration = {
+    mode: 'enterprise',
+    corpId: 'test-corp',
+    clientId: 'test-robot',
+    displayName: 'Test',
+    gatewayUrl: 'wss://private.example.com/relay',
+  }
+  const save = (robotConnection) =>
+    writeFile(
+      path.join(profile, 'cordis.patch.yml'),
+      JSON.stringify([{ id: 'dingtalk-channel', config: { robotConnection } }]),
+    )
+  await save(configuration)
+  await writeFile(
+    path.join(state, 'relay-runtime.json'),
+    JSON.stringify({ status: 'connected', observedAt: Date.now() }),
+  )
+  const options = {
+    mode: 'offline',
+    dshHome: root,
+    stateDir: root,
+    profile: 'employee',
+    verifyCredentials: () => assert.fail('employee does not have app credentials'),
+  }
+  const report = await collectDoctorReport(options)
+  assert.equal(report.channel, 'robot-relay')
+  assert.equal(report.checks[0].status, 'pass')
+  assert.doesNotMatch(JSON.stringify(report), /test-corp|test-robot|private.example.com/)
+  await save({ ...configuration, gatewayUrl: 'http://private.example.com/relay' })
+  const invalid = await collectDoctorReport(options)
+  assert.equal(invalid.result, 'fail')
+  assert.equal(invalid.summary.fail, 1)
+  assert.doesNotMatch(JSON.stringify(invalid), /test-corp|test-robot|private.example.com/)
+})

@@ -5,7 +5,7 @@ export interface ClientConnection { rpc: { call(channel: '/api', endpoint: strin
 export interface Snapshot { status: ConnectionStatus; pending: boolean; preparing?: boolean; progress?: ComponentProgress | undefined; actionRevision?: number; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
 const key = 'dsh-dingtalk-ui-v1';
 export class ConnectionStore {
-  relay(method: 'status' | 'connect' | 'disconnect', payload: object = {}) { return this.call(`relay-${method}`, payload); }
+  relay(method: 'status' | 'connect' | 'disconnect' | 'configure' | 'stop', payload: object = {}) { return this.call(`relay-${method}`, payload); }
   private listeners = new Set<() => void>();
   private snapshot: Snapshot = { status: { state: 'unknown' }, pending: false };
   readonly prompts = new PromptRegistry(() => this.snapshot.actionRevision || 0);

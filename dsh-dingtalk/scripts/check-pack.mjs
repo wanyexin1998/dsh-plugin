@@ -20,7 +20,7 @@ if (packed.status !== 0) {
 const report = extractPackReport(JSON.parse(packed.stdout), packageJson.name)
 const files = report.files.map((entry) => entry.path)
 const allowed = [
-  /^docs\/(PHASE1|PHASE2|PHASE3|DWS-CAPABILITIES|REPOSITORY|CLOSEOUT)\.md$/,
+  /^docs\/(ROBOT-INSTALLATION|PHASE1|PHASE2|PHASE3|DWS-CAPABILITIES|REPOSITORY|CLOSEOUT)\.md$/,
   /^package\.json$/,
   /^README\.md$/,
   /^README\.zh-CN\.md$/,
@@ -43,6 +43,9 @@ const required = [
   'docs/DWS-CAPABILITIES.md',
   'docs/PHASE2.md',
   'docs/PHASE3.md',
+  'docs/ROBOT-INSTALLATION.md',
+  'lib/relay/controller.js',
+  'lib/relay/connection-config.js',
   'lib/relay/gateway.js',
   'lib/relay/client.js',
   'lib/relay/robot.js',
