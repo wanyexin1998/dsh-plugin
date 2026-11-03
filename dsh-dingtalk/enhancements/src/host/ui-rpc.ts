@@ -18,7 +18,8 @@ function request(value: unknown, keys: string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw new ConnectionServiceError('invalid_request');
   return value as Record<string, unknown>;
 }
-export function createUIRpc(connection: HostConnection, managed: ManagedConnection, service: DingtalkConnectionService) {
+export interface RelayControl { status(): unknown; connect(url: string): Promise<unknown>; disconnect(): Promise<void> }
+export function createUIRpc(connection: HostConnection, managed: ManagedConnection, service: DingtalkConnectionService, relay: () => RelayControl | undefined = () => undefined) {
   const sessions = new Map<string, BrowserSession>();
   const handle = async (endpoint: string, input: unknown, signal: AbortSignal, peer: Peer): Promise<RpcResult> => {
     try {
@@ -38,7 +39,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
         sessions.set(id, { peer: peer.id, context, expires: Date.now() + 8 * 3600000 });
         return { ok: true, value: { browserId: id, callbackOrigin: managed.callbackOrigin ?? null } };
       }
-      const keys = method === 'begin' ? ['browserId', 'context'] : method === 'transaction' || method === 'cancel' ? ['browserId', 'transactionId'] : method === 'disconnect-confirm' ? ['browserId', 'confirmation'] : ['browserId'];
+      const keys = method === 'relay-connect' ? ['browserId', 'url'] : method === 'begin' ? ['browserId', 'context'] : method === 'transaction' || method === 'cancel' ? ['browserId', 'transactionId'] : method === 'disconnect-confirm' ? ['browserId', 'confirmation'] : ['browserId'];
       const data = request(input, keys);
       const id = typeof data.browserId === 'string' ? data.browserId : '';
       const browser = sessions.get(id);
@@ -46,6 +47,13 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
       return await managed.ui(id, browser.context, async () => {
         let value: unknown;
         switch (method) {
+          case 'relay-status': value = relay()?.status() ?? { status: 'unavailable' }; break;
+          case 'relay-connect': {
+            if (typeof data.url !== 'string' || data.url.length > 2048) throw new ConnectionServiceError('invalid_request');
+            const control = relay(); if (!control) throw new ConnectionServiceError('service_unavailable');
+            value = await control.connect(data.url); break;
+          }
+          case 'relay-disconnect': await relay()?.disconnect(); value = { status: 'disconnected' }; break;
           case 'status': value = await service.status({ signal }); break;
           case 'begin': value = await service.beginAuthorization(data.context === undefined ? {} : data.context as {}, { signal }); break;
           case 'transaction':
@@ -75,7 +83,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
   // Public exact routes coexist with the native Gateway's single /api interceptor.
   // DSH applies authenticated admission/body limits first; re-read the actual Peer
   // because an owner API credential is deliberately not a human browser carrier.
-  const methods = ['bootstrap', 'status', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm'];
+  const methods = ['bootstrap', 'status', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm', 'relay-status', 'relay-connect', 'relay-disconnect'];
   const registrations = methods.map(method => connection.fetch.register({
     path: `/api/dsh-dingtalk/${method}`, methods: ['POST'], requestBody: 'buffered',
     async fetch(request) {

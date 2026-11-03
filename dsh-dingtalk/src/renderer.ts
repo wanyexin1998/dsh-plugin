@@ -11,7 +11,7 @@ import type { HostSession, HostSessionEvent } from './host.js'
 import type { InboundMessage } from './stream.js'
 import type { Emotion } from './emotion.js'
 import type { ReplySink } from './reply-sink.js'
-import { AICard, CardCapabilityError, type CardTarget } from './aicard.js'
+import { type AICard, type CardHandle, CardCapabilityError, type CardTarget } from './aicard.js'
 import { cardTarget } from './targets.js'
 import { describeTurnError } from './errors.js'
 
@@ -35,7 +35,7 @@ interface TurnState {
   finalParts: string[]
   /** Tool-step prose belongs to the process view, not the settled answer. */
   hadTools: boolean
-  cardPromise?: Promise<AICard | null>
+  cardPromise?: Promise<CardHandle | null>
   flushTimer?: ReturnType<typeof setTimeout>
   lastFlushed: string
   flushing: boolean
@@ -79,8 +79,8 @@ function renderLive(segments: Segment[]): string {
 export interface RendererDeps {
   config: Pick<Config, 'replyMode' | 'streaming' | 'asyncMode' | 'ackText' | 'markdownTitle' | 'emotionFirstResponse'>
   outbound: ReplySink
-  emotion: Emotion
-  createCard(target: CardTarget): Promise<AICard | null>
+  emotion: Pick<Emotion, 'add' | 'recall'>
+  createCard(target: CardTarget): Promise<CardHandle | null>
   log(line: string): void
 }
 
@@ -143,7 +143,7 @@ export class Renderer {
   }
 
   /** Settle the old card with a pointer note and continue on a fresh one. */
-  private async rollover(st: TurnState, card: AICard, content: string): Promise<AICard | null> {
+  private async rollover(st: TurnState, card: CardHandle, content: string): Promise<CardHandle | null> {
     st.needsRollover = false
     try {
       await card.finish(`${content || st.lastFlushed || '…'}\n\n> ⤵️ 输出继续，见下方新卡片`)

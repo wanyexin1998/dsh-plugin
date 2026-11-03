@@ -20,6 +20,8 @@ export interface AccountConfig {
 }
 
 export interface Config {
+  relay?: boolean
+
   accounts: AccountConfig[]
   digitalEmployees: DigitalEmployeeConfig[]
   /** 数字员工默认优先 A2UI；text 是显式回滚开关。 */
@@ -86,6 +88,7 @@ const DigitalEmployeeConfigSchema: Schema<DigitalEmployeeConfig> = Schema.object
 })
 
 export const Config: Schema<Config> = Schema.object({
+  relay: Schema.boolean().default(false).description('共享机器人模式；应用凭据只在网关配置'),
   interactionMode: Schema.union(['auto', 'text'])
     .default('auto')
     .description('数字员工审批/提问：auto 优先 A2UI，能力缺失时降级文字；text 强制文字'),

@@ -13,6 +13,7 @@ import { dingtalkTool } from './tool.js';
 import { readFile } from 'node:fs/promises';
 
 export interface ImToolFactory {
+  identity(): { corpId: string; userId: string } | undefined;
   createTool(identity: () => { corpId: string; userId: string } | undefined, host: () => ToolHost): ReturnType<typeof dingtalkTool>;
 }
 declare module '@deepseek-ai/cordis' {
@@ -30,6 +31,7 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
   // Host-only service. IM gets the same managed reader, with its transport identity
   // checked on every call; no account selector is exposed to the model or Client.
   ctx.provide('dingtalkImTools', {
+    identity: () => managed.identity(),
     createTool: (identity, host) => dingtalkTool({ invoke: (input, options) => {
       const principal = identity();
       return principal ? managed.invokeFor(principal, input, options)
@@ -38,7 +40,7 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
   });
   ctx.inject(['connection', 'webServer'], scope => {
     const connection = (scope as unknown as { connection: HostConnection }).connection;
-    scope.effect(() => createUIRpc(connection, managed, owner.service));
+    scope.effect(() => createUIRpc(connection, managed, owner.service, () => scope.get('dingtalkRelay') as import('./ui-rpc.js').RelayControl | undefined));
   });
   ctx.inject(['tools'], scope => { (scope as unknown as { tools: { register(tool: ReturnType<typeof dingtalkTool>): unknown } }).tools.register(dingtalkTool(owner.service, () => ({ approval: scope.get('approval'), workingDirectory: scope.get('workingDirectory') } as ToolHost))); });
   ctx.inject(['skills'], async scope => {
