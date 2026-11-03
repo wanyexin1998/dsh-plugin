@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { verifyExecutable } from '../adapters/local/executable.js';
 import { ConnectionServiceError } from '../shared/models.js';
+import { downloadLockedAsset } from './download.js';
+import type { ComponentProgress } from '../shared/models.js';
 
 interface Lock { dws: { assets: { platform: string; url: string; size: number; sha256: string }[]; binaryChecksums: Record<string, string> } }
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -44,22 +46,26 @@ export function extractWindowsBinary(zip: Buffer): Buffer {
 }
 /** Host-only test seams. Neither settings JSON nor RPC can supply download URLs/bytes. */
 export interface BootstrapRuntime { archive?: (signal: AbortSignal) => Promise<Buffer>; discoverClient?: (signal: AbortSignal) => Promise<string> }
-export async function ensureDws(binary: string, signal: AbortSignal, runtime: BootstrapRuntime = {}): Promise<void> {
+export async function ensureDws(binary: string, signal: AbortSignal, runtime: BootstrapRuntime = {}, progress: (value: ComponentProgress) => void = () => {}): Promise<void> {
+  if (signal.aborted) throw new ConnectionServiceError('execution_cancelled');
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new ConnectionServiceError('cli_platform_unsupported');
   try { await lstat(binary); await verifyExecutable(binary, signal); return; }
   catch (error) { if (!(error instanceof Error) || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const lock = JSON.parse(await readFile(new URL('../../dws.lock.json', import.meta.url), 'utf8')) as Lock;
   const asset = lock.dws.assets.find(asset => asset.platform === 'windows-amd64');
   if (!asset || !asset.url.startsWith('https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/')) throw new ConnectionServiceError('cli_integrity_failed');
-  const combined = AbortSignal.any([signal, AbortSignal.timeout(60000)]);
-  const archive = await (runtime.archive?.(combined) ?? bytesFrom(asset.url, asset.size, combined));
+  const combined = signal;
+  const partial = join(dirname(binary), `.dws-${asset.sha256}.download`);
+  progress({ phase: 'download', received: 0, total: asset.size });
+  const archive = await (runtime.archive?.(combined) ?? downloadLockedAsset(asset, partial, combined, (received, total) => progress({ phase: 'download', received, total })));
   if (combined.aborted) throw new ConnectionServiceError('execution_cancelled');
+  progress({ phase: 'verify', received: asset.size, total: asset.size });
   if (archive.length !== asset.size || sha(archive) !== asset.sha256) throw new ConnectionServiceError('cli_integrity_failed');
   const bytes = extractWindowsBinary(archive);
   if (sha(bytes) !== lock.dws.binaryChecksums['win32-x64']) throw new ConnectionServiceError('cli_integrity_failed');
   const directory = dirname(binary); await mkdir(directory, { recursive: true, mode: 0o700 });
   const temporary = join(directory, `.dws-${randomUUID()}.tmp`);
-  try { await writeFile(temporary, bytes, { flag: 'wx', mode: 0o700 }); if (combined.aborted) throw new ConnectionServiceError('execution_cancelled'); await rename(temporary, binary); await verifyExecutable(binary, combined); }
+  try { await writeFile(temporary, bytes, { flag: 'wx', mode: 0o700 }); if (combined.aborted) throw new ConnectionServiceError('execution_cancelled'); await rename(temporary, binary); await verifyExecutable(binary, combined); await unlink(partial).catch(() => {}); }
   finally { await unlink(temporary).catch(() => {}); }
 }
 export async function officialClient(signal: AbortSignal, runtime: BootstrapRuntime = {}): Promise<string> {

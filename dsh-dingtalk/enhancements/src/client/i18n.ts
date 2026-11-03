@@ -2,6 +2,7 @@ import { Children, cloneElement, isValidElement } from 'react';
 import type { ReactNode, ReactElement } from 'react';
 export interface LocaleFace { getSnapshot(): { active: string }; subscribe(fn: () => void): () => void }
 const english: Record<string, string> = {
+  '组件下载中断': 'Component download interrupted', '组件下载超时': 'Component download timed out', '请检查网络后重试，将继续下载。': 'Check your network and retry to resume.', '正在校验组件…': 'Verifying component…', '组件下载进度': 'Component download progress',
   '日程与待办': 'Calendar & tasks', '查询与管理': 'View & manage', '文档与表格': 'Docs & sheets', '读取与编辑': 'Read & edit', '消息与更多': 'Messages & more', '按账号权限': 'Account permissions',
   '按你的指令操作，写入前确认。': 'Act on your instructions. Confirm before changes.', '解除后将停止调用与后台任务。再次使用需重新连接。': 'Disconnect stops calls and background tasks. Reconnect to use again.',
   '连接后即可使用钉钉功能。': 'Connect to use DingTalk.', '钉钉 · 已完成': 'DingTalk · Done', '钉钉 · 处理中…': 'DingTalk · Working…',
@@ -59,6 +60,7 @@ const english: Record<string, string> = {
 };
 export function translate(text: string, language = 'zh'): string {
   if (language.startsWith('zh')) return text;
+  if (text.startsWith('正在下载组件 · ')) return 'Downloading component · ' + text.slice('正在下载组件 · '.length);
   if (text.startsWith('最近验证：')) return 'Last verified: ' + text.slice(5);
   if (text.startsWith('可用能力：')) return 'Verified capabilities: ' + text.slice(5);
   if (text === '已验证企业 · 已授权账号') return 'Verified organization · Authorized account';

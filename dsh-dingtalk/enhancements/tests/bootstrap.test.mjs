@@ -95,3 +95,28 @@ test('first-install cancellation and failure keep the service unlinked and allow
     assert.equal(calls, 2); assert.equal((await owner.service.status()).state, 'unlinked');
   } finally { await owner.dispose(); await isolated.dispose(); }
 });
+
+test('background preparation returns promptly, shares one download and survives request cancellation; explicit cancel allows retry', { skip }, async () => {
+  const isolated = await sandbox();
+  let entered, calls = 0;
+  const ready = new Promise(resolve => { entered = resolve; });
+  const managed = await createManagedConnection({}, { stateDirectory: join(isolated.root, 'state') }, DEFAULT_LIMITS, {
+    archive: signal => { calls++; entered(); return new Promise((_, reject) => { const abort = () => reject(new ConnectionServiceError('execution_cancelled')); signal.addEventListener('abort', abort, { once: true }); }); },
+  });
+  const ui = action => managed.ui('browser', { origin: 'dsh-app://app', returnPath: '/' }, action);
+  try {
+    assert.throws(() => managed.prepareStart(), { reasonCode: 'invalid_request' });
+    assert.equal((await ui(() => managed.prepareStart())).state, 'running');
+    await ready;
+    assert.equal((await ui(() => managed.prepareStart())).state, 'running');
+    assert.equal(calls, 1);
+    const state = await ui(() => managed.prepareStatus());
+    assert.equal(state.progress.phase, 'download'); assert.ok(state.progress.total > 20_000_000);
+    assert.doesNotMatch(JSON.stringify(state), /https:|token|stateDirectory/);
+    assert.equal((await ui(() => managed.prepareCancel())).state, 'cancelled');
+    assert.equal((await managed.backend.status()).state, 'unlinked');
+    await ui(() => managed.prepareStart());
+    for (let i = 0; i < 100 && calls < 2; i++) await new Promise(r => setTimeout(r, 5));
+    assert.equal(calls, 2);
+  } finally { await managed.backend.dispose(); await isolated.dispose(); }
+});

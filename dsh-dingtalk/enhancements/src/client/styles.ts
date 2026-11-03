@@ -20,6 +20,11 @@ export const connectionCss = `
 .dsh-dt-copy{min-width:0;display:flex;flex-direction:column;gap:2px}
 .dsh-dt-copy strong{font-size:13px;font-weight:550;line-height:1.5}
 .dsh-dt-copy p{font-size:11px;line-height:1.6;color:var(--dt-muted);margin:0}
+.dsh-dt-download-size{font-variant-numeric:tabular-nums}
+.dsh-dt-progress{width:100%;max-width:260px;height:3px;margin-top:6px;border-radius:2px;overflow:hidden;background:var(--dt-line)}
+.dsh-dt-progress span{display:block;height:100%;background:var(--dt-accent);border-radius:inherit;transition:width .2s ease}
+.dsh-dt-actions.dsh-dt-preparing-actions{min-width:22px}
+@media(prefers-reduced-motion:reduce){.dsh-dt-progress span{transition:none}}
 .dsh-dt-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:99px;margin:0}
 .dsh-dt-actions .dsh-dt-action,.dsh-dt-actions .dsh-dt-caption{display:inline-flex;align-items:center;justify-content:center;gap:4px;width:72px;min-height:29px;padding:4px 5px;border:0;border-radius:5px;font-size:11px;line-height:1.3;text-align:center;background:var(--dt-soft);white-space:normal}
 .dsh-dt-actions .dsh-dt-icon:not(.dsh-dt-caption),.dsh-dt-action-spacer{width:22px;flex:none}

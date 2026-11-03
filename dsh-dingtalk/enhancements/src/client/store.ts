@@ -1,8 +1,8 @@
-import type { AuthorizationContext, AuthStart, ConnectionStatus, ReasonCode } from '../shared/models.js';
+import type { AuthorizationContext, AuthStart, ConnectionStatus, ReasonCode, ComponentProgress, PreparationStatus } from '../shared/models.js';
 import { showAuthorizationLoading } from './loading.js';
 import { PromptRegistry } from './prompts.js';
 export interface ClientConnection { rpc: { call(channel: '/api', endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{ ok: boolean; value?: unknown; error?: { code: string } }> } }
-export interface Snapshot { status: ConnectionStatus; pending: boolean; preparing?: boolean; actionRevision?: number; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
+export interface Snapshot { status: ConnectionStatus; pending: boolean; preparing?: boolean; progress?: ComponentProgress | undefined; actionRevision?: number; transaction?: AuthStart | undefined; fallback?: string | undefined; error?: ReasonCode | undefined }
 const key = 'dsh-dingtalk-ui-v1';
 export class ConnectionStore {
   relay(method: 'status' | 'connect' | 'disconnect', payload: object = {}) { return this.call(`relay-${method}`, payload); }
@@ -14,6 +14,9 @@ export class ConnectionStore {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private controller = new AbortController();
   private beginController: AbortController | undefined;
+  private preparationContext: AuthorizationContext | undefined;
+  private preparationStart: Promise<unknown> | undefined;
+  private completing = false;
   private popup: Window | null = null;
   private closed = false;
   private generation = 0;
@@ -27,6 +30,7 @@ export class ConnectionStore {
   };
   constructor(private connection: ClientConnection) {
     try { const cached = JSON.parse(sessionStorage.getItem(key) || '{}'); this.browserId = typeof cached.browserId === 'string' ? cached.browserId : ''; if (cached.transaction?.expiresAt && Date.parse(cached.transaction.expiresAt) > Date.now()) this.snapshot = { ...this.snapshot, transaction: cached.transaction }; } catch {}
+    try { const cached = JSON.parse(sessionStorage.getItem(key) || '{}'); if (cached.preparing && !this.snapshot.transaction) { this.preparationContext = cached.context || {}; this.snapshot = { ...this.snapshot, preparing: true, pending: true }; } } catch {}
     window.addEventListener('message', this.message);
     window.addEventListener('focus', this.focus);
     if (typeof BroadcastChannel !== 'undefined') { this.channel = new BroadcastChannel('dsh-dingtalk-invalidation'); this.channel.onmessage = () => this.focus(); }
@@ -38,7 +42,7 @@ export class ConnectionStore {
     return () => { this.listeners.delete(listener); if (!this.listeners.size) { clearTimeout(this.timer); this.timer = undefined; } };
   };
   private set(update: Partial<Snapshot>) { if (this.closed) return; this.snapshot = { ...this.snapshot, ...update }; for (const fn of this.listeners) fn(); }
-  private persist() { try { sessionStorage.setItem(key, JSON.stringify({ browserId: this.browserId, transaction: this.snapshot.transaction })); } catch {} }
+  private persist() { try { sessionStorage.setItem(key, JSON.stringify({ browserId: this.browserId, transaction: this.snapshot.transaction, preparing: this.preparationContext !== undefined, context: this.preparationContext })); } catch {} }
   private async raw(method: string, payload: object, signal = this.controller.signal): Promise<unknown> {
     const result = await this.connection.rpc.call('/api', `dsh-dingtalk/${method}`, payload, signal);
     if (!result.ok) throw Object.assign(new Error('连接请求未完成'), { reasonCode: result.error?.code || 'service_unavailable' });
@@ -65,11 +69,20 @@ export class ConnectionStore {
   private failure(error: unknown) { this.set({ error: (error as { reasonCode?: ReasonCode })?.reasonCode || 'service_unavailable', pending: false }); }
   private async readStatus() {
     const generation = this.generation;
+    if (this.preparationStart) return; // A focus event must not observe idle before prepare-start arrives.
+    if (this.preparationContext !== undefined) {
+      const value = await this.call('prepare-status', {}, AbortSignal.any([this.controller.signal, AbortSignal.timeout(15000)])) as PreparationStatus;
+      if (generation === this.generation) await this.applyPreparation(value, generation);
+      return;
+    }
     const status = await this.call('status') as ConnectionStatus;
-    if (generation === this.generation && !this.snapshot.transaction) this.set({ status, error: undefined });
+    if (generation === this.generation && !this.snapshot.transaction) {
+      const keepDownloadError = status.state !== 'connected' && ['cli_download_failed', 'cli_download_timeout'].includes(this.snapshot.error || '');
+      this.set({ status, ...(keepDownloadError ? {} : { error: undefined }) });
+    }
   }
   private scheduleStatus() {
-    if (!this.snapshot.transaction && this.listeners.size && !this.closed) { clearTimeout(this.timer); this.timer = setTimeout(() => { void this.refresh(); }, 15000); }
+    if (!this.snapshot.transaction && this.listeners.size && !this.closed) { clearTimeout(this.timer); this.timer = setTimeout(() => { void this.refresh(); }, this.preparationContext !== undefined ? 1000 : 15000); }
   }
   refresh(manual = false): Promise<void> {
     if (manual) this.set({ actionRevision: (this.snapshot.actionRevision || 0) + 1 });
@@ -106,22 +119,49 @@ export class ConnectionStore {
     this.popup = window.open('about:blank', '_blank');
     const popup = this.popup, generation = ++this.generation;
     if (popup) { try { showAuthorizationLoading(popup); } catch {} }
-    const controller = this.beginController = new AbortController();
-    this.set({ pending: true, preparing: true, actionRevision: (this.snapshot.actionRevision || 0) + 1, error: undefined });
+    this.beginController = new AbortController();
+    this.preparationContext = context;
+    this.set({ pending: true, preparing: true, progress: undefined, actionRevision: (this.snapshot.actionRevision || 0) + 1, error: undefined }); this.persist();
     try {
-      const tx = await this.call('begin', { context }, AbortSignal.any([controller.signal, this.controller.signal, AbortSignal.timeout(100000)])) as AuthStart;
+      this.preparationStart = this.call('prepare-start', {}, AbortSignal.any([this.controller.signal, AbortSignal.timeout(15000)]));
+      const value = await this.preparationStart as PreparationStatus;
+      if (generation === this.generation) await this.applyPreparation(value, generation);
+    } catch (error) { if (generation === this.generation) { popup?.close(); this.set({ preparing: false }); this.failure(error); } }
+    finally { this.preparationStart = undefined; this.scheduleStatus(); }
+  }
+  private async applyPreparation(value: PreparationStatus, generation: number) {
+    if (value.state === 'running') { this.set({ pending: true, preparing: true, progress: value.progress, error: undefined }); return; }
+    if (value.state !== 'ready') {
+      this.preparationContext = undefined; this.popup?.close();
+      this.set({ pending: false, preparing: false, progress: undefined, error: value.reasonCode === 'execution_cancelled' || value.state === 'cancelled' ? 'user_cancelled' : value.reasonCode || 'cli_download_failed' }); this.persist(); return;
+    }
+    if (this.completing) return;
+    this.completing = true;
+    const popup = this.popup;
+    try {
+      const tx = await this.call('begin', { context: this.preparationContext || {} }, AbortSignal.any([this.beginController?.signal || this.controller.signal, this.controller.signal, AbortSignal.timeout(30000)])) as AuthStart;
       if (this.closed || generation !== this.generation) { popup?.close(); return; }
       const target = new URL(tx.authorizeUrl);
       if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.username || target.password || target.pathname !== '/dsh-dingtalk/start') throw new Error();
       this.callbackOrigin = target.origin;
-      this.set({ pending: false, preparing: false, status: { state: 'authorizing', reasonCode: 'authorization_pending' }, transaction: tx, fallback: popup && !popup.closed ? undefined : tx.authorizeUrl }); this.persist();
+      this.preparationContext = undefined;
+      this.set({ pending: false, preparing: false, progress: undefined, status: { state: 'authorizing', reasonCode: 'authorization_pending' }, transaction: tx, fallback: popup && !popup.closed ? undefined : tx.authorizeUrl }); this.persist();
       if (popup && !popup.closed) popup.location.href = tx.authorizeUrl;
       this.schedule();
-    } catch (error) { popup?.close(); if (generation === this.generation) { this.set({ preparing: false }); this.failure(error); } }
-    finally { if (this.beginController === controller) this.beginController = undefined; }
+    } catch (error) { popup?.close(); if (generation === this.generation) { this.preparationContext = undefined; this.set({ preparing: false, progress: undefined }); this.failure(error); this.persist(); } }
+    finally { this.completing = false; }
   }
   async cancel() {
-    if (this.snapshot.preparing) { this.beginController?.abort(); this.generation++; this.popup?.close(); this.set({ pending: false, preparing: false, error: 'user_cancelled' }); return; }
+    if (this.snapshot.preparing || this.preparationContext !== undefined) {
+      this.beginController?.abort(); this.generation++; this.popup?.close(); this.preparationContext = undefined; this.persist();
+      this.set({ pending: true, preparing: false, progress: undefined });
+      try {
+        await this.preparationStart?.catch(() => {});
+        await this.call('prepare-cancel', {}, AbortSignal.any([this.controller.signal, AbortSignal.timeout(15000)]));
+        this.set({ pending: false, error: 'user_cancelled', status: { state: 'unlinked', reasonCode: 'user_cancelled' } });
+      } catch (error) { this.failure(error); }
+      return;
+    }
     const tx = this.snapshot.transaction;
     if (!tx) return;
     try {

@@ -8,7 +8,7 @@ for (const origin of ['http://127.0.0.1:3000', 'dsh-app://app']) test(`UI carrie
   const routes = new Map(); let admitted = owner;
   const connection = { browserPeer: owner, admit: () => ({ peer: admitted }), fetch: { register(route) { assert.equal(route.requestBody, 'buffered'); routes.set(route.path, route); return async () => { disposed++; }; } } };
   const service = { status: async () => ({ state: 'unlinked' }), beginAuthorization: async () => ({ transactionId: 'tx' }), getAuthorizationStatus: async () => ({ state: 'authorizing' }), disconnect: async () => { disconnected++; return { disconnected: true }; } };
-  const cleanup = createUIRpc(connection, { ui: async (_id, _context, action) => action(), cancel: () => ({ state: 'user_cancelled' }), revision: () => epoch, callbackOrigin: 'http://127.0.0.1:5000' }, service);
+  const cleanup = createUIRpc(connection, { ui: async (_id, _context, action) => action(), prepareStart: () => ({ state: 'running', progress: { phase: 'download', received: 20, total: 100 } }), prepareStatus: () => ({ state: 'ready' }), prepareCancel: async () => ({ state: 'cancelled' }), cancel: () => ({ state: 'user_cancelled' }), revision: () => epoch, callbackOrigin: 'http://127.0.0.1:5000' }, service);
   const call = async (method, payload, peer = owner) => { admitted = peer; const response = await routes.get(`/api/dsh-dingtalk/${method}`).fetch(new Request(`http://127.0.0.1/api/dsh-dingtalk/${method}`, { method: 'POST', body: JSON.stringify({ type: 'client-request', rpcId: 'test-rpc', method: `dsh-dingtalk/${method}`, payload }) })); return (await response.json()).result; };
   const context = { origin, returnPath: '/session/test' };
   try {
@@ -18,6 +18,11 @@ for (const origin of ['http://127.0.0.1:3000', 'dsh-app://app']) test(`UI carrie
     assert.equal((await call('status', { browserId: 'spoof' })).ok, false);
     assert.equal((await call('status', { browserId, userId: 'spoof' })).ok, false);
     assert.equal((await call('status', { browserId })).ok, true);
+    for (const method of ['prepare-start', 'prepare-status', 'prepare-cancel']) {
+      assert.equal((await call(method, { browserId }, { id: 'api-owner', principal: { kind: 'owner' } })).ok, false);
+      assert.equal((await call(method, { browserId, url: 'https://untrusted.invalid/component' })).ok, false);
+      assert.equal((await call(method, { browserId })).ok, true);
+    }
     const statusRoute = routes.get('/api/dsh-dingtalk/status');
     const invalidEnvelope = await statusRoute.fetch(new Request('http://127.0.0.1/api/dsh-dingtalk/status', { method: 'POST', body: JSON.stringify({ type: 'client-request', rpcId: 'test', method: 'different', payload: { browserId } }) }));
     assert.equal(invalidEnvelope.status, 400);
