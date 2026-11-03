@@ -98,7 +98,7 @@ export function createRobotOperations(config: RobotGatewayConfig) {
   return { operation, outbound, diagnostics }
 }
 
-export async function startRobotGateway(config: RobotGatewayConfig) {
+export async function startRobotGateway(config: RobotGatewayConfig, deferStream = false) {
   if (!config.clientId || !config.clientSecret || !config.corpId || !config.stateDirectory || !config.publicOrigin)
     throw new Error('invalid_gateway_config')
   const { operation, outbound, diagnostics } = createRobotOperations(config)
@@ -118,34 +118,52 @@ export async function startRobotGateway(config: RobotGatewayConfig) {
     operation,
     diagnostics: () => diagnostics.snapshot(),
   })
-  const port = await gateway.start()
-  let stop: (() => void) | undefined
-  let streamStatus = 'connecting'
+  let port: number
   try {
-    stop = await startStream({
-      ...config,
-      seenFile: join(config.stateDirectory, 'stream-seen.json'),
-      log,
-      onMessage: async (msg) => {
-        try {
-          await gateway.receive(msg)
-        } catch {
-          await outbound.sendText(msg.sessionWebhook, '本次连接未完成，请稍后重试。')
-        }
-      },
-      onCardCallback: (callback) => gateway.card(callback),
-      onStatus: (status) => {
-        streamStatus = status
-      },
-    })
+    port = await gateway.start()
   } catch (error) {
     await gateway.close()
+    diagnostics.close()
+    throw error
+  }
+  let stop: (() => void) | undefined
+  let streamStatus = 'connecting'
+  let starting: Promise<void> | undefined
+  const enable = () =>
+    (starting ??= (async () => {
+      stop = await startStream({
+        ...config,
+        seenFile: join(config.stateDirectory, 'stream-seen.json'),
+        log,
+        onMessage: async (msg) => {
+          try {
+            await gateway.receive(msg)
+          } catch {
+            await outbound.sendText(msg.sessionWebhook, '本次连接未完成，请稍后重试。')
+          }
+        },
+        onCardCallback: (callback) => gateway.card(callback),
+        onStatus: (status) => {
+          streamStatus = status
+        },
+      })
+    })().catch((error) => {
+      starting = undefined
+      throw error
+    }))
+  try {
+    if (!deferStream) await enable()
+  } catch (error) {
+    await gateway.close()
+    diagnostics.close()
     throw error
   }
   return {
+    enable,
     port,
     status: () => ({ stream: streamStatus, ...gateway.status() }),
     close: async () => {
+      await starting?.catch(() => undefined)
       stop?.()
       await gateway.close()
       diagnostics.close()

@@ -1,4 +1,5 @@
 import { FeedbackDiagnostics } from './feedback.js'
+import { RobotConnection } from './relay/controller.js'
 import { RelayClient } from './relay/client.js'
 import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
@@ -85,12 +86,34 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       return ''
     }
   }
-  if (config.relay) {
+  const standalone = !!(
+    config.clientId ||
+    config.clientSecret ||
+    config.accounts?.length ||
+    config.digitalEmployees?.length ||
+    process.env.DINGTALK_CLIENT_ID
+  )
+  if (config.relay || config.robotConnection !== undefined || !standalone) {
     const cwd = config.workspace || path.join(os.homedir(), 'dsh-dingtalk-workspace')
     fs.mkdirSync(cwd, { recursive: true })
-    const relay = new RelayClient(path.join(resolveStateDir(), 'relay-device.json'), () =>
-      (ctx.get('dingtalkImTools') as ImToolFactory).identity?.(),
-    )
+    const profile = ctx.get('profileContext') as { dir?: string } | undefined
+    const home =
+      profile?.dir && path.basename(path.dirname(profile.dir)) === 'profiles'
+        ? path.dirname(path.dirname(profile.dir))
+        : process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+    const relay =
+      config.relay && config.robotConnection === undefined
+        ? new RelayClient(path.join(resolveStateDir(), 'relay-device.json'), () =>
+            (ctx.get('dingtalkImTools') as ImToolFactory).identity?.(),
+          )
+        : new RobotConnection({
+            root: resolveStateDir(),
+            home,
+            profile: profile?.dir || path.join(home, 'profiles', 'web'),
+            enterprise: config.robotConnection,
+            identity: () => (ctx.get('dingtalkImTools') as ImToolFactory).identity?.(),
+          })
+    if (relay instanceof RobotConnection) ctx.effect(() => () => relay.close())
     ;(ctx as any).provide('dingtalkRelay', relay)
     await startAccount(
       ctx,
@@ -470,7 +493,7 @@ async function startAccount(
     console.log(`[dsh-dingtalk:${account.id} ${new Date().toTimeString().slice(0, 8)}] ${line}`)
   const interactionCardTemplateId =
     config.interactionCardTemplateId || process.env.DINGTALK_INTERACTION_CARD_TEMPLATE_ID || ''
-  const stateDir = accountStateDir(resolveStateDir(), account.id)
+  const stateDir = accountStateDir(relay instanceof RobotConnection ? relay.directory : resolveStateDir(), account.id)
   const feedback = new FeedbackDiagnostics(path.join(stateDir, 'feedback.json'))
   let streamStatus: 'connecting' | 'connected' | 'reconnecting' | 'stopped' = 'connecting'
   const localOwner = new OwnerBinding({

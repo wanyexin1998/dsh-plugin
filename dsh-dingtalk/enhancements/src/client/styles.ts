@@ -10,6 +10,7 @@ export const connectionCss = `
 .dsh-dt :focus-visible,.dsh-dt-shell :focus-visible{outline:2px solid #5797ff;outline-offset:3px}
 .dsh-dt .dsh-dt-icon,.dsh-dt-shell .dsh-dt-icon{display:inline-flex;align-items:center;justify-content:center;gap:5px;width:28px;height:29px;flex:none;padding:0;border:0;border-radius:5px;background:transparent;color:var(--dt-muted);font-size:11px;line-height:1.3;vertical-align:middle}
 .dsh-dt .dsh-dt-caption,.dsh-dt-shell .dsh-dt-caption{width:auto;padding-inline:8px;white-space:nowrap}
+.dsh-dt-robot .dsh-dt-action{display:inline-flex;align-items:center;justify-content:center;min-width:64px;min-height:29px;padding:4px 12px;border:0;border-radius:5px;background:var(--dt-accent-bg);color:var(--dt-accent);font:inherit}
 .dsh-dt-icon:hover:not(:disabled){background:var(--dt-soft)}
 .dsh-dt-strip{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;min-height:70px;margin:0;padding:13px 14px;border:1px solid var(--dt-line);border-radius:9px;background:transparent}
 .dsh-dt-card{max-width:440px}
