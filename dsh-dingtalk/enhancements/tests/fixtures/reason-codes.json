@@ -17,6 +17,8 @@
   "cli_integrity_failed",
   "cli_version_unsupported",
   "cli_platform_unsupported",
+  "cli_download_failed",
+  "cli_download_timeout",
   "local_configuration_invalid",
   "execution_timeout",
   "execution_cancelled",

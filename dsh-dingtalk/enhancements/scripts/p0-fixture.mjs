@@ -9,7 +9,7 @@ import { createConnectionService } from '../lib/shared/service.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { sandbox, verifiedBinary, run } from './g0/runtime.mjs';
 export async function freePort() { const server = createServer(); await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.address().port; await new Promise(r => server.close(r)); return port; }
-export async function fixture({ automatic = false, install = automatic } = {}) {
+export async function fixture({ automatic = false, install = automatic, nativeDownload = false } = {}) {
   const isolated = await sandbox();
   const binary = await verifiedBinary(resolve('../.cache/dingtalk-g0/bin-amd64/dws.exe'));
   const events = [], failures = [];
@@ -61,6 +61,7 @@ export async function fixture({ automatic = false, install = automatic } = {}) {
     if (args[0] === 'auth' && args[1] === 'exchange') assert.ok(args.includes('--code-stdin'));
     return spawn(file, args, { ...options, stdio: 'pipe' });
   } };
+  if (nativeDownload) delete runtime.archive;
   const local = install ? {} : { binaryPath: binary };
   let managed = await createManagedConnection(local, settings, { ...DEFAULT_LIMITS, timeoutMs: 20000 }, runtime, `${base}/authorize`);
   await writeFile(join(config, 'mcp_url'), base);

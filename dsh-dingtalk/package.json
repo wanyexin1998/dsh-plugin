@@ -1,6 +1,6 @@
 {
   "name": "@wanyexin1998/dsh-dingtalk",
-  "version": "0.2.0-dev.8",
+  "version": "0.2.0-dev.9",
   "description": "DingTalk connector fork with local DSH Web authorization",
   "type": "module",
   "main": "lib/index.js",
@@ -76,7 +76,8 @@
     "test:web": "cd enhancements && node --test --test-concurrency=1 tests/*.test.mjs",
     "verify:bundle": "node enhancements/scripts/verify-bundle.mjs",
     "verify:dsh-web": "node enhancements/scripts/verify-dsh-web.mjs",
-    "verify:browser": "cd enhancements && node scripts/verify-browser.mjs"
+    "verify:browser": "cd enhancements && node scripts/verify-browser.mjs",
+    "verify:download": "cd enhancements && node scripts/verify-slow-download.mjs"
   },
   "keywords": [
     "dsh",

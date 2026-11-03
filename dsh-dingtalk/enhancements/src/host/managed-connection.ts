@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { DingtalkBackend, ConnectionStatus, InvokeInput, InvokeResult, CallOptions } from '../shared/models.js';
+import type { DingtalkBackend, ConnectionStatus, InvokeInput, InvokeResult, CallOptions, PreparationStatus } from '../shared/models.js';
 import { ConnectionServiceError } from '../shared/models.js';
 import type { ExecutionLimits } from '../shared/config.js';
 import type { LocalSettings } from '../adapters/local/settings.js';
@@ -26,6 +26,9 @@ export interface ManagedConnection {
   invokeFor(principal: { corpId: string; userId: string }, input: InvokeInput, options?: CallOptions): Promise<InvokeResult>;
   ui<T>(browser: string, context: BrowserContext, action: () => Promise<T>): Promise<T>;
   cancel(id: string, browser: string): ConnectionStatus;
+  prepareStart(): PreparationStatus;
+  prepareStatus(): PreparationStatus;
+  prepareCancel(): Promise<PreparationStatus>;
   revision(): number;
   identity(): { corpId: string; userId: string } | undefined;
   callbackOrigin?: string;
@@ -65,18 +68,28 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
   const executor = new DwsExecutor(settings, limits, runtime);
   const lifetime = new AbortController();
   let preparing = false, preparation: Promise<void> | undefined, pendingProfile: string | undefined;
+  let preparationController: AbortController | undefined;
+  let preparationState: PreparationStatus = { state: 'idle' };
   async function save(value: BindingRecord): Promise<void> { await store.write(value); record = value; }
   const check = async (): Promise<void> => { if (closed) throw new ConnectionServiceError('service_disposed'); await verifyPrivacyGuard(directory); };
   async function prepare(signal?: AbortSignal) {
     if (!preparation) preparation = (async () => {
       preparing = true;
-      const combined = AbortSignal.any([lifetime.signal, ...(signal ? [signal] : [])]);
+      preparationController = new AbortController();
+      preparationState = { state: 'running' };
+      const combined = AbortSignal.any([lifetime.signal, preparationController.signal, ...(signal ? [signal] : [])]);
       try {
-        if (autoInstall) await ensureDws(settings.binaryPath!, combined, runtime);
+        await check();
+        if (autoInstall) await ensureDws(settings.binaryPath!, combined, runtime, progress => { if (!combined.aborted) preparationState = { state: 'running', progress }; });
         await control.run(inner => executor.check(inner), combined);
         if (!config.clientId) config.clientId = await officialClient(combined, runtime);
         await check();
         if (combined.aborted) throw new ConnectionServiceError('execution_cancelled');
+        preparationState = { state: 'ready' };
+      } catch (error) {
+        const reasonCode = combined.aborted ? 'execution_cancelled' : error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable';
+        preparationState = { state: combined.aborted ? 'cancelled' : 'failed', reasonCode, progress: preparationState.progress };
+        throw error;
       } finally { preparing = false; }
     })().catch(error => { preparation = undefined; throw error; });
     await preparation;
@@ -208,7 +221,25 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
       return allowed && !closed && epoch === revision && reader === selected;
     } } : {}) });
   }
-  return { backend, invokeFor, ui, identity: () => {
+  const preparationCaller = () => { if (closed) throw new ConnectionServiceError('service_disposed'); if (!scope.getStore()) throw new ConnectionServiceError('invalid_request'); };
+  return { backend, invokeFor, ui,
+    prepareStart() {
+      preparationCaller();
+      if (busy || record.revocationPending) throw new ConnectionServiceError('authorization_busy');
+      // Detached from a short RPC's signal; explicit cancel/dispose owns its lifetime.
+      void prepare().catch(() => {});
+      return structuredClone(preparationState);
+    },
+    prepareStatus() { preparationCaller(); return structuredClone(preparationState); },
+    async prepareCancel() {
+      preparationCaller();
+      epoch++; preparationController?.abort();
+      await preparation?.catch(() => {});
+      preparation = undefined;
+      preparationState = { state: 'cancelled', reasonCode: 'user_cancelled' };
+      return structuredClone(preparationState);
+    },
+    identity: () => {
     if (!reader || record.revoked || record.verificationPending || record.revocationPending || busy || !record.profile) return undefined;
     const [corpId, userId] = record.profile.split(':'); return corpId && userId ? { corpId, userId } : undefined;
   }, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };

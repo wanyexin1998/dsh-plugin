@@ -44,6 +44,30 @@ try {
   await page.locator('.dsh-dt-card').waitFor();
   assert.equal(await page.locator('.dsh-dt-card').count(), 1);
   assert.equal(await page.locator('#thinking .dsh-dt-card').count(), 0);
+  // Inspect the same production panel in all display modes, without new card nodes.
+  await page.evaluate(() => window.harness.store.set({ pending: true, preparing: true, progress: { phase: 'download', received: 4089446, total: 21025934 } }));
+  await page.getByRole('progressbar').first().waitFor();
+  assert.ok(await page.getByText('正在下载组件 · 3.9 / 20.1 MB', { exact: true }).count());
+  for (const mode of ['light', 'dark', 'mobile']) {
+    await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), mode === 'dark');
+    await page.setViewportSize({ width: mode === 'mobile' ? 390 : 1280, height: 1000 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForTimeout(50);
+    const metrics = await page.locator('.dsh-dt-card').evaluate(card => {
+      const bar = card.querySelector('[role=progressbar]'), fill = bar.firstElementChild;
+      const symbol = card.querySelector('.dsh-dt-symbol').getBoundingClientRect(), rect = card.getBoundingClientRect();
+      return { height: bar.getBoundingClientRect().height, ratio: fill.getBoundingClientRect().width / bar.getBoundingClientRect().width, aligned: Math.abs(symbol.top + symbol.height / 2 - rect.top - rect.height / 2), width: rect.width, buttons: card.querySelectorAll('button').length };
+    });
+    assert.equal(metrics.height, 3); assert.ok(Math.abs(metrics.ratio - 4089446 / 21025934) < .01); assert.ok(metrics.aligned < 1); assert.ok(metrics.width <= 440); assert.equal(metrics.buttons, 1);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: `artifacts/browser/download-${mode}.png`, fullPage: true });
+  }
+  await page.evaluate(() => window.harness.store.set({ progress: { phase: 'download', received: 10512967, total: 21025934 } }));
+  assert.equal(await page.getByRole('progressbar').first().getAttribute('aria-valuenow'), '10512967');
+  await page.evaluate(() => window.harness.store.set({ pending: false, preparing: false, progress: undefined }));
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  checks.push('download progress is a 3px bar inside the original panel; bytes update, only cancel is shown; light/dark/mobile/reduced-motion and icon alignment pass');
   assert.ok(await page.evaluate(() => !!(document.getElementById('final-answer').compareDocumentPosition(document.querySelector('.dsh-dt-card')) & Node.DOCUMENT_POSITION_FOLLOWING)));
   await page.evaluate(() => { for(let n=0;n<4;n++) window.harness.add({status:'auth_required',reasonCode:'not_connected'}); });
   await page.waitForTimeout(100);

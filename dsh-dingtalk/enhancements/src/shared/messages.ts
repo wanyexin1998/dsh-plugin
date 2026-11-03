@@ -10,6 +10,8 @@ export const messages: Partial<Record<ReasonCode, { title: string; detail: strin
   job_not_found: { title: '当前会话未找到此任务。', detail: '请查看任务列表。' },
   job_limit: { title: '后台任务已满。', detail: '请先停止不再需要的任务。' },
   connection_preparing: { title: '正在准备连接', detail: '首次使用需下载组件。' },
+  cli_download_failed: { title: '组件下载中断', detail: '请检查网络后重试，将继续下载。' },
+  cli_download_timeout: { title: '组件下载超时', detail: '请检查网络后重试，将继续下载。' },
   org_policy_denied: { title: '组织数据权限策略限制', detail: '请联系 IT 开通数据权限。', admin: true },
   scope_authorization_required: { title: '需要补充数据授权', detail: '请重新授权或联系管理员。' },
   permission_denied: { title: '当前数据访问未获授权', detail: '请联系管理员确认权限。' },

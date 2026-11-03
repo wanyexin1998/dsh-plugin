@@ -11,6 +11,7 @@ export const REASON_CODES = [
   'service_unavailable', 'connection_unknown', 'backend_not_ready', 'unsupported_mode',
   'invalid_request', 'service_disposed',
   'cli_missing', 'cli_integrity_failed', 'cli_version_unsupported', 'cli_platform_unsupported',
+  'cli_download_failed', 'cli_download_timeout',
   'local_configuration_invalid', 'execution_timeout', 'execution_cancelled', 'queue_full',
   'queue_timeout', 'output_limit_exceeded', 'invalid_cli_output', 'cli_failed',
   'business_verification_required', 'token_refresh_pending',
@@ -33,6 +34,12 @@ export interface ConnectionStatus {
 }
 export interface AuthorizationContext { sessionRef?: string; callRef?: string }
 export interface AuthStart { transactionId: string; authorizeUrl: string; expiresAt: string }
+export interface ComponentProgress { phase: 'download' | 'verify'; received: number; total: number }
+export interface PreparationStatus {
+  state: 'idle' | 'running' | 'ready' | 'failed' | 'cancelled';
+  progress?: ComponentProgress | undefined;
+  reasonCode?: ReasonCode | undefined;
+}
 /** Host operational cancellation; never part of the model/JSON arguments. */
 export interface CallOptions {
   signal?: AbortSignal;

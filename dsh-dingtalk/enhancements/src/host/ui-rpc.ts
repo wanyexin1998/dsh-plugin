@@ -55,6 +55,9 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
           }
           case 'relay-disconnect': await relay()?.disconnect(); value = { status: 'disconnected' }; break;
           case 'status': value = await service.status({ signal }); break;
+          case 'prepare-start': value = managed.prepareStart(); break;
+          case 'prepare-status': value = managed.prepareStatus(); break;
+          case 'prepare-cancel': value = await managed.prepareCancel(); break;
           case 'begin': value = await service.beginAuthorization(data.context === undefined ? {} : data.context as {}, { signal }); break;
           case 'transaction':
             if (typeof data.transactionId !== 'string') throw new ConnectionServiceError('invalid_request');
@@ -83,7 +86,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
   // Public exact routes coexist with the native Gateway's single /api interceptor.
   // DSH applies authenticated admission/body limits first; re-read the actual Peer
   // because an owner API credential is deliberately not a human browser carrier.
-  const methods = ['bootstrap', 'status', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm', 'relay-status', 'relay-connect', 'relay-disconnect'];
+  const methods = ['bootstrap', 'status', 'prepare-start', 'prepare-status', 'prepare-cancel', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm', 'relay-status', 'relay-connect', 'relay-disconnect'];
   const registrations = methods.map(method => connection.fetch.register({
     path: `/api/dsh-dingtalk/${method}`, methods: ['POST'], requestBody: 'buffered',
     async fetch(request) {
