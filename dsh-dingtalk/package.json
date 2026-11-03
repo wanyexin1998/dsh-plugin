@@ -1,6 +1,6 @@
 {
   "name": "@wanyexin1998/dsh-dingtalk",
-  "version": "0.2.0-dev.2",
+  "version": "0.2.0-dev.5",
   "description": "DingTalk connector fork with local DSH Web authorization",
   "type": "module",
   "main": "lib/index.js",
@@ -45,6 +45,7 @@
     "docs/CLOSEOUT.md",
     "docs/REPOSITORY.md",
     "docs/PHASE1.md",
+    "docs/PHASE2.md",
     "docs/DWS-CAPABILITIES.md",
     "lib",
     "assets",

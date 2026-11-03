@@ -1,4 +1,4 @@
-import { installPhaseOneBoundary } from './phase-one-boundary.js'
+import { ImTools, type ImToolFactory } from './im-tools.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
  * Inbound: DingTalk Stream long connection (no public endpoint needed).
@@ -63,7 +63,7 @@ import type {
 } from './host.js'
 
 export const name = 'dingtalk-channel'
-export const inject = ['agents', 'agentDefaultModel', 'credentials', 'llm']
+export const inject = ['agents', 'agentDefaultModel', 'credentials', 'llm', 'dingtalkImTools']
 export { Config }
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
@@ -149,7 +149,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         log,
       })
     : undefined
-  if (config.tools.enabled) log('phase 1: IM DWS disabled; connect personal data in Web settings')
+  if (config.tools.enabled) log('legacy DWS tools disabled; IM uses the identity-matched Web connection')
 
   await Promise.all([
     ...resolution.accounts.map(async (account) => {
@@ -536,13 +536,15 @@ async function startAccount(
     interactionCards,
     log,
   })
+  const imTools = new ImTools(() => ctx.get('dingtalkImTools') as ImToolFactory | undefined)
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
-    installPhaseOneBoundary(agentCtx)
+    imTools.install(agentCtx)
     questions.install(agentCtx, agent)
     files.install(agentCtx, agent)
   }
   const bridge = new Bridge(agents, renderer, bindings, {
     exclusiveOwnership: true,
+    recoverForeignSession: true,
     cwd,
     log,
     modelOverrides,
@@ -592,6 +594,7 @@ async function startAccount(
       // channel sees a message. Creation/resume setup is skipped in that path,
       // so attach the channel shadow through the live Agent.ctx as well.
       installBotTools(agent.ctx, agent)
+      imTools.bind(agent.ctx, msg)
       questions.bindSession(agent.id, msg)
       files.bindSession(agent, msg, sessionCwd)
       void workspace.attach(agent.id, sessionCwd)
@@ -807,7 +810,12 @@ async function startAccount(
             if (config.emotionFirstResponse) await emotion.recall(msg.msgId, msg.conversationId)
             return
           }
-          await bridge.process(msg, scopeKey)
+          try {
+            await bridge.process(msg, scopeKey)
+          } catch (error) {
+            log(`message dispatch failed (${error instanceof Error ? error.message : 'unknown'})`)
+            await outbound.sendMarkdown(msg.sessionWebhook, config.markdownTitle, '这条消息未能开始处理，请重试。')
+          }
         },
         (position) => {
           const target = cardTarget(msg)

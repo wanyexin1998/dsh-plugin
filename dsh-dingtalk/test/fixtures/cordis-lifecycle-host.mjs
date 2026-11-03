@@ -54,6 +54,7 @@ root.provide('agents', {
 root.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'fixture', model: 'fixture' }) })
 root.provide('credentials', { resolve: async () => undefined })
 root.provide('llm', {})
+root.provide('dingtalkImTools', {})
 const config = {
   accounts: [{ id: 'disabled-fixture', enabled: false }],
   digitalEmployees: [],

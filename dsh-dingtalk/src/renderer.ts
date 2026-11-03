@@ -33,6 +33,8 @@ interface TurnState {
   live: Segment[]
   /** Clean final texts from assistant/message events. */
   finalParts: string[]
+  /** Tool-step prose belongs to the process view, not the settled answer. */
+  hadTools: boolean
   cardPromise?: Promise<AICard | null>
   flushTimer?: ReturnType<typeof setTimeout>
   lastFlushed: string
@@ -108,6 +110,7 @@ export class Renderer {
       async: config.asyncMode,
       live: [],
       finalParts: [],
+      hadTools: false,
       lastFlushed: '',
       flushing: false,
       needsRollover: false,
@@ -168,6 +171,8 @@ export class Renderer {
         break
       }
       case 'tool/call': {
+        st.hadTools = true
+        st.finalParts = []
         const name = event.data?.name ?? 'tool'
         st.live.push({ kind: 'tool', callId: event.data?.callId, name, text: `⚙️ ${name} 执行中…` })
         this.scheduleFlush(session.id, st)
@@ -187,6 +192,11 @@ export class Renderer {
       case 'assistant/message': {
         const blocks = event.data?.message?.content
         if (Array.isArray(blocks)) {
+          if (blocks.some((b: any) => b?.type === 'tool-call')) {
+            st.hadTools = true
+            st.finalParts = []
+            break
+          }
           const text = blocks
             .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
             .map((b: any) => b.text)
@@ -288,8 +298,8 @@ export class Renderer {
     // After earlier roll-overs the settled cards already hold the prefix；
     // the final card carries the remainder (clean substance replaces the live
     // view only when no roll-over consumed part of it).
-    let text = st.carryOffset > 0 ? liveText.slice(st.carryOffset) : substance || liveText
-    if (st.carryOffset > 0 && !text.trim()) text = substance ? '（完整内容见上方卡片）' : ''
+    let text = st.hadTools ? substance : st.carryOffset > 0 ? liveText.slice(st.carryOffset) : substance || liveText
+    if (!st.hadTools && st.carryOffset > 0 && !text.trim()) text = substance ? '（完整内容见上方卡片）' : ''
     if (errText) text = text ? `${text}\n\n${errText}` : errText
     if (!text.trim()) text = EMPTY_MODEL_RESPONSE
 

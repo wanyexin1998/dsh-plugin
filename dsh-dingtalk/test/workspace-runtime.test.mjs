@@ -6,6 +6,7 @@ import test, { mock } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { Bridge as RealBridge } from '../lib/bridge.js'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 const sources = []
 class RobotStreamSource {
@@ -165,6 +166,7 @@ for (const [channel, conversationType] of [
         return () => {}
       },
       get(name) {
+        if (name === 'dingtalkImTools') return imToolFactory
         if (name === 'workspaceRegistry') return registry
         if (name === 'sessionPersistence')
           return { list: async () => [...headers].map(([id, header]) => ({ id, ...header })) }

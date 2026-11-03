@@ -6,6 +6,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 import { DWClient, TOPIC_ROBOT } from 'dingtalk-stream'
 import { apply } from '../lib/index.js'
@@ -116,6 +117,7 @@ function createHost(workspace) {
     agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'model' }) },
     credentials: { resolve: async () => undefined },
     get(name) {
+      if (name === 'dingtalkImTools') return imToolFactory
       if (name === 'workspaceRegistry') {
         return {
           resolveByPath: async () => linkedWorkspace,
@@ -232,4 +234,17 @@ test('公开插件运行时执行发送者和群策略，并按群成员隔离�
   await allowlistInbound(delivery('owner-dm', 'owner', 'owner-dm', '1'))
   await waitFor(() => allowlistHost.followups.length === 2)
   assert.notEqual(allowlistHost.created[0].sessionId, allowlistHost.created[1].sessionId)
+  const repliesBeforeFailure = sent.length
+  allowlistHost.ctx.agents.create = async () => {
+    throw new Error('synthetic_private_setup_failure')
+  }
+  await allowlistInbound(delivery('dispatch-failure', 'owner', 'fresh-owner-dm', '1'))
+  await waitFor(() =>
+    sent.slice(repliesBeforeFailure).some((reply) => reply.body.markdown?.text?.includes('未能开始处理')),
+  )
+  assert.equal(
+    sent.slice(repliesBeforeFailure).filter((reply) => reply.body.markdown?.text?.includes('未能开始处理')).length,
+    1,
+  )
+  assert.ok(!JSON.stringify(sent.slice(repliesBeforeFailure)).includes('synthetic_private_setup_failure'))
 })

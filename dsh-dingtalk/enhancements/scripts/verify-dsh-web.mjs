@@ -30,14 +30,16 @@ try {
   // Test-only observer in this isolated profile; production plugin/core stay unchanged.
   const probe = `import { writeFile } from 'node:fs/promises';
 export const name = 'capabilities-probe';
-export const inject = ['tools', 'skills', 'approval', 'workingDirectory', 'dingtalkConnection'];
+export const inject = ['tools', 'skills', 'approval', 'workingDirectory', 'dingtalkConnection', 'dingtalkImTools'];
 export async function apply(ctx) {
   for (let i = 0; i < 50; i++) {
     const skills = (await ctx.skills.list()).filter(s => s.provider === 'dsh-dingtalk');
     const tool = ctx.tools.get('dingtalk_call');
     if (skills.length === 34 && tool) {
       const result = await tool.execute({operationId:'dws.catalog',args:{}}, {signal:new AbortController().signal});
-      await writeFile(new URL('./capabilities-host-report.json', import.meta.url), JSON.stringify({skills:skills.map(s=>s.name),operations:tool.parameters.properties.operationId.enum,catalogStatus:result.status,commands:result.data?.commands,approval:typeof ctx.approval.request,workspace:typeof ctx.workingDirectory.get}));
+      const imTool = ctx.dingtalkImTools.createTool(() => undefined, () => ({}));
+      const imResult = await imTool.execute({operationId:'identity.getSelf',args:{}}, {signal:new AbortController().signal});
+      await writeFile(new URL('./capabilities-host-report.json', import.meta.url), JSON.stringify({skills:skills.map(s=>s.name),operations:tool.parameters.properties.operationId.enum,catalogStatus:result.status,commands:result.data?.commands,approval:typeof ctx.approval.request,workspace:typeof ctx.workingDirectory.get,imMissingIdentity:imResult.reasonCode}));
       return;
     }
     await new Promise(r=>setTimeout(r,100));
@@ -59,6 +61,7 @@ export async function apply(ctx) {
   assert.equal(hostReport.skills.length, 34); assert.equal(hostReport.commands, 1540);
   assert.equal(hostReport.catalogStatus, 'ok'); assert.equal(hostReport.approval, 'function'); assert.equal(hostReport.workspace, 'function');
   assert.ok(hostReport.operations.includes('dws.execute'));
+  assert.equal(hostReport.imMissingIdentity, 'identity_mismatch');
   await writeFile('artifacts/capabilities-host-report.json', JSON.stringify(hostReport, null, 2) + '\n');
   checks.push('installed native Host exposes 34 DingTalk skills, 1540-command catalog, generic execution and native approval/workspace services');
   const hostDiagnostics = logs.split('\n').filter(line => /TEST_HOST|TEST_ROUTE|Error|dsh-dingtalk|INJECT|webServer|connection:/i.test(line)).map(line => line.replace(/https?:\/\/[^\s]+/g, '<url>'));

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { DingtalkBackend, ConnectionStatus, InvokeInput, CallOptions } from '../shared/models.js';
+import type { DingtalkBackend, ConnectionStatus, InvokeInput, InvokeResult, CallOptions } from '../shared/models.js';
 import { ConnectionServiceError } from '../shared/models.js';
 import type { ExecutionLimits } from '../shared/config.js';
 import type { LocalSettings } from '../adapters/local/settings.js';
@@ -22,6 +22,8 @@ import { join } from 'node:path';
 interface UIContext { browser: string; context: BrowserContext }
 export interface ManagedConnection {
   backend: DingtalkBackend;
+  /** Host-only entry: principal must come from the verified transport context. */
+  invokeFor(principal: { corpId: string; userId: string }, input: InvokeInput, options?: CallOptions): Promise<InvokeResult>;
   ui<T>(browser: string, context: BrowserContext, action: () => Promise<T>): Promise<T>;
   cancel(id: string, browser: string): ConnectionStatus;
   revision(): number;
@@ -190,5 +192,20 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
     },
     async dispose() { closed = true; lifetime.abort(); epoch++; oauth.invalidate(); await preparation?.catch(() => {}); await control.dispose(); await reader?.dispose(); await mutationTail; await oauth.dispose(); },
   };
-  return { backend, ui, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };
+  async function invokeFor(principal: { corpId: string; userId: string }, input: InvokeInput, call: CallOptions = {}): Promise<InvokeResult> {
+    await check();
+    if (busy || !reader || record.revoked || record.verificationPending || record.revocationPending)
+      return { status: 'auth_required', reasonCode: busy ? 'authorization_pending' : 'not_connected' };
+    const valid = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+    if (!principal || !valid(principal.corpId) || !valid(principal.userId) || record.profile !== `${principal.corpId}:${principal.userId}`)
+      return { status: 'denied', reasonCode: 'identity_mismatch', retryable: false };
+    // Capture the actual reader before awaiting approval. Reauthorization disposes
+    // this reader; an outstanding operation must never move to the new account.
+    const selected = reader, revision = epoch;
+    return selected.invoke(input, { ...call, ...(call.approve ? { approve: async (summary: string) => {
+      const allowed = await call.approve!(summary);
+      return allowed && !closed && epoch === revision && reader === selected;
+    } } : {}) });
+  }
+  return { backend, invokeFor, ui, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };
 }

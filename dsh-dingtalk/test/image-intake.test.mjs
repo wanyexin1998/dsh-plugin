@@ -6,6 +6,7 @@ import path from 'node:path'
 import test, { mock } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 function deferred() {
   let resolve
@@ -117,6 +118,7 @@ test('图片接收在 Auto 模式下覆盖拒绝提示与下载、存储、注�
     },
     agentDefaultModel: { currentSelection: () => ({ provider: 'custom', model: 'text-only' }) },
     get(name) {
+      if (name === 'dingtalkImTools') return imToolFactory
       if (name === 'workspaceRegistry') {
         return { resolveByPath: async () => workspace, create: async () => workspace }
       }

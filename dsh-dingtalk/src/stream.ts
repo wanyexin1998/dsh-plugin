@@ -21,6 +21,9 @@ export interface InboundMessage {
   conversationId: string
   conversationType: 'direct' | 'group'
   senderStaffId: string
+  /** Preserve enterprise fields for Host identity matching, never infer from Web. */
+  senderCorpId?: string
+  chatbotCorpId?: string
   senderNick: string
   text: string
   /** Original send time (ms); stable across gateway redeliveries. */
@@ -390,6 +393,8 @@ export async function startStream(opts: StreamOptions): Promise<() => void> {
         conversationId: data?.conversationId ?? '',
         conversationType,
         senderStaffId: data?.senderStaffId ?? '',
+        ...(typeof data?.senderCorpId === 'string' ? { senderCorpId: data.senderCorpId } : {}),
+        ...(typeof data?.chatbotCorpId === 'string' ? { chatbotCorpId: data.chatbotCorpId } : {}),
         senderNick: data?.senderNick ?? '',
         text,
         createAt: String(data?.createAt ?? data?.createTime ?? ''),

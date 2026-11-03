@@ -1,5 +1,7 @@
 # 第一阶段：官方 Fork 与 Web 功能迁入
 
+本文保留第一阶段范围与历史限制。第二阶段开发及当前 IM 身份方案见 [PHASE2.md](PHASE2.md)。
+
 最初开发分支：`feat/phase1-web-integration`。当前代码已迁入 `dsh-plugin/dsh-dingtalk`，收尾按本地验证、新分支推送、PR 合并执行，详见 [仓库与维护](REPOSITORY.md)。
 
 ## 来源与范围
