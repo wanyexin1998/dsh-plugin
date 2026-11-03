@@ -27,6 +27,7 @@ export interface ManagedConnection {
   ui<T>(browser: string, context: BrowserContext, action: () => Promise<T>): Promise<T>;
   cancel(id: string, browser: string): ConnectionStatus;
   revision(): number;
+  identity(): { corpId: string; userId: string } | undefined;
   callbackOrigin?: string;
 }
 export async function createManagedConnection(local: LocalSettings, options: PrivateSettings, limits: ExecutionLimits,
@@ -207,5 +208,8 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
       return allowed && !closed && epoch === revision && reader === selected;
     } } : {}) });
   }
-  return { backend, invokeFor, ui, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };
+  return { backend, invokeFor, ui, identity: () => {
+    if (!reader || record.revoked || record.verificationPending || record.revocationPending || busy || !record.profile) return undefined;
+    const [corpId, userId] = record.profile.split(':'); return corpId && userId ? { corpId, userId } : undefined;
+  }, revision: () => epoch, get callbackOrigin() { return oauth.origin; }, cancel: (id, browser) => oauth.cancel(id, browser) };
 }

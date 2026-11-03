@@ -1,6 +1,6 @@
 {
   "name": "@wanyexin1998/dsh-dingtalk",
-  "version": "0.2.0-dev.5",
+  "version": "0.2.0-dev.7",
   "description": "DingTalk connector fork with local DSH Web authorization",
   "type": "module",
   "main": "lib/index.js",
@@ -58,7 +58,8 @@
     "enhancements/lib",
     "enhancements/dws.lock.json",
     "enhancements/skills",
-    "enhancements/LICENSE"
+    "enhancements/LICENSE",
+    "docs/PHASE3.md"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
@@ -91,6 +92,7 @@
     "cross-spawn": "7.0.6",
     "dingtalk-stream": "^2.1.4",
     "qrcode-terminal": "^0.12.0",
+    "ws": "^8.22.1",
     "yaml": "^2.8.1"
   },
   "peerDependencies": {
@@ -98,22 +100,23 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.5",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/github": "^11.0.6",
     "@semantic-release/npm": "^13.1.4",
     "@semantic-release/release-notes-generator": "^14.1.0",
     "@types/node": "22.20.0",
     "@types/qrcode-terminal": "^0.12.2",
-    "conventional-changelog-conventionalcommits": "^9.1.0",
-    "prettier": "^3.6.2",
-    "semantic-release": "^25.0.9",
-    "typescript": "6.0.3",
-    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.5",
     "@types/react": "18.3.12",
+    "@types/ws": "^8.18.2",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
     "esbuild": "0.25.12",
     "playwright-core": "1.56.1",
+    "prettier": "^3.6.2",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "semantic-release": "^25.0.9",
+    "typescript": "6.0.3"
   },
   "publishConfig": {
     "access": "public",

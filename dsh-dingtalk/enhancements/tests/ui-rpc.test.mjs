@@ -37,7 +37,7 @@ test('UI carrier/owner/capability and revision-bound single-use revoke confirmat
     assert.equal((await call('disconnect-confirm', { browserId, confirmation: fresh })).ok, false);
     assert.equal(disconnected, 1);
   } finally { await cleanup(); }
-  assert.equal(disposed, 7);
+  assert.equal(disposed, routes.size);
 });
 test('error normalization uses reviewed envelope fields; 403/prose/unknown codes never imply IT denial', () => {
   const envelope = error => JSON.stringify({ error });

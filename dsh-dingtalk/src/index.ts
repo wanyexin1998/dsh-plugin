@@ -1,3 +1,5 @@
+import { RelayClient } from './relay/client.js'
+import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
@@ -20,7 +22,7 @@ import {
 import { Config } from './config.js'
 import { Outbound } from './outbound.js'
 import { Emotion } from './emotion.js'
-import { AICard, CardCapability, type CardTarget } from './aicard.js'
+import { AICard, CardCapability, type CardTarget, type CardHandle } from './aicard.js'
 import { Renderer } from './renderer.js'
 import { Bridge } from './bridge.js'
 import { JsonStore } from './jsonstore.js'
@@ -81,6 +83,36 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       log(`credential ${ref} unavailable (${error instanceof Error ? error.message : error})`)
       return ''
     }
+  }
+  if (config.relay) {
+    const cwd = config.workspace || path.join(os.homedir(), 'dsh-dingtalk-workspace')
+    fs.mkdirSync(cwd, { recursive: true })
+    const relay = new RelayClient(path.join(resolveStateDir(), 'relay-device.json'), () =>
+      (ctx.get('dingtalkImTools') as ImToolFactory).identity?.(),
+    )
+    ;(ctx as any).provide('dingtalkRelay', relay)
+    await startAccount(
+      ctx,
+      config,
+      {
+        id: 'shared',
+        enabled: true,
+        clientId: '',
+        clientSecret: '',
+        clientIdRef: '',
+        clientSecretRef: '',
+        ownerStaffId: '',
+        senderAccess: 'owner',
+        allowedSenders: [],
+        groupAccess: 'all',
+        groupAllowlist: [],
+        sessionScope: 'chat-sender',
+      },
+      cwd,
+      undefined,
+      relay,
+    )
+    return
   }
   const resolution = await resolveRuntimeAccounts(configuredAccountSpecs(config), resolveCredential, process.env)
   for (const id of resolution.missingCredentialAccountIds) log(`robot ${id}: missing credentials — skipped`)
@@ -430,6 +462,7 @@ async function startAccount(
   account: RuntimeAccount,
   cwd: string,
   dwsTools: DwsTools | undefined,
+  relay?: RelayClient,
 ): Promise<void> {
   const { clientId, clientSecret } = account
   const log = (line: string) =>
@@ -438,7 +471,7 @@ async function startAccount(
     config.interactionCardTemplateId || process.env.DINGTALK_INTERACTION_CARD_TEMPLATE_ID || ''
   const stateDir = accountStateDir(resolveStateDir(), account.id)
   let streamStatus: 'connecting' | 'connected' | 'reconnecting' | 'stopped' = 'connecting'
-  const owner = new OwnerBinding({
+  const localOwner = new OwnerBinding({
     file: path.join(stateDir, 'owner.json'),
     configuredOwner:
       account.ownerStaffId || (account.id === DEFAULT_ACCOUNT_ID ? process.env.DINGTALK_OWNER_STAFF_ID || '' : ''),
@@ -448,6 +481,19 @@ async function startAccount(
     groupAccess: account.groupAccess,
     allowedGroups: account.groupAllowlist,
   })
+  const owner = relay
+    ? {
+        status: () => ({
+          ...localOwner.status(),
+          bound: true,
+          ownerStaffId: (ctx.get('dingtalkImTools') as ImToolFactory).identity?.()?.userId,
+        }),
+        authorize: (msg: unknown) =>
+          sameIdentity(messageIdentity(msg), (ctx.get('dingtalkImTools') as ImToolFactory).identity?.())
+            ? { kind: 'allowed' as const }
+            : { kind: 'denied' as const, reason: 'identity-mismatch' },
+      }
+    : localOwner
   // Onboarding gap guard: an unbound connector silently rejects everyone, so
   // say at boot HOW to claim it (the code itself never goes into logs).
   {
@@ -485,13 +531,30 @@ async function startAccount(
     }
   }
 
-  const outbound = new Outbound({ clientId, clientSecret }, log)
+  const directOutbound = new Outbound({ clientId, clientSecret }, log)
+  const outbound = relay
+    ? {
+        token: async (): Promise<string> => {
+          throw new Error('robot_credentials_gateway_only')
+        },
+        sendText: (id: string, text: string) => relay.operation(id, 'text', { text }),
+        sendMarkdown: (id: string, title: string, text: string) => relay.operation(id, 'markdown', { title, text }),
+        sendMedia: (async () => {
+          throw new Error('im_tool_unavailable')
+        }) as typeof directOutbound.sendMedia,
+      }
+    : directOutbound
   const files = new FileTransfer({ accountId: account.id, outbound, log })
   const replySink = new BotReplySink(outbound)
   // Shared by question/plan-review/approval cards and the queue busy card.
-  const interactionCards = interactionCardTemplateId
-    ? new InteractionCards(() => outbound.token(), clientId, interactionCardTemplateId, log)
-    : undefined
+  const interactionCards = relay
+    ? {
+        create: (request: import('./interaction-card.js').InteractionCardRequest) =>
+          relay.operation(relay.requestFor(request.target), 'interaction.create', request) as Promise<boolean>,
+      }
+    : interactionCardTemplateId
+      ? new InteractionCards(() => outbound.token(), clientId, interactionCardTemplateId, log)
+      : undefined
   const cardCapabilityFile = path.join(stateDir, 'capabilities.json')
   const cardCapability = new CardCapability((reason) => {
     fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
@@ -508,19 +571,22 @@ async function startAccount(
     )
     fs.chmodSync(cardCapabilityFile, 0o600)
   })
-  const emotion = new Emotion(() => outbound.token(), clientId, log)
+  const directEmotion = new Emotion(() => outbound.token(), clientId, log)
+  const emotion = relay
+    ? {
+        add: (_id: string, _conversation: string) => undefined,
+        recall: async (_id: string, _conversation: string) => undefined,
+      }
+    : directEmotion
+  const createCard = (target: CardTarget): Promise<CardHandle | null> =>
+    relay
+      ? relay.createCard(target)
+      : AICard.create({ token: () => outbound.token(), robotCode: clientId, target, capability: cardCapability, log })
   const renderer = new Renderer({
     config,
     outbound: replySink,
     emotion,
-    createCard: (target: CardTarget) =>
-      AICard.create({
-        token: () => outbound.token(),
-        robotCode: clientId,
-        target,
-        capability: cardCapability,
-        log,
-      }),
+    createCard,
     log,
   })
   const bindings = new JsonStore<string>(path.join(stateDir, 'bindings.json'), log)
@@ -552,7 +618,9 @@ async function startAccount(
     modelSelection: currentDefault,
     resolveFile: async (file, scopeKey, sessionCwd) => {
       try {
-        const data = await downloadFileByCode(await outbound.token(), clientId, file.downloadCode, log, files.signal)
+        const data = relay
+          ? (await relay.media(file.downloadCode))?.data
+          : await downloadFileByCode(await outbound.token(), clientId, file.downloadCode, log, files.signal)
         if (!data) throw new Error('download_failed')
         const stored = await files.storeInbound(sessionCwd, scopeKey, file.fileName, data)
         log(`inbound file stored (${stored.bytes} bytes)`)
@@ -579,7 +647,9 @@ async function startAccount(
           log('attachments service unavailable; image dropped to text note')
           return null
         }
-        const image = await downloadImageByCode(await outbound.token(), clientId, downloadCode, log)
+        const image = relay
+          ? await relay.media(downloadCode)
+          : await downloadImageByCode(await outbound.token(), clientId, downloadCode, log)
         if (!image) return null
         const ref = await attachments.saveImage({ data: image.data, mediaType: image.mediaType })
         log(`inbound image stored (${image.mediaType}, ${image.data.length} bytes)`)
@@ -704,7 +774,7 @@ async function startAccount(
       outbound.sendMarkdown(msg.sessionWebhook, config.markdownTitle, text),
     )
   }
-  const source = new RobotStreamSource({
+  const sourceOptions: import('./stream.js').StreamOptions = {
     clientId,
     clientSecret,
     debug: config.debug,
@@ -769,7 +839,9 @@ async function startAccount(
       // Session scope key: chat-sender isolates each group member's session.
       const scopeKey =
         account.sessionScope === 'chat-sender' && msg.conversationType === 'group'
-          ? `${msg.conversationId}#${msg.senderStaffId}`
+          ? relay
+            ? JSON.stringify([msg.senderCorpId, msg.conversationId, msg.senderStaffId])
+            : `${msg.conversationId}#${msg.senderStaffId}`
           : msg.conversationId
 
       // Picture without vision support: answer honestly instead of a silent drop.
@@ -828,7 +900,7 @@ async function startAccount(
           // interrupt, reject = steer; waiting is simply not pressing) →
           // updatable AI Card whose choice outcome morphs it in place →
           // plain bubble. Text answers 1/2 stay valid on every carrier.
-          const noticeCard = (async (): Promise<AICard | null> => {
+          const noticeCard = (async (): Promise<CardHandle | null> => {
             if (interactionCards) {
               const outTrackId = `busy_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
               const ok = await interactionCards.create({
@@ -845,13 +917,7 @@ async function startAccount(
                 return null
               }
             }
-            const card = await AICard.create({
-              token: () => outbound.token(),
-              robotCode: clientId,
-              target,
-              capability: cardCapability,
-              log,
-            })
+            const card = await createCard(target)
             if (!card) {
               void outbound.sendMarkdown(msg.sessionWebhook, config.markdownTitle, noticeText)
               return null
@@ -884,7 +950,10 @@ async function startAccount(
         cardUpdateOptions: { updateCardDataByKey: true },
       }
     },
-  })
+  }
+  const source = relay
+    ? { start: () => relay.start(sourceOptions), stop: () => relay.stop() }
+    : new RobotStreamSource(sourceOptions)
   await ctx.effect(async () => {
     try {
       await source.start()
@@ -894,8 +963,9 @@ async function startAccount(
       throw error
     }
     return async () => {
-      source.stop()
+      await source.stop()
       await files.close()
+      await bridge.close()
     }
   })
 

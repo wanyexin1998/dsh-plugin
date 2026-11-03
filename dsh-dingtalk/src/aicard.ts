@@ -88,6 +88,8 @@ function isQpsLimit(status: number, body: string): boolean {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+export type CardHandle = Pick<AICard, 'outTrackId' | 'stream' | 'finish' | 'fail' | 'updateStatic'>
+
 export class AICard {
   #inputingStarted = false
 

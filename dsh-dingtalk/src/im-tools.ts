@@ -3,6 +3,7 @@ import { messageIdentity, sameIdentity, type DingTalkIdentity } from './identity
 
 /** Structural bridge between the independently built channel and Web extension. */
 export interface ImToolFactory {
+  identity?(): DingTalkIdentity | undefined
   createTool(identity: () => DingTalkIdentity | undefined, host: () => object): HostToolDefinition
 }
 

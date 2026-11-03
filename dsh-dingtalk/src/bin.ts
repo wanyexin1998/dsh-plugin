@@ -54,6 +54,7 @@ function usage(): void {
       `${packageName} ${packageVersion}`,
       '',
       '用法：',
+      '  dsh-dingtalk gateway --config <private-file>  启动共享机器人网关',
       '  dsh-dingtalk setup                 安装插件并启动完整引导',
       '  dsh-dingtalk setup --plan --json [--account <id>]',
       '                                      生成严格只读的机器安装计划',
@@ -397,7 +398,16 @@ async function setup(args: string[]): Promise<number> {
 
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2)
-  if (command === 'setup') process.exitCode = await setup(args)
+  if (command === 'gateway') {
+    if (args.length !== 2 || args[0] !== '--config') throw new Error('usage: gateway --config <private-file>')
+    const { startRobotGateway } = await import('./relay/robot.js')
+    const service = await startRobotGateway(JSON.parse(await readFile(args[1], 'utf8')))
+    console.log(`Gateway listening on port ${service.port}`)
+    for (const signal of ['SIGINT', 'SIGTERM'] as const)
+      process.once(signal, () => {
+        void service.close()
+      })
+  } else if (command === 'setup') process.exitCode = await setup(args)
   else if (command === 'doctor') process.exitCode = await doctor(args)
   else if (command === 'digital-employee') process.exitCode = await digitalEmployee(args)
   else if (command === '--version' || command === '-V') console.log(packageVersion)

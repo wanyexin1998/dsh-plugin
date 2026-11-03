@@ -11,6 +11,7 @@ import type { LocaleFace } from './i18n.js';
 import { toolLabel } from './tool-label.js';
 import type { ToolArgumentView } from './tool-label.js';
 import { connectionCss } from './styles.js';
+import { RelaySection } from './relay.js';
 import { authorizationTail } from './tail.js';
 import type { ChatSnapshot } from './tail.js';
 
@@ -91,6 +92,7 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
       h('div', { className: 'dsh-dt-menu-anchor', ref: menuRoot }, h('button', { className: 'dsh-dt-icon', ref: menuButton, type: 'button', 'aria-label': '连接管理', title: '连接管理', 'aria-expanded': menu, onClick: () => setMenu(!menu) }, icon('more')),
         h('div', { className: 'dsh-dt-menu', hidden: !menu }, h(IconButton, { label: '重新授权', caption: '重新授权', symbol: 'refresh', disabled: snap.pending || working, onClick: () => { setMenu(false); void store.begin(context); } }), h(IconButton, { label: '解除连接', caption: '解除连接', symbol: 'disconnect', disabled: snap.pending || working, onClick: unlink })))),
     connected ? h('div', { className: 'dsh-dt-account' }, h('span', { className: 'dsh-dt-avatar' }, icon('user')), h('div', { className: 'dsh-dt-account-copy' }, h('strong', null, account?.displayName || '已授权账号'), h('p', null, account?.organizationName || '已验证企业')), h('span', { className: 'dsh-dt-connected', role: 'status', 'aria-live': 'polite' }, icon('check'), '钉钉已连接')) : strip(false),
+    h(RelaySection, { store }),
     h('div', { className: 'dsh-dt-list-label' }, '连接后可用'), permissions(),
     h('p', { className: 'dsh-dt-privacy' }, icon('shield'), h('span', null, '按你的指令操作，写入前确认。')),
     admin && reconnect ? h(IconButton, { label: copied ? '已复制申请文案' : '复制给 IT 的申请文案', caption: copied ? '已复制' : '复制给管理员', symbol: 'copy', onClick: copy }) : null,
