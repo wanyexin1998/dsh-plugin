@@ -1,5 +1,13 @@
 # Changelog
 
+## 定制版 0.2.0-dev.8（本地验收通过）
+
+- 兼容当前 DSH 的 agent/assistant-stream 实时增量，并保留旧 assistant/chunk 入口；等待正在发送的流式帧后再完成卡片。
+- 共享机器人转发 Thinking / 撤回 / Done；只在正常完成且回复投递成功后显示 Done，失败或取消不显示成功状态。
+- 增加脱敏的 Renderer 事件计数及卡片、表情 API 结果；doctor --profile NAME --json 识别共享网关，不再将旧 web 配置的 Stream 状态当作当前状态。
+- 修复桌面设置页 dsh-app://app 来源被拒绝的问题，保留浏览器 owner 校验与其他来源限制。
+- 测试私聊真实验收通过：用户确认即时 Thinking、正文流式更新及完成后的 Done 均正常；卡片与表情 API 无失败，群聊仍保留 Markdown，未将私聊结果视为群聊验收。
+
 ## 定制版 0.2.0-dev.7
 
 - 新增共享机器人网关：统一接收 Stream 消息，按企业及用户路由到个人 DSH，以本人的本地 DWS 授权执行，结果返回原会话。独立连接模式保留。

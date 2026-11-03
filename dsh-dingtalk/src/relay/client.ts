@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path'
 import WebSocket from 'ws'
 import { Peer } from './protocol.js'
 import { readState, saveState } from './state.js'
@@ -17,6 +18,9 @@ export class RelayClient {
   private stopped = false
   private reconnect?: NodeJS.Timeout
   private routes = new Map<string, InboundMessage>()
+  private messageRoutes = new Map<string, string>()
+  private diagnosing = false
+  private heartbeat?: NodeJS.Timeout
   private downloads = new Map<string, string>()
   private seen: Record<string, number>
   private callbacks?: Pick<StreamOptions, 'onMessage' | 'onCardCallback' | 'onStatus'>
@@ -52,6 +56,7 @@ export class RelayClient {
     this.stop()
     this.peer = undefined
     this.stopped = false
+    this.heartbeat = setInterval(() => this.publishRuntime(), 5000).unref()
     this.saved = { url }
     saveState(this.file, this.saved)
     await this.open()
@@ -69,11 +74,16 @@ export class RelayClient {
   }
   async start(callbacks: Pick<StreamOptions, 'onMessage' | 'onCardCallback' | 'onStatus'>) {
     this.callbacks = callbacks
+    clearInterval(this.heartbeat)
+    this.heartbeat = setInterval(() => this.publishRuntime(), 5000).unref()
+    this.publishRuntime()
     this.stopped = false
     if (this.saved.url && this.saved.token) await this.open().catch(() => undefined)
   }
   stop() {
     this.stopped = true
+    clearInterval(this.heartbeat)
+    this.publishRuntime()
     clearTimeout(this.reconnect)
     this.peer?.socket.close()
   }
@@ -112,6 +122,8 @@ export class RelayClient {
         for (const id of Object.keys(this.seen)) if (this.seen[id] < Date.now()) delete this.seen[id]
         this.seen[data.requestId] = Date.now() + 24 * 3600_000
         saveState(`${this.file}.seen`, this.seen)
+        this.messageRoutes.set(JSON.stringify([msg.conversationId, msg.msgId]), data.requestId)
+        while (this.messageRoutes.size > 4096) this.messageRoutes.delete(this.messageRoutes.keys().next().value!)
         this.routes.set(
           this.targetKey(
             msg.conversationType === 'group'
@@ -178,6 +190,33 @@ export class RelayClient {
       this.view = { status: 'auth_required' }
     } else this.view = { status: 'connected' }
     this.callbacks?.onStatus?.('connected')
+  }
+  private publishRuntime() {
+    if (this.diagnosing) return
+    this.diagnosing = true
+    const status = this.stopped ? 'stopped' : this.status().status
+    const gateway = status === 'connected' ? this.peer?.call('diagnostics', {}, 3000).catch(() => undefined) : undefined
+    void Promise.resolve(gateway)
+      .then((value) => {
+        try {
+          saveState(join(dirname(this.file), 'relay-runtime.json'), {
+            pid: process.pid,
+            observedAt: Date.now(),
+            status,
+            gateway: value,
+          })
+        } catch {
+          /* Diagnostics do not interrupt transport. */
+        }
+      })
+      .finally(() => {
+        this.diagnosing = false
+      })
+  }
+  async emotion(action: 'add' | 'recall' | 'done', id: string, conversation: string) {
+    const requestId = this.messageRoutes.get(JSON.stringify([conversation, id]))
+    if (!requestId) return
+    await this.operation(requestId, `emotion.${action}`, {})
   }
   private targetKey(target: CardTarget) {
     return JSON.stringify(target.type === 'group' ? ['group', target.openConversationId] : ['user', target.userId])

@@ -1,3 +1,4 @@
+import { FeedbackDiagnostics } from './feedback.js'
 import { RelayClient } from './relay/client.js'
 import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
@@ -470,6 +471,7 @@ async function startAccount(
   const interactionCardTemplateId =
     config.interactionCardTemplateId || process.env.DINGTALK_INTERACTION_CARD_TEMPLATE_ID || ''
   const stateDir = accountStateDir(resolveStateDir(), account.id)
+  const feedback = new FeedbackDiagnostics(path.join(stateDir, 'feedback.json'))
   let streamStatus: 'connecting' | 'connected' | 'reconnecting' | 'stopped' = 'connecting'
   const localOwner = new OwnerBinding({
     file: path.join(stateDir, 'owner.json'),
@@ -571,22 +573,35 @@ async function startAccount(
     )
     fs.chmodSync(cardCapabilityFile, 0o600)
   })
-  const directEmotion = new Emotion(() => outbound.token(), clientId, log)
+  const directEmotion = new Emotion(() => outbound.token(), clientId, log, feedback.observe)
   const emotion = relay
     ? {
-        add: (_id: string, _conversation: string) => undefined,
-        recall: async (_id: string, _conversation: string) => undefined,
+        add: (id: string, conversation: string) => {
+          void relay.emotion('add', id, conversation).catch(() => feedback.observe('emotion.add', false))
+        },
+        recall: (id: string, conversation: string) =>
+          relay.emotion('recall', id, conversation).catch(() => feedback.observe('emotion.recall', false)),
+        done: (id: string, conversation: string) =>
+          relay.emotion('done', id, conversation).catch(() => feedback.observe('emotion.done', false)),
       }
     : directEmotion
   const createCard = (target: CardTarget): Promise<CardHandle | null> =>
     relay
       ? relay.createCard(target)
-      : AICard.create({ token: () => outbound.token(), robotCode: clientId, target, capability: cardCapability, log })
+      : AICard.create({
+          token: () => outbound.token(),
+          robotCode: clientId,
+          target,
+          capability: cardCapability,
+          log,
+          observe: feedback.observe,
+        })
   const renderer = new Renderer({
     config,
     outbound: replySink,
     emotion,
     createCard,
+    observe: feedback.observe,
     log,
   })
   const bindings = new JsonStore<string>(path.join(stateDir, 'bindings.json'), log)
@@ -740,6 +755,9 @@ async function startAccount(
 
   ;(ctx as any).on('session/event', (session: HostSession, event: HostSessionEvent) => {
     renderer.onSessionEvent(session, event)
+  })
+  ;(ctx as any).on('agent/assistant-stream', ({ agent, frame }: any) => {
+    renderer.onAssistantStream(agent, frame)
   })
 
   // Reject visibility (Feishu SDK's reject-with-reason lesson): tell the
@@ -966,6 +984,7 @@ async function startAccount(
       await source.stop()
       await files.close()
       await bridge.close()
+      feedback.close()
     }
   })
 

@@ -477,3 +477,39 @@ test('profile 解析异常返回稳定错误码且不回显路径或原文', asy
   assert.deepEqual(report.accounts, [])
   assert.doesNotMatch(JSON.stringify(report), /profile-secret-value|dsh-dingtalk-doctor-profile-error/)
 })
+
+test('doctor selects the shared-gateway profile without inspecting stale web credentials', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dt-relay-doctor-'))
+  t.after(() => import('node:fs/promises').then((fs) => fs.rm(root, { recursive: true, force: true })))
+  const profile = path.join(root, 'profiles', 'desktop-test')
+  await mkdir(profile, { recursive: true })
+  await writeFile(
+    path.join(profile, 'cordis.patch.yml'),
+    '- id: dingtalk-channel\n  config:\n    relay: true\n    replyMode: {direct: markdown, group: markdown}\n',
+  )
+  await writeFile(
+    path.join(root, 'relay-runtime.json'),
+    JSON.stringify({
+      status: 'connected',
+      observedAt: Date.now(),
+      gateway: {
+        events: {
+          'card.stream': { success: 2, failure: 0, at: Date.now(), code: 'ok', token: 'secret' },
+          untrusted: { secret: true },
+        },
+      },
+    }),
+  )
+  const report = await collectDoctorReport({
+    mode: 'online',
+    dshHome: root,
+    stateDir: root,
+    profile: 'desktop-test',
+    verifyCredentials: () => assert.fail('local credentials irrelevant'),
+  })
+  assert.equal(report.channel, 'robot-relay')
+  assert.equal(report.result, 'unverified')
+  assert.equal(report.effective.replyMode.direct, 'markdown')
+  assert.equal(report.feedback.gateway['card.stream'].success, 2)
+  assert.doesNotMatch(JSON.stringify(report), /secret|untrusted/)
+})

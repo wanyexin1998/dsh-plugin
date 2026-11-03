@@ -866,8 +866,9 @@ export async function updateWebProfileAccountAccess(
   })
 }
 
-export async function loadWebProfileConfig(dshHome: string): Promise<WebProfileConfig> {
-  const file = path.join(dshHome, 'profiles', 'web', 'cordis.patch.yml')
+export async function loadWebProfileConfig(dshHome: string, profile = 'web'): Promise<WebProfileConfig> {
+  if (!/^[a-zA-Z0-9_-]+$/.test(profile)) throw new Error('invalid_profile')
+  const file = path.join(dshHome, 'profiles', profile, 'cordis.patch.yml')
   const source = await readOptional(file)
   if (!source || !source.trim()) {
     return {

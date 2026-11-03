@@ -1,3 +1,4 @@
+import { relayDoctor } from './relay/doctor.js'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { accountStateDir, DEFAULT_ACCOUNT_ID } from './accounts.js'
@@ -19,6 +20,7 @@ export type DoctorResult = 'pass' | 'warning' | 'fail' | 'unverified' | 'error'
 export interface DoctorCheck {
   id:
     | DiagnosticCheck['id']
+    | 'relay'
     | 'profile'
     | 'diagnostics'
     | 'digital-employee-config'
@@ -32,6 +34,9 @@ export interface DoctorCheck {
   status: DoctorResult
   code:
     | DiagnosticCode
+    | 'ai-card.verified'
+    | 'relay.connected'
+    | 'relay.unverified'
     | 'profile.read-error'
     | 'profile.no-enabled-accounts'
     | 'credentials.read-error'
@@ -79,6 +84,10 @@ export interface DoctorDigitalEmployeeReport {
 }
 
 export interface DoctorReport {
+  channel?: 'robot-relay'
+  profile?: string
+  effective?: unknown
+  feedback?: unknown
   schemaVersion: 1
   kind: 'doctor-report'
   mode: DoctorMode
@@ -90,6 +99,7 @@ export interface DoctorReport {
 }
 
 export interface DoctorReportOptions {
+  profile?: string
   mode: DoctorMode
   dshHome: string
   stateDir: string
@@ -305,7 +315,11 @@ export async function collectDoctorReport(options: DoctorReportOptions): Promise
   const env = options.env ?? process.env
   let profile
   try {
-    profile = await loadWebProfileConfig(options.dshHome)
+    const name = options.profile ?? env.DSH_PROFILE ?? 'web'
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) throw new Error('invalid_profile')
+    const relay = await relayDoctor(options.dshHome, name, options.stateDir, options.mode)
+    if (relay) return relay
+    profile = await loadWebProfileConfig(options.dshHome, name)
   } catch {
     return createReport(
       options.mode,

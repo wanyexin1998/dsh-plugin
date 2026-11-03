@@ -62,7 +62,7 @@ function usage(): void {
       '                                      按显式批准执行并创建检查点',
       '  dsh-dingtalk setup --resume <id> [--json]',
       '                                      人工处理私密步骤，或机器续跑',
-      '  dsh-dingtalk doctor [--offline] [--json]',
+      '  dsh-dingtalk doctor [--profile NAME] [--offline] [--json]',
       '                                      执行只读诊断',
       '  dsh-dingtalk digital-employee register --stdin --json',
       '  dsh-dingtalk digital-employee runtime --stdin --json',
@@ -196,9 +196,12 @@ async function doctor(args: string[]): Promise<number> {
   const remaining = [...args]
   let offline: boolean
   let json: boolean
+  let profileName: string
   try {
     offline = takeFlag(remaining, '--offline')
     json = takeFlag(remaining, '--json')
+    profileName = takeValue(remaining, '--profile') ?? process.env.DSH_PROFILE ?? 'web'
+    if (!/^[a-zA-Z0-9_-]+$/.test(profileName)) throw new CliArgumentError('invalid_arguments')
     if (remaining.length) throw new CliArgumentError('invalid_arguments')
   } catch {
     if (args.includes('--json')) writeJsonError('invalid_arguments')
@@ -209,6 +212,7 @@ async function doctor(args: string[]): Promise<number> {
   if (json) {
     try {
       const report = await collectDoctorReport({
+        profile: profileName,
         mode: offline ? 'offline' : 'online',
         dshHome: dshHome(),
         stateDir: stateDir(),
@@ -221,7 +225,17 @@ async function doctor(args: string[]): Promise<number> {
     }
   }
 
-  const profile = await loadWebProfileConfig(dshHome())
+  const relayReport = await collectDoctorReport({
+    mode: 'offline',
+    profile: profileName,
+    dshHome: dshHome(),
+    stateDir: stateDir(),
+  })
+  if (relayReport.channel === 'robot-relay') {
+    for (const check of relayReport.checks) console.log(`${check.status}: ${check.message}`)
+    return relayReport.result === 'pass' ? 0 : 1
+  }
+  const profile = await loadWebProfileConfig(dshHome(), profileName)
   const icons = { pass: '✅', warn: '⚠️', fail: '❌' } as const
   const accounts = await enabledConfiguredWebProfileAccounts(dshHome(), profile)
   if (!accounts.length && !profile.digitalEmployees.some((employee) => employee.enabled)) {
