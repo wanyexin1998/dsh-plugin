@@ -12,11 +12,14 @@ import type { ToolHost } from './tool.js';
 import { dingtalkTool } from './tool.js';
 import { readFile } from 'node:fs/promises';
 
+export interface ImToolFactory {
+  createTool(identity: () => { corpId: string; userId: string } | undefined, host: () => ToolHost): ReturnType<typeof dingtalkTool>;
+}
 declare module '@deepseek-ai/cordis' {
-  interface Context { dingtalkConnection: DingtalkConnectionService }
+  interface Context { dingtalkConnection: DingtalkConnectionService; dingtalkImTools: ImToolFactory }
 }
 export const name = 'dsh-dingtalk';
-export const provide = ['dingtalkConnection'];
+export const provide = ['dingtalkConnection', 'dingtalkImTools'];
 export async function apply(ctx: Context, config: unknown): Promise<void> {
   const parsed = parseConfig(config);
   const profile = ctx.get('profileContext') as { dir?: string } | undefined;
@@ -24,6 +27,15 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
   const owner = createConnectionService(managed.backend);
   ctx.effect(() => () => owner.dispose());
   ctx.provide('dingtalkConnection', owner.service);
+  // Host-only service. IM gets the same managed reader, with its transport identity
+  // checked on every call; no account selector is exposed to the model or Client.
+  ctx.provide('dingtalkImTools', {
+    createTool: (identity, host) => dingtalkTool({ invoke: (input, options) => {
+      const principal = identity();
+      return principal ? managed.invokeFor(principal, input, options)
+        : Promise.resolve({ status: 'denied' as const, reasonCode: 'identity_mismatch' as const, retryable: false });
+    } }, host),
+  });
   ctx.inject(['connection', 'webServer'], scope => {
     const connection = (scope as unknown as { connection: HostConnection }).connection;
     scope.effect(() => createUIRpc(connection, managed, owner.service));

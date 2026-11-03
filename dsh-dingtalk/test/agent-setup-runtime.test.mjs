@@ -6,6 +6,7 @@ import test, { mock } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { Bridge as RealBridge } from '../lib/bridge.js'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 const bridges = [],
   sources = []
@@ -132,6 +133,7 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
         return () => {}
       },
       get(name) {
+        if (name === 'dingtalkImTools') return imToolFactory
         if (name === 'workspaceRegistry')
           return { resolveByPath: async () => ({ path: dir, sessionIds: [], async attachSession() {} }) }
         if (name === 'agentPresets' && preset !== 'missing') return presets
@@ -241,11 +243,13 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
       } else {
         live.set(replacement.id, replacement)
         const beforeAttempts = attempts.length
-        await assert.rejects(send(key), /owned|ownership|borrow|another|external/)
-        assert.equal(attempts.length, beforeAttempts)
+        const recovered = (await send(key))[0].agent
+        assert.notEqual(recovered.id, replacement.id)
+        assert.equal(live.get(replacement.id), replacement)
+        assert.equal(attempts.length, beforeAttempts + 1)
       }
       // setup 已安装后回滚；同一持久会话 ID 再恢复仍必须完成安装。
-      live.delete(first.id)
+      live.delete(followups.at(-1).agent.id)
       rollback = true
       const beforeAttempts = attempts.length
       assert.equal((await send(key)).length, 1)

@@ -47,7 +47,7 @@ npm run verify:dsh-web
 ```powershell
 New-Item -ItemType Directory -Force artifacts | Out-Null
 npm pack --pack-destination artifacts
-dsh plugin --profile <你的WebProfile名称> add .\artifacts\wanyexin1998-dsh-dingtalk-0.2.0-dev.2.tgz --ignore-scripts
+dsh plugin --profile <你的WebProfile名称> add .\artifacts\wanyexin1998-dsh-dingtalk-0.2.0-dev.5.tgz --ignore-scripts
 ```
 
 当前开发预览继续使用 `http://127.0.0.1:19877`；迁移后的本机启动脚本位于 `%LOCALAPPDATA%\dsh-dt\launch.mjs`，从本目录安装已验证的 tarball。授权与会话备份保留在原目录的忽略缓存中，迁移不清空授权。需要重启预览时，先停止该预览实例，再执行：

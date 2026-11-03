@@ -20,7 +20,7 @@ if (packed.status !== 0) {
 const report = extractPackReport(JSON.parse(packed.stdout), packageJson.name)
 const files = report.files.map((entry) => entry.path)
 const allowed = [
-  /^docs\/(PHASE1|DWS-CAPABILITIES|REPOSITORY|CLOSEOUT)\.md$/,
+  /^docs\/(PHASE1|PHASE2|DWS-CAPABILITIES|REPOSITORY|CLOSEOUT)\.md$/,
   /^package\.json$/,
   /^README\.md$/,
   /^README\.zh-CN\.md$/,
@@ -41,6 +41,7 @@ const required = [
   'docs/REPOSITORY.md',
   'package.json',
   'docs/DWS-CAPABILITIES.md',
+  'docs/PHASE2.md',
   'README.md',
   'README.zh-CN.md',
   'LICENSE',
@@ -48,6 +49,8 @@ const required = [
   'CHANGELOG.md',
   'cordis.patch.yml',
   'lib/index.js',
+  'lib/identity.js',
+  'lib/im-tools.js',
   'enhancements/lib/host/index.js',
   'enhancements/lib/client.js',
   'enhancements/dws.lock.json',

@@ -21,6 +21,8 @@ export interface TurnRenderer {
 export interface BridgeOptions {
   /** 数字员工不借用 Web UI 或其他 Channel 持有的运行实例。 */
   exclusiveOwnership?: boolean
+  /** Keep the foreign Agent untouched and bind a fresh channel session instead. */
+  recoverForeignSession?: boolean
   cwd: string
   log(line: string): void
   /** Per-conversation model override store (set via /model use). */
@@ -115,21 +117,21 @@ export class Bridge {
     if (bound) {
       const running = this.agents.get(sessionId(bound))
       if (running) {
-        if (this.opts.exclusiveOwnership && this.owned.get(running.id)?.agent !== running)
-          throw new Error('session_owned_by_another_runtime')
-        return running
-      }
-      try {
-        const handle = await this.agents.resume({
-          resumeSessionId: sessionId(bound),
-          agentOptions,
-          setup: composition.setup,
-        })
-        this.opts.log(`resumed session ${bound} for conversation ${conversationId}`)
-        return this.own(handle)
-      } catch (err) {
-        this.opts.log(`resume ${bound} failed (${err instanceof Error ? err.message : err}); creating fresh`)
-      }
+        if (!this.opts.exclusiveOwnership || this.owned.get(running.id)?.agent === running) return running
+        if (!this.opts.recoverForeignSession) throw new Error('session_owned_by_another_runtime')
+        this.opts.log('bound session active in another runtime; creating a fresh channel session')
+      } else
+        try {
+          const handle = await this.agents.resume({
+            resumeSessionId: sessionId(bound),
+            agentOptions,
+            setup: composition.setup,
+          })
+          this.opts.log(`resumed session ${bound} for conversation ${conversationId}`)
+          return this.own(handle)
+        } catch (err) {
+          this.opts.log(`resume ${bound} failed (${err instanceof Error ? err.message : err}); creating fresh`)
+        }
     }
     const id = sessionId(randomUUID())
     const handle = await this.agents.create({

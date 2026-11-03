@@ -6,6 +6,7 @@ import test, { mock } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { Bridge as RealBridge } from '../lib/bridge.js'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 let source
 // 只替换传输和 turn 完成信号，保持 apply 的授权、队列、工作区与文件链路真实。
@@ -106,6 +107,7 @@ test(
       },
       on() {},
       get(name) {
+        if (name === 'dingtalkImTools') return imToolFactory
         if (name === 'workspaceRegistry')
           return {
             resolveByPath: async (cwd) => ({ path: cwd, sessionIds: [], async attachSession() {} }),

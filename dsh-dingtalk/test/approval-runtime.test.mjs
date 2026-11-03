@@ -6,6 +6,7 @@ import path from 'node:path'
 import test, { mock } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
 let deliveryClock = Date.now()
 
@@ -118,6 +119,7 @@ test('公开 apply 运行时允许管理员通过私聊或同群一次性文字�
     },
     agentDefaultModel: { currentSelection: () => undefined },
     get(name) {
+      if (name === 'dingtalkImTools') return imToolFactory
       if (name === 'workspaceRegistry') {
         return { resolveByPath: async () => workspace, create: async () => workspace }
       }
