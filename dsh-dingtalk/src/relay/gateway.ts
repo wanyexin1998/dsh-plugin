@@ -24,6 +24,7 @@ interface RequestRoute extends Route {
 const key = (identity: DingTalkIdentity) => JSON.stringify([identity.corpId, identity.userId])
 const hash = (token: string) => createHash('sha256').update(token).digest('hex')
 export interface GatewayOptions {
+  diagnostics?: () => unknown
   login?: LoginOptions
   stateFile: string
   host?: string
@@ -118,6 +119,7 @@ export class Gateway {
           this.online.delete(key(binding.identity))
           return true
         }
+        if (method === 'diagnostics') return options.diagnostics?.() ?? {}
         if (method !== 'operation' || typeof data?.requestId !== 'string') throw new Error('invalid_method')
         const route = this.requests.get(data.requestId)
         if (!route || route.peer !== peer || route.expires < Date.now()) throw new Error('invalid_request')
@@ -133,6 +135,7 @@ export class Gateway {
           'media',
           'emotion.add',
           'emotion.recall',
+          'emotion.done',
         ]
         if (!allowed.includes(data.method)) throw new Error('invalid_operation')
         if (data.method === 'interaction.create') {

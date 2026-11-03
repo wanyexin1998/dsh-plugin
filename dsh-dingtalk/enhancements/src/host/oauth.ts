@@ -23,12 +23,13 @@ export function browserContext(input: unknown): BrowserContext {
   const data = input as Record<string, unknown>;
   if (Object.keys(data).some(key => !['origin', 'returnPath'].includes(key)) || typeof data.origin !== 'string' || typeof data.returnPath !== 'string' || data.returnPath.length > 2048) throw new ConnectionServiceError('invalid_request');
   if (data.origin === 'null') return { origin: 'null', returnPath: '' };
+  const desktop = data.origin === 'dsh-app://app';
   const url = new URL(data.origin);
-  if (!['http:', 'https:'].includes(url.protocol) || !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname) || url.origin !== data.origin) throw new ConnectionServiceError('invalid_request');
+  if (!desktop && (!['http:', 'https:'].includes(url.protocol) || !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname) || url.origin !== data.origin)) throw new ConnectionServiceError('invalid_request');
   if (!data.returnPath.startsWith('/') || data.returnPath.startsWith('//') || /[\\\u0000-\u001f]/.test(data.returnPath)) throw new ConnectionServiceError('invalid_request');
   const back = new URL(data.returnPath, url);
-  if (back.origin !== url.origin || [...back.searchParams.keys()].some(key => /token|code|secret/i.test(key)) || /[?&](?:token|code|authCode|secret)=/i.test(back.hash)) throw new ConnectionServiceError('invalid_request');
-  return { origin: url.origin, returnPath: back.pathname + back.search + back.hash };
+  if (back.protocol !== url.protocol || back.host !== url.host || back.username || back.password || back.origin !== url.origin || [...back.searchParams.keys()].some(key => /token|code|secret/i.test(key)) || /[#?&](?:token|code|authCode|secret)=/i.test(back.hash)) throw new ConnectionServiceError('invalid_request');
+  return { origin: desktop ? 'dsh-app://app' : url.origin, returnPath: back.pathname + back.search + back.hash };
 }
 const escapeHtml = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 export class OAuthController {
@@ -66,7 +67,7 @@ export class OAuthController {
       id: random(), owner, state: random(), ticket: random(), proof: random(), nonce: random(),
       expires: this.clock() + 120000, started: false, consumed: false,
       result: { state: 'authorizing', reasonCode: 'authorization_pending' },
-      origin: context.origin, returnUrl: context.origin === 'null' ? '' : new URL(context.returnPath, context.origin).href,
+      origin: context.origin, returnUrl: ['null', 'dsh-app://app'].includes(context.origin) ? '' : new URL(context.returnPath, context.origin).href,
       revision: this.operations.revision(), controller: new AbortController(),
     };
     this.transactions.set(tx.id, tx);

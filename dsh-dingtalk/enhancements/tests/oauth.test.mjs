@@ -97,3 +97,11 @@ test('cancellation wins over a late exchange result even when a test operation i
     assert.equal(oauth.status(a.tx.transactionId, 'browser-a').state, 'user_cancelled');
   } finally { release(); await oauth.dispose(); }
 });
+
+
+test('desktop origin accepts only the exact DSH shell and safe local return paths', () => {
+  const context = { origin: 'dsh-app://app', returnPath: '/session/test#settings' };
+  assert.deepEqual(browserContext(context), context);
+  for (const origin of ['dsh-app://evil','dsh-app://app:123','dsh-app://user@app','dsh-app://app/','file://app','https://app']) assert.throws(() => browserContext({...context, origin}));
+  for (const returnPath of ['//evil','/?token=secret','/#code=secret','/\\evil']) assert.throws(() => browserContext({...context,returnPath}));
+});

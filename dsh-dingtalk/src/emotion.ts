@@ -1,62 +1,62 @@
-/**
- * First-response emotion: put a "🤔思考中" reaction on the user's message the
- * moment it arrives, and withdraw it when the turn settles. Ported from
- * dingtalk-openclaw-connector `src/utils/utils-legacy.ts:394-445` (same
- * endpoints, payload, and non-blocking failure policy).
- */
+import { feedbackCode, type ObserveFeedback } from './feedback.js'
 
-const DINGTALK_API = 'https://api.dingtalk.com'
-
-const EMOTION_BODY = {
-  emotionType: 2,
-  emotionName: '🤔思考中',
-  textEmotion: {
-    emotionId: '2659900',
-    emotionName: '🤔思考中',
-    text: '🤔思考中',
-    backgroundId: 'im_bg_1',
-  },
-}
-
+/** Serialize transitions per message so a slow Thinking request cannot outlive Done. */
 export class Emotion {
+  private pending = new Map<string, Promise<void>>()
   constructor(
     private readonly token: () => Promise<string>,
     private readonly robotCode: string,
     private readonly log: (line: string) => void,
+    private readonly observe?: ObserveFeedback,
   ) {}
-
-  private async post(path: 'reply' | 'recall', openMsgId: string, openConversationId: string): Promise<void> {
-    const token = await this.token()
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5_000)
-    try {
-      const resp = await fetch(`${DINGTALK_API}/v1.0/robot/emotion/${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
-        body: JSON.stringify({ robotCode: this.robotCode, openMsgId, openConversationId, ...EMOTION_BODY }),
-        signal: controller.signal,
-      })
-      if (!resp.ok) this.log(`emotion ${path} failed ${resp.status}: ${(await resp.text()).slice(0, 200)}`)
-    } finally {
-      clearTimeout(timer)
-    }
+  private transition(action: 'add' | 'recall' | 'done', openMsgId: string, openConversationId: string): Promise<void> {
+    if (!openMsgId || !openConversationId) return Promise.resolve()
+    const key = JSON.stringify([openConversationId, openMsgId])
+    const task = (this.pending.get(key) ?? Promise.resolve()).then(async () => {
+      const name = action === 'done' ? '🥳 Done' : '🤔思考中'
+      try {
+        const token = await this.token()
+        const response = await fetch(
+          `https://api.dingtalk.com/v1.0/robot/emotion/${action === 'recall' ? 'recall' : 'reply'}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
+            body: JSON.stringify({
+              robotCode: this.robotCode,
+              openMsgId,
+              openConversationId,
+              emotionType: 2,
+              emotionName: name,
+              textEmotion: { emotionId: '2659900', emotionName: name, text: name, backgroundId: 'im_bg_1' },
+            }),
+            signal: AbortSignal.timeout(5000),
+          },
+        )
+        this.observe?.(`emotion.${action}`, response.ok, response.ok ? 'ok' : feedbackCode(response.status))
+        if (!response.ok) this.log(`emotion ${action} failed HTTP ${response.status}`)
+        await response.body?.cancel()
+      } catch (error) {
+        this.observe?.(
+          `emotion.${action}`,
+          false,
+          error instanceof Error && /Timeout|Abort/.test(error.name) ? 'timeout' : 'transport',
+        )
+        this.log(`emotion ${action} failed`)
+      }
+    })
+    this.pending.set(key, task)
+    void task.finally(() => {
+      if (this.pending.get(key) === task) this.pending.delete(key)
+    })
+    return task
   }
-
-  /** Fire-and-forget add; a failure never blocks the main flow. */
-  add(openMsgId: string, openConversationId: string): void {
-    if (!openMsgId || !openConversationId) return
-    this.post('reply', openMsgId, openConversationId).catch((err) =>
-      this.log(`emotion add error: ${err instanceof Error ? err.message : err}`),
-    )
+  add(id: string, conversation: string): void {
+    void this.transition('add', id, conversation)
   }
-
-  /** Awaited recall so the face never lingers after the turn settles. */
-  async recall(openMsgId: string, openConversationId: string): Promise<void> {
-    if (!openMsgId || !openConversationId) return
-    try {
-      await this.post('recall', openMsgId, openConversationId)
-    } catch (err) {
-      this.log(`emotion recall error: ${err instanceof Error ? err.message : err}`)
-    }
+  recall(id: string, conversation: string): Promise<void> {
+    return this.transition('recall', id, conversation)
+  }
+  done(id: string, conversation: string): Promise<void> {
+    return this.transition('done', id, conversation)
   }
 }

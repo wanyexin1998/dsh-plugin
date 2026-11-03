@@ -64,3 +64,21 @@
 - 用户要求先停止真实测试并交付。两位真实成员、共享网关群聊、真实 A/B 设备切换、实际审批模板及图片附件尚未进行本阶段真实验收；上述自动化用例不能替代这些验收，也不沿用第二阶段的直连群聊结果作为共享网关验收。
 
 后续真实验收需两位成员分别完成 DWS 授权和网关网页登录，确认 Web/私聊/同群身份一致、A 离线或断开授权不影响 B，并验证同一人 A/B 设备切换、实际模板按钮与图片附件。
+
+## 流式反馈与桌面兼容（dev.8，本地验收）
+
+共享网关支持 AI Card 创建、投放、流式更新与结束。先验证真实卡片权限（`Card.Instance.Write` / `Card.Streaming.Write`）和模型文本增量，再把测试入口的 `replyMode.direct` 改为 `aicard`；`streaming.enabled: true`、`throttleMs: 500`、`asyncMode: false`。未经验证的入口保留原配置。
+
+当前 DSH 将文本增量发布到 `agent/assistant-stream`，最终消息与 `turn/end` 仍在 `session/event`。插件同时兼容旧 `assistant/chunk`，只处理当前机器人会话，按修订号去重。已开始发送的帧完成后才提交最终卡片。
+
+开启 `emotionFirstResponse` 后，在原始用户消息上贴 🤔，回复完成后撤回并贴 `🥳 Done`。取消、模型失败或最终投递失败不显示 Done。表情调用串行处理，失败不阻止业务回复，API 错误正文与凭据不写入诊断。
+
+本机 `accounts/shared/feedback.json` 记录 Renderer 收到的流式帧、文本增量、回合结束、最终投递和 Markdown 降级计数；网关 `feedback.json` 记录卡片及表情 API 成败。仅记录固定事件名、计数、时间和错误类别，不记录正文、账号、消息 ID、URL 或 Token。通过既有已认证连接读取网关诊断，不新增公开诊断端点。
+
+`dsh-dingtalk doctor --profile <当前 Profile> --json`（或设置 `DSH_PROFILE`）读取该 Profile 的有效回复配置和共享网关状态。默认仍为 `web`。连接正常不等于卡片权限已验证，需结合 `feedback.gateway` 中创建、更新与结束的实际成功记录。
+
+桌面 UI 接受精确来源 `dsh-app://app`；仍要求宿主已认证的 owner 浏览器 Peer。OAuth 完成后由设置页轮询更新，不让外部浏览器跳转到桌面自定义 scheme。其他任意 scheme、host、端口和带凭据的返回地址仍拒绝。
+
+本地验证记录（2026-11-03）：完整检查 359 项消息侧测试通过、51 项平台条件跳过，54 项 Web/DWS 测试通过；安装包与真实 DSH ToolRuntime 作用域检查通过。机器人应用补齐权限后，真实测试卡片创建、投放、3 次流式更新及结束均成功。安装 dev.8 时保留测试 Profile 的原配置；真实宿主 RPC 以桌面来源完成 bootstrap、status、disconnect-preview，未实际解除连接。随后真实私聊记录到 705 个流式帧、其中 508 个 text-delta 到达 Renderer，2 个回合正常结束并投递成功。三项前置验证通过后，才将测试私聊切为 aicard 并开启表情，群聊仍为 Markdown。
+
+启用后真实私聊验收通过：用户确认原消息及时出现 🤔、卡片正文边生成边更新、完成后显示 🥳 Done。本轮 Renderer 收到 310 个流式帧，其中 277 个 text-delta；回合结束和最终投递均成功。网关卡片创建、投放、2 次流式更新、结束，以及 Thinking 添加、撤回和 Done 添加均成功，所有记录失败数为 0，没有 Markdown 降级记录。`doctor --profile phase1-preview --json` 返回共享网关连接及 AI Card 验证均通过。此结果仅覆盖测试私聊；群聊流式效果与实际 Electron 窗口完整操作尚未单独验收。

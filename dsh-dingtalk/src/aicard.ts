@@ -1,3 +1,4 @@
+import { feedbackCode, type ObserveFeedback, type FeedbackEvent } from './feedback.js'
 /**
  * DingTalk AI Card lifecycle: create + deliver, streaming frames, finish/fail.
  * Ported from dingtalk-openclaw-connector `src/services/messaging/card.ts`
@@ -98,28 +99,47 @@ export class AICard {
     private readonly token: () => Promise<string>,
     private readonly capability: CardCapability,
     private readonly log: (line: string) => void,
+    private readonly observe?: ObserveFeedback,
   ) {}
 
   private async call(method: 'POST' | 'PUT', path: string, body: unknown): Promise<void> {
     this.capability.assertAvailable()
+    const event: FeedbackEvent = path.endsWith('/deliver')
+      ? 'card.deliver'
+      : path.endsWith('/streaming')
+        ? 'card.stream'
+        : method === 'POST'
+          ? 'card.create'
+          : 'card.update'
     const exec = async () => {
       const resp = await fetch(`${DINGTALK_API}${path}`, {
         method,
         headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': await this.token() },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
       })
+      this.observe?.(event, resp.ok, resp.ok ? 'ok' : feedbackCode(resp.status))
       if (!resp.ok) {
         const text = await resp.text()
         return { ok: false as const, status: resp.status, text }
       }
       return { ok: true as const }
     }
-    let result = await exec()
+    const request = () =>
+      exec().catch((error) => {
+        this.observe?.(
+          event,
+          false,
+          error instanceof Error && /Timeout|Abort/.test(error.name) ? 'timeout' : 'transport',
+        )
+        throw error
+      })
+    let result = await request()
     if (!result.ok && isQpsLimit(result.status, result.text)) {
       // Transient rate limit: back off and retry once so finalize frames survive.
       this.log(`card ${path} rate-limited, backing off ${QPS_BACKOFF_MS}ms`)
       await sleep(QPS_BACKOFF_MS)
-      result = await exec()
+      result = await request()
     }
     if (!result.ok) {
       const error = new Error(`card ${method} ${path} failed ${result.status}: ${result.text.slice(0, 300)}`)
@@ -168,6 +188,7 @@ export class AICard {
   async finish(content: string): Promise<void> {
     await this.stream(content, true)
     await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FINISHED, content, true))
+    this.observe?.('card.finish', true)
   }
 
   /**
@@ -188,6 +209,7 @@ export class AICard {
       isError: false,
     })
     await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FINISHED, content, true))
+    this.observe?.('card.finish', true)
   }
 
   /** Freeze the card in FAILED state with a human-readable error text. */
@@ -210,11 +232,12 @@ export class AICard {
     target: CardTarget
     capability?: CardCapability
     log: (line: string) => void
+    observe?: ObserveFeedback
   }): Promise<AICard | null> {
     const capability = opts.capability ?? new CardCapability()
     if (!capability.available) return null
     const outTrackId = `dshdt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-    const card = new AICard(outTrackId, opts.token, capability, opts.log)
+    const card = new AICard(outTrackId, opts.token, capability, opts.log, opts.observe)
     const deliverBody =
       opts.target.type === 'group'
         ? {

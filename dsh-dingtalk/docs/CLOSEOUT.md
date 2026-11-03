@@ -1,5 +1,15 @@
 # 开发收尾记录
 
+## 2026-11-03 流式反馈与桌面兼容
+
+- 开发分支：`feat/dingtalk-streaming-feedback`，版本 `0.2.0-dev.8`；仅修改 `dsh-dingtalk/`。
+- 适配 DSH 当前 `agent/assistant-stream` 事件，共享网关转发 AI Card 与 Thinking / 撤回 / Done，保留旧事件兼容。最终卡片等待在途更新完成；取消、失败或投递失败不显示 Done。
+- `doctor --profile NAME --json` 识别指定 Profile 的共享网关，提供脱敏的 Renderer 和 API 诊断。桌面来源 `dsh-app://app` 可正常 bootstrap，保持宿主 owner 校验。
+- 本地完整检查：消息侧 359 项通过、51 项平台条件跳过，Web/DWS 54 项通过；格式、类型、敏感内容扫描、安装包与真实 DSH ToolRuntime 作用域验证通过。
+- 先验证真实卡片权限和文本增量，再开启测试私聊 aicard 与表情。用户确认即时 🤔、正文实时更新、完成后 🥳 Done 均正常；本轮卡片与表情 API 全部成功，无 Markdown 降级，doctor 通过。
+- 群聊仍使用 Markdown，其流式效果尚未验收；桌面来源已通过真实宿主 RPC 验证，尚未单独完成 Electron 窗口全流程验收。详情见 [流式反馈验收](PHASE3.md)。
+- 凭据、配置、运行数据及本地日志不纳入提交。完成本地检查后推送当前分支、创建 PR 合并并同步本地 main；GitHub Actions 保持关闭，不发布 NPM。
+
 ## 2026-11-03 第三阶段：共享机器人按身份路由
 
 - 开发分支：`feat/dingtalk-phase3-shared-gateway`，基于第二阶段已合并的 `main`；仅修改 `dsh-dingtalk/`。版本 `0.2.0-dev.7`，独立 fork 仍只跟踪官方。

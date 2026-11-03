@@ -1,3 +1,6 @@
+const originalFetch = globalThis.fetch
+import { Renderer } from '../lib/renderer.js'
+import { createRobotOperations } from '../lib/relay/robot.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
@@ -51,7 +54,7 @@ async function fixture(t) {
     sessionWebhook: `https://original.invalid/${user}`,
     ...extra,
   })
-  async function client(user, suffix = user) {
+  async function client(user, suffix = user, onMessage) {
     let identity = { corpId: 'corp', userId: user }
     const received = [],
       callbacks = []
@@ -61,6 +64,7 @@ async function fixture(t) {
     await c.start({
       onMessage: async (msg) => {
         received.push(msg)
+        if (onMessage) return onMessage(msg, c)
         await c.operation(msg.sessionWebhook, 'text', { text: 'result' })
       },
       onCardCallback: (cb) => {
@@ -241,4 +245,79 @@ test('concurrent successful logins have one final route and revoked devices cann
   await f.gateway.receive(f.message('a'))
   assert.equal(a.received.length + b.received.length, 1)
   assert.deepEqual([a.c.status().status, b.c.status().status].sort(), ['connected', 'replaced'])
+})
+
+test('Renderer text deltas cross real relay sockets into the real AI Card API adapter; Done follows final delivery', async (t) => {
+  const f = await fixture(t),
+    api = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (!String(url).startsWith('https://api.dingtalk.com/')) return originalFetch(url, options)
+    const body = JSON.parse(options.body)
+    api.push({ path: new URL(url).pathname, body })
+    return new Response(
+      JSON.stringify(String(url).includes('accessToken') ? { accessToken: 'test-token', expireIn: 7200 } : {}),
+      { status: 200 },
+    )
+  })
+  const robot = createRobotOperations({
+    clientId: 'fixture',
+    clientSecret: 'fixture-secret',
+    corpId: 'corp',
+    publicOrigin: 'http://127.0.0.1',
+    stateDirectory: f.dir,
+  })
+  t.after(() => robot.diagnostics.close())
+  f.opts.operation = robot.operation
+  const events = []
+  const a = await f.client('a', 'streaming', async (msg, c) => {
+    const renderer = new Renderer({
+      config: {
+        replyMode: { direct: 'aicard', group: 'aicard' },
+        streaming: { enabled: true, throttleMs: 1, maxCardChars: 15000 },
+        asyncMode: false,
+        emotionFirstResponse: true,
+      },
+      outbound: {
+        sendText: async () => assert.fail('unexpected fallback'),
+        sendMarkdown: async () => assert.fail('unexpected fallback'),
+      },
+      emotion: {
+        recall: (id, conversation) => c.emotion('recall', id, conversation),
+        done: (id, conversation) => c.emotion('done', id, conversation),
+      },
+      createCard: (target) => c.createCard(target),
+      log() {},
+      observe: (name) => events.push(name),
+    })
+    void c.emotion('add', msg.msgId, msg.conversationId)
+    const settled = renderer.onInbound('session', msg)
+    renderer.onAssistantStream(
+      { id: 'session' },
+      { type: 'chunk', revision: 1, chunk: { type: 'text-delta', text: 'first' } },
+    )
+    renderer.onAssistantStream(
+      { id: 'session' },
+      { type: 'chunk', revision: 1, chunk: { type: 'text-delta', text: 'duplicate' } },
+    )
+    for (let i = 0; i < 100 && !api.some((x) => x.path.endsWith('/streaming')); i++)
+      await new Promise((r) => setTimeout(r, 5))
+    assert.ok(api.some((x) => x.path.endsWith('/streaming') && !x.body.isFinalize))
+    renderer.onSessionEvent(
+      { id: 'session' },
+      { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'finished' }] } } },
+    )
+    renderer.onSessionEvent({ id: 'session' }, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    await settled
+  })
+  await f.pair(a, 'a')
+  await f.gateway.receive(f.message('a'))
+  assert.ok(events.includes('renderer.text-delta'))
+  assert.equal(events.filter((x) => x === 'renderer.agent-stream').length, 1)
+  assert.ok(api.some((x) => x.path.endsWith('/deliver')))
+  assert.ok(api.some((x) => x.path.endsWith('/streaming') && x.body.isFinalize))
+  assert.equal(api.at(-1).body.emotionName, '🥳 Done')
+  assert.ok(
+    api.findIndex((x) => x.body.emotionName === '🥳 Done') >
+      api.findIndex((x) => x.body.cardData?.cardParamMap?.flowStatus === '3'),
+  )
 })

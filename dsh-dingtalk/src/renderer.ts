@@ -1,3 +1,4 @@
+import type { ObserveFeedback } from './feedback.js'
 /**
  * Outbound orchestration: one active turn per session, rendered to the
  * conversation through the configured carrier — AI Card (streaming or
@@ -39,6 +40,8 @@ interface TurnState {
   flushTimer?: ReturnType<typeof setTimeout>
   lastFlushed: string
   flushing: boolean
+  flushWork?: Promise<void>
+  streamRevision?: number
   /**
    * A newer bubble (user message / system notice) sits below the live card;
    * the next frame rolls output over to a fresh card at the bottom.
@@ -79,7 +82,8 @@ function renderLive(segments: Segment[]): string {
 export interface RendererDeps {
   config: Pick<Config, 'replyMode' | 'streaming' | 'asyncMode' | 'ackText' | 'markdownTitle' | 'emotionFirstResponse'>
   outbound: ReplySink
-  emotion: Pick<Emotion, 'add' | 'recall'>
+  emotion: Pick<Emotion, 'add' | 'recall'> & Partial<Pick<Emotion, 'done'>>
+  observe?: ObserveFeedback
   createCard(target: CardTarget): Promise<CardHandle | null>
   log(line: string): void
 }
@@ -123,7 +127,10 @@ export class Renderer {
       // Ack now; the settled result is pushed at turn end, no streaming card.
       void this.deps.outbound.sendText(msg, config.ackText)
     } else if (mode === 'aicard') {
-      state.cardPromise = this.deps.createCard(cardTarget(msg))
+      state.cardPromise = this.deps.createCard(cardTarget(msg)).catch(() => {
+        this.deps.observe?.('card.create', false)
+        return null
+      })
     }
 
     this.states.set(sessionId, state)
@@ -156,13 +163,25 @@ export class Renderer {
     return st.cardPromise
   }
 
-  onSessionEvent(session: HostSession, event: HostSessionEvent): void {
+  /** Current DSH publishes transient chunks on the agent bus, not the durable session log. */
+  onAssistantStream(agent: HostSession, frame: any): void {
+    const st = this.states.get(agent.id)
+    if (!st || !frame || !Number.isSafeInteger(frame.revision) || frame.revision <= (st.streamRevision ?? -1)) return
+    st.streamRevision = frame.revision
+    if (frame.type !== 'chunk') return
+    this.deps.observe?.('renderer.agent-stream', true)
+    this.onSessionEvent(agent, { type: 'assistant/chunk', data: { chunk: frame.chunk } }, true)
+  }
+  onSessionEvent(session: HostSession, event: HostSessionEvent, agentStream = false): void {
     const st = this.states.get(session.id)
     if (!st) return
     switch (event.type) {
       case 'assistant/chunk': {
+        if (!agentStream && st.streamRevision !== undefined) break
+        this.deps.observe?.('renderer.chunk', true)
         const chunk = event.data?.chunk
         if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') {
+          this.deps.observe?.('renderer.text-delta', true)
           const last = st.live[st.live.length - 1]
           if (last?.kind === 'text') last.text += chunk.text
           else st.live.push({ kind: 'text', text: chunk.text })
@@ -206,7 +225,13 @@ export class Renderer {
         break
       }
       case 'turn/end': {
+        this.deps.observe?.('renderer.turn-end', true)
         void this.finalize(session.id, st, event.data?.reason)
+          .catch(() => {
+            this.deps.observe?.('renderer.delivered', false)
+            this.deps.log('reply delivery failed')
+          })
+          .finally(() => st.settle())
         break
       }
     }
@@ -214,10 +239,10 @@ export class Renderer {
 
   private scheduleFlush(sessionId: string, st: TurnState): void {
     if (st.async || st.mode !== 'aicard' || st.cardUnavailable || !this.deps.config.streaming.enabled) return
-    if (st.flushTimer) return
+    if (st.flushTimer || st.flushing) return
     st.flushTimer = setTimeout(() => {
       st.flushTimer = undefined
-      void this.flush(sessionId, st)
+      st.flushWork = this.flush(sessionId, st)
     }, this.deps.config.streaming.throttleMs)
   }
 
@@ -261,9 +286,8 @@ export class Renderer {
     if (st.flushTimer) clearTimeout(st.flushTimer)
 
     const { config, outbound, emotion } = this.deps
+    await st.flushWork
     if (config.emotionFirstResponse) await emotion.recall(st.msg.msgId, st.msg.conversationId)
-    // Release the queue lane no matter how rendering below fares.
-    st.settle()
 
     const kind = reason?.kind
     const failure = reason?.failure ?? reason?.error
@@ -315,13 +339,22 @@ export class Renderer {
         if (errText) await card.fail(text)
         else await card.finish(text)
         this.deps.log(`card settled (${text.length} chars)`)
+        this.deps.observe?.('renderer.delivered', true)
+        if (config.emotionFirstResponse && kind === 'completed')
+          await emotion.done?.(st.msg.msgId, st.msg.conversationId)
         return
       } catch (err) {
         this.deps.log(`card settle failed, falling back to markdown: ${err instanceof Error ? err.message : err}`)
       }
     }
+    if (st.mode === 'aicard' && !st.async) this.deps.observe?.('renderer.fallback', true)
     // markdown / text / asyncMode / card-fallback all land here.
-    if (st.mode === 'text' && !errText) await outbound.sendText(st.msg, text)
-    else await outbound.sendMarkdown(st.msg, config.markdownTitle, text)
+    const delivered =
+      st.mode === 'text' && !errText
+        ? await outbound.sendText(st.msg, text)
+        : await outbound.sendMarkdown(st.msg, config.markdownTitle, text)
+    this.deps.observe?.('renderer.delivered', delivered !== false)
+    if (delivered !== false && config.emotionFirstResponse && kind === 'completed')
+      await emotion.done?.(st.msg.msgId, st.msg.conversationId)
   }
 }
