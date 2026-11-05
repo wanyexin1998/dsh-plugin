@@ -54,6 +54,7 @@ interface QuestionAnswer {
 interface Route {
   conversationId: string
   conversationType: InboundMessage['conversationType']
+  senderCorpId?: string
   senderStaffId: string
   replyContext: InboundMessage
 }
@@ -91,8 +92,12 @@ export interface QuestionManagerOptions {
 const SKIP_ANSWERS = new Set(['0', '跳过', '/skip', 'skip'])
 const CANCEL_ANSWERS = new Set(['取消', '/cancel', '/stop'])
 
-function routeKey(route: Pick<Route, 'conversationId' | 'senderStaffId'>): string {
-  return `${route.conversationId}\u0000${route.senderStaffId}`
+function routeKey(
+  route: Pick<Route, 'conversationId' | 'conversationType' | 'senderCorpId' | 'senderStaffId'>,
+): string {
+  // Legacy events without an enterprise may only answer another legacy route.
+  // Never match an explicit foreign enterprise or a different chat surface.
+  return JSON.stringify([route.senderCorpId ?? null, route.conversationType, route.conversationId, route.senderStaffId])
 }
 
 function abortError(message: string): Error {
@@ -234,6 +239,7 @@ export class QuestionManager {
     this.routes.set(sessionId, {
       conversationId: msg.conversationId,
       conversationType: msg.conversationType,
+      senderCorpId: msg.senderCorpId,
       senderStaffId: msg.senderStaffId,
       replyContext: msg,
     })
@@ -255,9 +261,10 @@ export class QuestionManager {
       disposers.push(
         agentCtx.on(
           'approval/request',
-          (request, next) => {
-            if (request.agent !== agent) return next()
-            if (!this.routes.has(agent.id)) return next()
+          async (request) => {
+            // Once a request reaches this IM scope, missing/foreign context
+            // cannot borrow a Web approval handler or another Agent's route.
+            if (request.agent !== agent || !this.routes.has(agent.id)) return 'unavailable'
             return this.askApproval(agent, request)
           },
           { prepend: true },

@@ -8,6 +8,8 @@
 
 > 第三阶段：共享机器人按企业和用户分发到本人 DSH，网页登录配对后自动接管接收设备，无需 `/bind`。真实网页登录及私聊身份查询已通过；多人、群聊和双设备真实验收暂缓。部署方式与验收边界见 [共享机器人说明](docs/PHASE3.md)。下方官方 Stream 直连安装流程仍用于独立模式。
 
+> 工作区工具权限（#27）：当前宿主缺少可信用户与工作区授权映射契约，机器人尚未开放非 DWS 工具。目标是继承绑定用户已有权限；具体阻断和测试边界见 [权限核查记录](docs/WORKSPACE-TOOL-POLICY.md)。文件回传范围不因该任务扩大。
+
 简体中文 | [English](README.md)
 
 把运行在本机的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）接入钉钉。连接器通过 Stream 长连接收发消息，无需公网入口。

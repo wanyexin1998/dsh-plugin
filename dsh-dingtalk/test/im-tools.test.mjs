@@ -25,39 +25,75 @@ function fixture() {
       return { name: 'dingtalk_call', execute: async () => ({ identity: identity(), host: host() }) }
     },
   }))
-  return { ctx, im, guards, definitions }
+  const agent = { id: 'session', ctx }
+  return { ctx, agent, im, guards, definitions }
 }
 
 test('IM shadows the Web tool, installs once, and permits only scoped DingTalk and interaction tools', () => {
   const f = fixture()
-  f.im.install(f.ctx)
-  f.im.install(f.ctx)
+  f.im.install(f.ctx, f.agent)
+  f.im.install(f.ctx, f.agent)
   assert.equal(f.definitions.length, 1)
   assert.equal(f.guards.length, 1)
-  for (const name of ['dingtalk_call', 'skill', 'ask_user_question']) assert.equal(f.guards[0]({ name }), undefined)
-  for (const name of ['bash', 'run_code', 'send_file', 'spawn_agent', 'unknown'])
-    assert.match(f.guards[0]({ name }), /im_tool_unavailable/)
+  for (const name of ['dingtalk_call', 'skill', 'ask_user_question'])
+    assert.equal(f.guards[0]({ name, agent: f.agent }), undefined)
+  for (const name of ['bash', 'run_code', 'spawn_agent', 'unknown'])
+    assert.match(f.guards[0]({ name, agent: f.agent }), /im_workspace_policy_unavailable/)
+  for (const name of ['send_file', 'send_image'])
+    assert.match(f.guards[0]({ name, agent: f.agent }), /im_file_transfer_unavailable/)
 })
 
 test('trusted message identity is pinned per Agent; model arguments and another chat cannot select it', async () => {
   const f = fixture(),
     second = fixture()
-  f.im.bind(f.ctx, { senderCorpId: 'corp-a', senderStaffId: 'owner' })
-  second.im.bind(second.ctx, { senderCorpId: 'corp-b', senderStaffId: 'owner' })
-  const call = await f.definitions[0].execute({ corpId: 'corp-b', userId: 'attacker' })
+  f.im.bind(f.ctx, { senderCorpId: 'corp-a', senderStaffId: 'owner' }, f.agent)
+  second.im.bind(second.ctx, { senderCorpId: 'corp-b', senderStaffId: 'owner' }, second.agent)
+  const call = await f.definitions[0].execute({ corpId: 'corp-b', userId: 'attacker' }, { agent: f.agent })
   assert.deepEqual(call.identity, { corpId: 'corp-a', userId: 'owner' })
   assert.ok(Object.isFrozen(call.identity))
   assert.equal(call.host.approval, 'approval')
-  assert.equal((await second.definitions[0].execute()).identity.corpId, 'corp-b')
-  assert.throws(() => f.im.bind(f.ctx, { senderCorpId: 'corp-b', senderStaffId: 'owner' }), /im_identity_changed/)
-  assert.throws(() => f.im.bind(f.ctx, {}), /im_identity_changed/)
-  assert.equal((await f.definitions[0].execute()).identity.corpId, 'corp-a')
+  assert.equal((await second.definitions[0].execute({}, { agent: second.agent })).identity.corpId, 'corp-b')
+  assert.throws(
+    () => f.im.bind(f.ctx, { senderCorpId: 'corp-b', senderStaffId: 'owner' }, f.agent),
+    /im_identity_changed/,
+  )
+  assert.throws(() => f.im.bind(f.ctx, {}, f.agent), /im_identity_changed/)
+  assert.equal((await f.definitions[0].execute({}, { agent: f.agent })).identity.corpId, 'corp-a')
 })
 
 test('missing message identity or Host services never falls back to the global Web tool', async () => {
   const f = fixture()
-  f.im.bind(f.ctx, { senderStaffId: 'owner', chatbotCorpId: 'corp-a' })
-  assert.equal((await f.definitions[0].execute()).identity, undefined)
-  assert.throws(() => new ImTools(() => undefined).install(f.ctx), /im_connection_service_unavailable/)
-  assert.throws(() => f.im.install({ tools: {} }), /im_tool_boundary_unavailable/)
+  f.im.bind(f.ctx, { senderStaffId: 'owner', chatbotCorpId: 'corp-a' }, f.agent)
+  assert.equal((await f.definitions[0].execute({}, { agent: f.agent })).identity, undefined)
+  assert.throws(() => new ImTools(() => undefined).install(f.ctx, f.agent), /im_connection_service_unavailable/)
+  assert.throws(() => f.im.install({ tools: {} }, f.agent), /im_tool_boundary_unavailable/)
+})
+
+test('a child, foreign or replacement Agent cannot inherit the pinned identity or guard', async () => {
+  const f = fixture()
+  f.im.bind(f.ctx, { senderCorpId: 'corp-a', senderStaffId: 'owner' }, f.agent)
+  for (const agent of [undefined, { id: 'child', ctx: f.ctx }, { ...f.agent }]) {
+    assert.equal(f.guards[0]({ name: 'dingtalk_call', agent }), 'im_agent_mismatch')
+    await assert.rejects(f.definitions[0].execute({}, { agent }), /im_agent_mismatch/)
+  }
+  assert.throws(() => f.im.install(f.ctx, { ...f.agent }), /im_agent_changed/)
+})
+
+test('failed guard installation removes the shadow and allows a safe setup retry', () => {
+  const f = fixture()
+  let registered = 0
+  f.ctx.tools.register = () => {
+    registered++
+    return () => registered--
+  }
+  const guard = f.ctx.tools.guard
+  f.ctx.tools.guard = () => {
+    throw new Error('guard_registration_failed')
+  }
+  assert.throws(() => f.im.install(f.ctx, f.agent), /guard_registration_failed/)
+  assert.equal(registered, 0)
+  f.ctx.tools.guard = guard
+  f.im.install(f.ctx, f.agent)
+  assert.equal(registered, 1)
+  assert.equal(f.guards.length, 1)
 })

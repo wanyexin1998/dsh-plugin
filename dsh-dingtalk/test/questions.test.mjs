@@ -402,6 +402,59 @@ test('缺少互动卡片时通过一次性码完成文字审批', async () => {
   assert.equal(await resultPromise, 'allowed-once')
 })
 
+test('审批回复不能跨企业、聊天类型或缺失企业身份匹配', async () => {
+  const h = harness()
+  h.manager.bindSession(h.agent.id, inbound({ senderCorpId: 'corp-a' }))
+  const outcome = h.listeners.get('approval/request')({ agent: h.agent, toolName: 'bash' }, async () => 'allowed-once')
+  await waitUntil(() => h.sent.length === 1)
+  const code = h.sent[0].text.match(/`确认 ([A-Z0-9]{6})`/)?.[1]
+  assert.ok(code)
+  for (const override of [
+    { senderCorpId: 'corp-b' },
+    { senderCorpId: undefined },
+    { senderCorpId: 'corp-a', conversationType: 'group' },
+  ]) {
+    assert.equal(h.manager.handleInbound(inbound({ text: `确认 ${code}`, ...override })), false)
+  }
+  assert.equal(h.manager.handleInbound(inbound({ senderCorpId: 'corp-a', text: `确认 ${code}` })), true)
+  assert.equal(await outcome, 'allowed-once')
+  assert.equal(h.manager.handleInbound(inbound({ senderCorpId: 'corp-a', text: `确认 ${code}` })), false)
+})
+
+test('到达 IM 作用域的未绑定或其他 Agent 审批不能回退 Web', async () => {
+  const h = harness()
+  let fallbackCalls = 0
+  const fallback = async () => {
+    fallbackCalls++
+    return 'allowed-once'
+  }
+  const approve = h.listeners.get('approval/request')
+  for (const agent of [undefined, { ...h.agent, id: 'foreign' }, { ...h.agent, id: 'child', parentId: h.agent.id }]) {
+    assert.equal(await approve({ agent, toolName: 'bash' }, fallback), 'unavailable')
+  }
+  const unbound = { ...h.agent, id: 'unbound', ctx: { ...h.agent.ctx } }
+  h.manager.installFor(unbound)
+  assert.equal(await h.listeners.get('approval/request')({ agent: unbound, toolName: 'bash' }, fallback), 'unavailable')
+  assert.equal(fallbackCalls, 0)
+  assert.equal(h.sent.length, 0)
+})
+
+test('审批消息不可达时拒绝且不回退 Web', async () => {
+  const h = harness(1_000, false)
+  let fallbackCalls = 0
+  assert.equal(
+    await h.listeners.get('approval/request')({ agent: h.agent, toolName: 'bash' }, async () => {
+      fallbackCalls++
+      return 'allowed-once'
+    }),
+    'unavailable',
+  )
+  assert.equal(fallbackCalls, 0)
+  const code = h.sent[0].text.match(/`确认 ([A-Z0-9]{6})`/)?.[1]
+  assert.ok(code)
+  assert.equal(h.manager.handleInbound(inbound({ text: `确认 ${code}` })), false)
+})
+
 test('钉钉审批优先于先注册的 Web 全局审批处理器', async () => {
   const ctx = new Context()
   let webIntercepted = false
@@ -436,6 +489,9 @@ test('钉钉审批优先于先注册的 Web 全局审批处理器', async () => 
     ctx: agentCtx,
     followup() {},
     cancel() {},
+    [Context.filter](listenerCtx) {
+      return listenerCtx === ctx || listenerCtx === agentCtx
+    },
   }
   manager.installFor(agent)
   manager.bindSession(agent.id, inbound())
@@ -459,7 +515,13 @@ test('钉钉审批优先于先注册的 Web 全局审批处理器', async () => 
   assert.equal(manager.handleInbound(inbound({ text: `确认 ${code}` })), true)
   assert.equal(await outcome, 'allowed-once')
 
-  const webOnlyAgent = { ...agent, id: 'session-web-only' }
+  const webOnlyAgent = {
+    ...agent,
+    id: 'session-web-only',
+    [Context.filter](listenerCtx) {
+      return listenerCtx === ctx
+    },
+  }
   assert.equal(
     await ctx.waterfall(
       webOnlyAgent,

@@ -642,7 +642,7 @@ async function startAccount(
   })
   const imTools = new ImTools(() => ctx.get('dingtalkImTools') as ImToolFactory | undefined)
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
-    imTools.install(agentCtx)
+    imTools.install(agentCtx, agent)
     questions.install(agentCtx, agent)
     files.install(agentCtx, agent)
   }
@@ -698,11 +698,10 @@ async function startAccount(
       }
     },
     onAgentMessage: (agent, msg, sessionCwd) => {
-      // A session may already be live because the Web UI loaded it before this
-      // channel sees a message. Creation/resume setup is skipped in that path,
-      // so attach the channel shadow through the live Agent.ctx as well.
+      // Recheck the channel-owned Agent on every message. Bridge never borrows
+      // a live Web Agent; restored/new contexts still need the scoped boundary.
       installBotTools(agent.ctx, agent)
-      imTools.bind(agent.ctx, msg)
+      imTools.bind(agent.ctx, msg, agent)
       questions.bindSession(agent.id, msg)
       files.bindSession(agent, msg, sessionCwd)
       void workspace.attach(agent.id, sessionCwd)
