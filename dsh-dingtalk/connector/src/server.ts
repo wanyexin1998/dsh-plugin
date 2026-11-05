@@ -38,6 +38,7 @@ const ADMIN: Route[] = Object.values(CONNECTOR_ROUTES)
   .filter((path) => path.startsWith('/admin/'))
   .map((path) => ({ path, methods: ['POST'] }))
 function respond(res: ServerResponse, status: number, value: unknown): void {
+  if (res.writableEnded || res.destroyed) return
   const body = JSON.stringify(value)
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -157,9 +158,17 @@ export class ConnectorServer {
     if (!session) throw new ConnectionServiceError('invalid_request')
     return session
   }
+  /** Stable per-caller socket directory so a caller can mount the directory across Connector restarts. */
+  private callerSocketDirectory(callerId: string): string {
+    return join(this.state.socketsDirectory, callerId)
+  }
+  private callerSocketPath(callerId: string): string {
+    return join(this.callerSocketDirectory(callerId), 'dsh.sock')
+  }
   private async listenUnix(
     path: string,
     handler: (req: IncomingMessage, res: ServerResponse) => void,
+    directoryMode = 0o700,
   ): Promise<Server> {
     try {
       const info = await lstat(path)
@@ -168,7 +177,8 @@ export class ConnectorServer {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    await mkdir(dirname(path), { recursive: true, mode: directoryMode })
+    if (process.platform !== 'win32') await chmod(dirname(path), directoryMode)
     const server = createServer(handler)
     server.requestTimeout = 30000
     server.headersTimeout = 10000
@@ -180,14 +190,19 @@ export class ConnectorServer {
     this.servers.push(server)
     return server
   }
+  private startCallerListener(callerId: string): Promise<Server> {
+    const directoryMode = this.config.socketMode === 0o660 ? 0o750 : 0o700
+    return this.listenUnix(
+      this.callerSocketPath(callerId),
+      (req, res) => {
+        void this.business(callerId, req, res)
+      },
+      directoryMode,
+    )
+  }
   private async startUnix(): Promise<void> {
     await mkdir(this.state.socketsDirectory, { recursive: true, mode: 0o700 })
-    for (const callerId of this.bindings.keys()) {
-      const server = await this.listenUnix(join(this.state.socketsDirectory, `${callerId}.sock`), (req, res) => {
-        void this.business(callerId, req, res)
-      })
-      this.listeners.set(callerId, server)
-    }
+    for (const callerId of this.bindings.keys()) this.listeners.set(callerId, await this.startCallerListener(callerId))
     await mkdir(join(this.state.root, 'admin'), { recursive: true, mode: 0o700 })
     this.adminServer = await this.listenUnix(join(this.state.root, 'admin', 'admin.sock'), (req, res) => {
       void this.admin(req, res)
@@ -228,7 +243,17 @@ export class ConnectorServer {
     return undefined
   }
   private async business(callerId: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Request-level cancellation: a client abort/closed response cancels the session work and the
+    // DWS subprocess. A normally completed response has writableEnded=true, so close is not a cancel.
+    const abortController = new AbortController()
+    const abort = (): void => {
+      if (!res.writableEnded) abortController.abort('execution_cancelled')
+    }
+    req.once('aborted', abort)
+    res.once('close', abort)
+    const signal = abortController.signal
     try {
+      if (signal.aborted) throw new ConnectionServiceError('execution_cancelled')
       if (this.closed) throw new ConnectionServiceError('service_disposed')
       const url = new URL(req.url ?? '/', 'http://connector.invalid')
       if (url.search) throw new ConnectionServiceError('invalid_request')
@@ -252,9 +277,10 @@ export class ConnectorServer {
         return
       }
       const body = await readBody(req)
+      if (signal.aborted) throw new ConnectionServiceError('execution_cancelled')
       if (route.path === CONNECTOR_ROUTES.status) {
         exact(body, [])
-        const status = await session.status()
+        const status = await session.status({ signal })
         // The caller's own identity on the private channel; the Host never projects it to the Client.
         const identity =
           status.state === 'connected' ||
@@ -267,12 +293,12 @@ export class ConnectorServer {
       }
       if (route.path === CONNECTOR_ROUTES.prepare) {
         exact(body, [])
-        ok(res, await session.preparation())
+        ok(res, await session.preparation(signal))
         return
       }
       if (route.path === CONNECTOR_ROUTES.identity) {
         exact(body, [])
-        ok(res, await session.identity())
+        ok(res, await session.identity({ signal }))
         return
       }
       if (route.path === CONNECTOR_ROUTES.authorizationBegin) {
@@ -292,7 +318,7 @@ export class ConnectorServer {
       }
       if (route.path === CONNECTOR_ROUTES.disconnect) {
         exact(body, [])
-        ok(res, await session.disconnect())
+        ok(res, await session.disconnect({ signal }))
         return
       }
       if (route.path === CONNECTOR_ROUTES.invoke) {
@@ -300,12 +326,15 @@ export class ConnectorServer {
         assertNoIdentityFields(body)
         const operationId = assertServerOperation(body.operationId)
         const input = parseInvokeInput({ operationId, args: body.args ?? {} }) as InvokeInput
-        ok(res, { result: await session.invoke(input) })
+        ok(res, { result: await session.invoke(input, { signal }) })
         return
       }
       respond(res, 404, { ok: false, error: { code: 'invalid_request' } })
     } catch (error) {
       fail(res, error)
+    } finally {
+      req.removeListener('aborted', abort)
+      res.removeListener('close', abort)
     }
   }
   private authorizeAdmin(req: IncomingMessage): void {
@@ -384,6 +413,17 @@ export class ConnectorServer {
     }
   }
   private async bindTestIdentity(callerId: string, profile: { corpId: string; userId: string }): Promise<void> {
+    const existing = this.bindings.get(callerId)
+    const same = !!existing && existing.corpId === profile.corpId && existing.userId === profile.userId
+    if (same) {
+      // Idempotent duplicate binding: keep the existing session and authorization state. Re-running
+      // initialization must not revoke a live authorization or create a false revocation marker.
+      if (!this.sessions.has(callerId)) await this.addSession(callerId)
+      if (this.config.transport === 'unix') {
+        if (!this.listeners.has(callerId)) this.listeners.set(callerId, await this.startCallerListener(callerId))
+      } else this.tokens.set(await this.state.ensureCapabilityToken(callerId), callerId)
+      return
+    }
     const previous = this.sessions.get(callerId)
     if (previous) {
       await previous.revoke().catch(() => {})
@@ -394,10 +434,7 @@ export class ConnectorServer {
     await this.addSession(callerId)
     if (this.config.transport === 'unix') {
       await this.closeListener(callerId)
-      const server = await this.listenUnix(join(this.state.socketsDirectory, `${callerId}.sock`), (req, res) => {
-        void this.business(callerId, req, res)
-      })
-      this.listeners.set(callerId, server)
+      this.listeners.set(callerId, await this.startCallerListener(callerId))
     } else {
       this.tokens.set(await this.state.ensureCapabilityToken(callerId), callerId)
     }
@@ -428,7 +465,7 @@ export class ConnectorServer {
     await this.oauth?.dispose().catch(() => {})
     for (const socket of [
       join(this.state.root, 'admin', 'admin.sock'),
-      ...[...this.bindings.keys()].map((callerId) => join(this.state.socketsDirectory, `${callerId}.sock`)),
+      ...[...this.bindings.keys()].map((callerId) => this.callerSocketPath(callerId)),
     ])
       await unlink(socket).catch(() => {})
   }

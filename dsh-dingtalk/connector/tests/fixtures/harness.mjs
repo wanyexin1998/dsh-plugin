@@ -219,7 +219,7 @@ export function businessRequest(env, callerId, path, method, payload, token) {
   const body = payload === undefined ? '' : JSON.stringify(payload)
   const target =
     env.DSH_CONNECTOR_TRANSPORT === 'unix'
-      ? { socketPath: join(env.DSH_CONNECTOR_STATE_DIR, 'sockets', `${callerId}.sock`), path }
+      ? { socketPath: join(env.DSH_CONNECTOR_STATE_DIR, 'sockets', callerId, 'dsh.sock'), path }
       : { host: '127.0.0.1', port: Number(env.DSH_CONNECTOR_LOOPBACK_PORT), path }
   return new Promise((done, reject) => {
     const headers = {

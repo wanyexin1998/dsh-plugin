@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRemoteConnection, createRemoteConnectionFor, parseRemoteSettings } from '../lib/adapters/remote/index.js';
+import { createUIRpc } from '../lib/host/ui-rpc.js';
 import { parseConfig, DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { createConnectionService } from '../lib/shared/service.js';
 
@@ -18,6 +19,12 @@ async function fakeConnector(overrides = {}) {
     invoke: { result: { status: 'ok', data: { synthetic: true } } },
     disconnected: { disconnected: true },
     protocol: 1,
+    healthAvailable: true,
+    healthCalls: 0,
+    cancel: { status: { state: 'user_cancelled', reasonCode: 'user_cancelled' } },
+    cancelError: undefined,
+    cancelGate: undefined,
+    prepareGate: undefined,
     ...overrides,
   };
   const server = createServer(async (req, res) => {
@@ -25,11 +32,20 @@ async function fakeConnector(overrides = {}) {
     const body = raw ? JSON.parse(raw) : {};
     requests.push({ path: req.url, body, authorization: req.headers.authorization });
     const reply = (value, status = 200) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(value)); };
-    if (req.url === '/v1/health') return reply({ ok: true, value: { ok: true, protocol: state.protocol, version: '0.1.0', callbackOrigin: 'https://connector.test' } });
+    if (req.url === '/v1/health') {
+      state.healthCalls++;
+      if (!state.healthAvailable) return reply({ ok: false, error: { code: 'service_unavailable' } }, 503);
+      return reply({ ok: true, value: { ok: true, protocol: state.protocol, version: '0.1.0', callbackOrigin: 'https://connector.test' } });
+    }
     if (req.headers.authorization !== `Bearer ${tokenValue}`) return reply({ ok: false, error: { code: 'invalid_request' } }, 403);
     if (req.url === '/v1/status') return reply({ ok: true, value: state.status });
-    if (req.url === '/v1/prepare') return reply({ ok: true, value: state.prepare });
+    if (req.url === '/v1/prepare') { if (state.prepareGate) await (typeof state.prepareGate === 'function' ? state.prepareGate() : state.prepareGate); return reply({ ok: true, value: state.prepare }); }
     if (req.url === '/v1/authorization/begin') return reply({ ok: true, value: state.begin });
+    if (req.url === '/v1/authorization/cancel') {
+      if (state.cancelGate) await (typeof state.cancelGate === 'function' ? state.cancelGate() : state.cancelGate);
+      if (state.cancelError) return reply({ ok: false, error: state.cancelError }, 400);
+      return reply({ ok: true, value: state.cancel });
+    }
     if (req.url === '/v1/disconnect') return reply({ ok: true, value: state.disconnected });
     if (req.url === '/v1/invoke') return reply({ ok: true, value: state.invoke });
     return reply({ ok: false, error: { code: 'invalid_request' } }, 404);
@@ -103,16 +119,141 @@ test('remote backend maps status/prepare/invoke and keeps catalog and unsupporte
   } finally { await fake.close(); await rm(token.root, { recursive: true, force: true }); }
 });
 test('protocol mismatch and capability-token errors surface as backend_not_ready/service_unavailable', async () => {
-  const fake = await fakeConnector({ protocol: 99 });
+  const mismatched = await fakeConnector({ protocol: 99 });
+  const healthy = await fakeConnector();
   const token = await isolatedToken();
   try {
-    const settings = { ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } };
-    const connection = await createRemoteConnection(settings, { ...DEFAULT_LIMITS, timeoutMs: 2000 });
-    assert.equal((await connection.backend.status()).reasonCode, 'backend_not_ready');
-    await connection.backend.dispose();
+    const mismatchConnection = await createRemoteConnection(
+      { ...settingsFor(mismatched), endpoint: { host: '127.0.0.1', port: mismatched.port, tokenFile: token.file } },
+      { ...DEFAULT_LIMITS, timeoutMs: 2000 },
+    );
+    assert.equal((await mismatchConnection.backend.status()).reasonCode, 'backend_not_ready');
+    await mismatchConnection.backend.dispose();
     await writeFile(token.file, 'not-a-token');
-    const wrong = await createRemoteConnection({ ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, { ...DEFAULT_LIMITS, timeoutMs: 2000 });
+    const wrong = await createRemoteConnection(
+      { ...settingsFor(healthy), endpoint: { host: '127.0.0.1', port: healthy.port, tokenFile: token.file } },
+      { ...DEFAULT_LIMITS, timeoutMs: 2000 },
+    );
     assert.equal((await wrong.backend.status()).reasonCode, 'service_unavailable');
     await wrong.backend.dispose();
+  } finally {
+    await mismatched.close();
+    await healthy.close();
+    await rm(token.root, { recursive: true, force: true });
+  }
+});
+
+function deferred() { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
+function uiHarness(connection, serviceOverrides = {}) {
+  const owner = { id: 'browser', principal: { kind: 'owner' } };
+  const routes = new Map();
+  const host = { browserPeer: owner, admit: () => ({ peer: owner }), fetch: { register(route) { routes.set(route.path, route); return async () => {}; } } };
+  const service = { status: async () => ({ state: 'unlinked' }), beginAuthorization: async () => ({ transactionId: 'tx' }), getAuthorizationStatus: async () => ({ state: 'authorizing' }), disconnect: async () => ({ disconnected: true }), ...serviceOverrides };
+  const cleanup = createUIRpc(host, connection, service);
+  const call = async (method, payload) => {
+    const route = routes.get('/api/dsh-dingtalk/' + method);
+    const response = await route.fetch(new Request('http://127.0.0.1/api/dsh-dingtalk/' + method, { method: 'POST', body: JSON.stringify({ type: 'client-request', rpcId: 'test-rpc', method: 'dsh-dingtalk/' + method, payload }) }));
+    return (await response.json()).result;
+  };
+  return { call, cleanup };
+}
+test('connector bootstrap accepts only exact trusted HTTPS origins and safe return paths', async () => {
+  const fake = await fakeConnector();
+  const token = await isolatedToken();
+  try {
+    const connection = await createRemoteConnection({ ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, { ...DEFAULT_LIMITS, timeoutMs: 5000 });
+    const { call, cleanup } = uiHarness(connection);
+    try {
+      const accepted = await call('bootstrap', { context: { origin: 'https://dsh.test', returnPath: '/chat?panel=1' } });
+      assert.equal(accepted.ok, true, JSON.stringify(accepted));
+      assert.equal(accepted.value.callbackOrigin, 'https://connector.test');
+      const rejected = [
+        { origin: 'https://evil.test', returnPath: '/chat' },
+        { origin: 'dsh-app://app', returnPath: '/chat' },
+        { origin: 'https://dsh.test', returnPath: '//evil.test' },
+        { origin: 'https://dsh.test', returnPath: '/?token=private' },
+        { origin: 'https://dsh.test', returnPath: '/\\evil.test' },
+        { origin: 'https://dsh.test', returnPath: '/chat', extra: true },
+        { origin: 'not-a-url', returnPath: '/chat' },
+      ];
+      for (const context of rejected) assert.equal((await call('bootstrap', { context })).ok, false, JSON.stringify(context));
+    } finally { await cleanup(); await connection.backend.dispose(); }
+  } finally { await fake.close(); await rm(token.root, { recursive: true, force: true }); }
+});
+test('remote readiness re-probes after recovery, merges concurrent probes and fails closed on protocol mismatch or disposal', async () => {
+  const fake = await fakeConnector({ healthAvailable: false });
+  const token = await isolatedToken();
+  try {
+    const connection = await createRemoteConnection({ ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, { ...DEFAULT_LIMITS, timeoutMs: 5000 });
+    assert.equal((await connection.backend.status()).reasonCode, 'service_unavailable');
+    assert.equal(fake.state.healthCalls, 1);
+    fake.state.healthAvailable = true;
+    const concurrent = await Promise.all(Array.from({ length: 8 }, () => connection.backend.status()));
+    assert.deepEqual(concurrent.map(item => item.state), Array(8).fill('connected'));
+    assert.equal(fake.state.healthCalls, 2, 'concurrent success probes are merged into one health call');
+    await Promise.all(Array.from({ length: 3 }, () => connection.backend.status()));
+    assert.equal(fake.state.healthCalls, 2, 'a verified probe is reused');
+    await connection.backend.dispose();
+    assert.equal((await connection.backend.status()).reasonCode, 'service_disposed');
+  } finally { await fake.close(); await rm(token.root, { recursive: true, force: true }); }
+  const mismatched = await fakeConnector({ protocol: 99 });
+  const token2 = await isolatedToken();
+  try {
+    const connection = await createRemoteConnection({ ...settingsFor(mismatched), endpoint: { host: '127.0.0.1', port: mismatched.port, tokenFile: token2.file } }, { ...DEFAULT_LIMITS, timeoutMs: 5000 });
+    assert.equal((await connection.backend.status()).reasonCode, 'backend_not_ready');
+    await connection.backend.dispose();
+  } finally { await mismatched.close(); await rm(token2.root, { recursive: true, force: true }); }
+});
+test('remote cancel awaits the server result and surfaces errors without retrying', async () => {
+  const fake = await fakeConnector();
+  const token = await isolatedToken();
+  try {
+    const connection = await createRemoteConnection({ ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, { ...DEFAULT_LIMITS, timeoutMs: 5000 });
+    const { call, cleanup } = uiHarness(connection);
+    try {
+      const browser = (await call('bootstrap', { context: { origin: 'https://dsh.test', returnPath: '/chat' } })).value.browserId;
+      const gate = deferred();
+      fake.state.cancelGate = gate.promise;
+      let settled = false;
+      const pending = call('cancel', { browserId: browser, transactionId: 'x'.repeat(32) }).then(result => { settled = true; return result; });
+      await new Promise(done => setTimeout(done, 50));
+      assert.equal(settled, false, 'UI cancel must not complete before the Connector answers');
+      gate.resolve();
+      const cancelled = await pending;
+      assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+      assert.deepEqual(cancelled.value, { state: 'user_cancelled', reasonCode: 'user_cancelled' });
+      assert.equal(fake.requests.filter(item => item.path === '/v1/authorization/cancel').length, 1);
+      fake.state.cancelGate = undefined;
+      fake.state.cancelError = { code: 'invalid_auth_state' };
+      const failed = await call('cancel', { browserId: browser, transactionId: 'y'.repeat(32) });
+      assert.equal(failed.ok, false);
+      assert.equal(failed.error.code, 'invalid_auth_state');
+      assert.equal(fake.requests.filter(item => item.path === '/v1/authorization/cancel').length, 2, 'failed cancel is not retried automatically');
+    } finally { await cleanup(); await connection.backend.dispose(); }
+  } finally { await fake.close(); await rm(token.root, { recursive: true, force: true }); }
+});
+test('prepare cancellation wins over a late response and a new prepare is not overwritten by the old task', async () => {
+  const fake = await fakeConnector();
+  const token = await isolatedToken();
+  try {
+    const connection = await createRemoteConnection({ ...settingsFor(fake), endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, { ...DEFAULT_LIMITS, timeoutMs: 5000 });
+    const first = deferred();
+    const second = deferred();
+    const gates = [first.promise, second.promise];
+    fake.state.prepareGate = () => gates.shift() ?? Promise.resolve();
+    const started = await connection.ui('browser', { origin: 'https://dsh.test', returnPath: '/chat' }, async () => connection.prepareStart());
+    assert.equal(started.state, 'running');
+    const cancelled = await connection.ui('browser', { origin: 'https://dsh.test', returnPath: '/chat' }, async () => connection.prepareCancel());
+    assert.equal(cancelled.state, 'cancelled');
+    assert.equal(connection.prepareStatus().state, 'cancelled');
+    first.resolve();
+    await new Promise(done => setTimeout(done, 50));
+    assert.equal(connection.prepareStatus().state, 'cancelled', 'late response must not overwrite cancelled');
+    const restarted = await connection.ui('browser', { origin: 'https://dsh.test', returnPath: '/chat' }, async () => connection.prepareStart());
+    assert.equal(restarted.state, 'running');
+    second.resolve();
+    for (let attempt = 0; attempt < 100 && connection.prepareStatus().state === 'running'; attempt++) await new Promise(done => setTimeout(done, 10));
+    assert.equal(connection.prepareStatus().state, 'ready');
+    await connection.backend.dispose();
   } finally { await fake.close(); await rm(token.root, { recursive: true, force: true }); }
 });

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Contract-faithful fake DWS CLI for Connector tests. Enabled only via the explicit test seam
 // DSH_CONNECTOR_TEST_DWS_BINARY; never shipped in the runtime image.
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const args = process.argv.slice(2)
 const configDir = process.env.DWS_CONFIG_DIR || process.cwd()
 mkdirSync(configDir, { recursive: true })
+// Test-only invocation trace (no stdin, so no auth code is recorded).
+appendFileSync(join(configDir, 'trace.log'), `${args.join(' ')}\n`)
 const stateFile = join(configDir, 'profiles.json')
 const readState = () => {
   try {
@@ -87,6 +89,7 @@ if (args[0] === 'auth' && args[1] === 'exchange') {
   process.exit(0)
 }
 if (args[0] === 'auth' && args[1] === 'logout') {
+  if (existsSync(join(configDir, 'fail_logout'))) fail('synthetic logout failure')
   const state = readState()
   delete state.profiles[profile]
   writeState(state)

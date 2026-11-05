@@ -47,7 +47,7 @@
 
 ## 身份通道
 
-- UDS：socket 文件位于私有卷 `sockets/<callerId>.sock`，目录 0700、文件 0600（可用 `DSH_CONNECTOR_SOCKET_MODE=0660` 支持同组多 UID），每个调用方只挂载自己的 socket。容器重建需重新挂载文件；socket 在 Connector 启动时重建。
+- UDS：socket 位于私有卷 `<sockets>/<callerId>/dsh.sock`（每调用方独立目录，目录 0700、文件 0600；可用 `DSH_CONNECTOR_SOCKET_MODE=0660` 支持同组多 UID）。调用方只挂载自己的目录；Connector 重启会在同一路径重建 socket，目录挂载可保持连接路径稳定。
 - 测试 loopback：`DSH_CONNECTOR_TRANSPORT=loopback` + `DSH_CONNECTOR_ALLOW_TEST_TRANSPORT=1`，每调用方一个 0600 capability token 文件；仅用于无 UDS 的开发/测试环境，文档标注不用于生产。
 - 调用方身份 → `corpId:userId` 的绑定保存在私有卷 `bindings.json`；绑定与 DWS profile 不一致时返回 `identity_mismatch`，绝不复用旧账号 Token。
 

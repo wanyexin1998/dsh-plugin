@@ -28,7 +28,9 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
       const method = endpoint;
       if (method === 'bootstrap') {
         const data = request(input, ['browserId', 'context']);
-        const context = browserContext(data.context);
+        // The backend owns origin policy: local keeps loopback/desktop rules, connector mode uses
+        // its exact trusted HTTPS origins. Never widen the local validator.
+        const context = managed.context ? managed.context(data.context) : browserContext(data.context);
         for (const [id, session] of sessions) if (session.expires < Date.now()) sessions.delete(id);
         let id = typeof data.browserId === 'string' ? data.browserId : '';
         const current = sessions.get(id);

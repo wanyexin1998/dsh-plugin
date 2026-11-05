@@ -54,4 +54,4 @@ Linux DWS 1.0.66 的 `auth exchange` 对合成授权码走服务端托管换取�
 
 ## 生产镜像构建
 
-生产镜像 `connector/docker/Dockerfile` 在构建阶段从固定 release URL 下载归档，因此需要构建机出网到 GitHub Release。本机无法稳定访问 GitHub CDN（直连 302 后停滞），生产镜像的端到端构建未在本环境完成；同等语义的 Linux 测试镜像 `connector/docker/Dockerfile.test` 使用同一固定归档、同一归档/二进制 SHA256、真实 `dws --version` 与非 root 用户构建并运行成功，见 `dws-version-linux.txt` 与 `linux-tests-summary.txt`。生产 Dockerfile 已由 `check-pins.mjs` 校验 ARG 与锁文件一致，构建脚本 `connector/docker/verify-dws-artifact.mjs` 复用与 `artifact.test.mjs` 相同的严格 tar.gz 提取规则。
+生产镜像 `connector/docker/Dockerfile` 在构建阶段从固定 release URL 下载归档，因此需要构建机出网到 GitHub Release。本机无法稳定访问 GitHub CDN（直连 302 后停滞），第二轮验证使用 `--build-arg DWS_ARCHIVE_URL=<mirror>` 完成端到端构建；归档与二进制 SHA256 仍由锁文件固定并在构建阶段校验，因此镜像内容不受镜像站影响。构建产物为非 root 镜像，`version`、`serve`、`health` 均通过，见 `production-image.txt`。同等语义的 Linux 测试镜像 `connector/docker/Dockerfile.test` 使用同一固定归档与校验。生产 Dockerfile 已由 `check-pins.mjs` 校验 ARG 与锁文件一致，构建脚本 `connector/docker/verify-dws-artifact.mjs` 复用与 `artifact.test.mjs` 相同的严格 tar.gz 提取规则。

@@ -38,6 +38,7 @@ export class ConnectorClient {
     return new Promise<T>((resolve, reject) => {
       if (combined.aborted) { reject(new ConnectionServiceError(signal?.aborted ? 'execution_cancelled' : 'service_unavailable')); return; }
       void this.token().then(token => {
+        if (combined.aborted) { reject(new ConnectionServiceError(signal?.aborted ? 'execution_cancelled' : 'service_unavailable')); return; }
         const req = request(this.options(path, body === undefined ? 'GET' : 'POST', payload, token), response => {
           const chunks: Buffer[] = []; let size = 0, overflow = false;
           response.on('data', (chunk: Buffer) => {

@@ -1,4 +1,5 @@
 # Container build context for connector/docker/Dockerfile.
+# The image builds the Connector from source in a builder stage, so pre-generated lib/ is excluded.
 node_modules
 **/node_modules
 .cache
@@ -11,17 +12,14 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 src
 test
-enhancements/src
-enhancements/scripts
-enhancements/tests
-enhancements/docs
-enhancements/skills
-enhancements/artifacts
 docs
 assets
+enhancements/lib
+enhancements/scripts
+enhancements/tests
+enhancements/skills
+enhancements/artifacts
+connector/lib
 connector/deploy
-connector/docs
-connector/scripts
 connector/tests
 connector/tsconfig.json
-connector/.cache

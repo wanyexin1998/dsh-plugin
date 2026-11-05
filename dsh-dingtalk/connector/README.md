@@ -4,7 +4,7 @@
 
 - 版本锁定：`version.json`（Connector 0.1.0、协议 1、插件 `0.2.0-dev.12`、DWS 1.0.66 `f215043e…`）。
 - 底层复用：`enhancements/` 的 `DwsExecutor`、`ExecutionQueue`、`createLocalBackend`、`operations`、错误码与 `dws.lock.json` 版本锁。
-- 运行形态：一个 Connector 进程，多用户隔离；每个调用方一条 Unix Domain Socket（生产）或仅测试用的 loopback + capability token。
+- 运行形态：一个 Connector 进程，多用户隔离；每个调用方一条 Unix Domain Socket（生产默认，`<state>/sockets/<callerId>/dsh.sock`）或仅测试用的 loopback + capability token。
 - 服务器首批能力：`identity.getSelf`、`calendar.listEvents`、`docs.search`。其余 DWS 操作（含写操作、文件、后台任务）在 Connector 侧显式拒绝。
 
 > 本交付**不等于** Cellgent 已接入。真实企业 OAuth、scope、IT 权限与双用户必须在真实环境验收，见 [docs/CELLGENT-INTERFACE.md](docs/CELLGENT-INTERFACE.md) 与 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

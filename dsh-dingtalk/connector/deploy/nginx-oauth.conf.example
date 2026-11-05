@@ -1,6 +1,10 @@
 # TLS termination in front of the Connector's loopback OAuth listener.
 # The shared network namespace (network_mode: service:connector) keeps the Connector bound to
 # 127.0.0.1:8787; only this proxy is reachable from the browser, and it always speaks HTTPS.
+#
+# Privacy: the OAuth start/callback URIs carry one-time tickets, state and auth codes in the query
+# string. Access logging is disabled for every location so those values never reach disk/stdout.
+# Error logging keeps only nginx diagnostics, not request URIs or arguments.
 server {
     listen 8443 ssl;
     http2 on;
@@ -9,6 +13,10 @@ server {
     ssl_certificate     /etc/nginx/tls/fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+
+    access_log off;
+    error_log /dev/stderr warn;
 
     # Fixed, exact upstream. No rewrite of paths or query strings.
     location /dsh-dingtalk/ {
@@ -16,13 +24,15 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For "";
+        proxy_set_header X-Forwarded-For '';
         proxy_set_header Cookie $http_cookie;
         proxy_read_timeout 30s;
         proxy_send_timeout 30s;
         client_max_body_size 16k;
+        access_log off;
     }
     location / {
+        access_log off;
         return 404;
     }
 }

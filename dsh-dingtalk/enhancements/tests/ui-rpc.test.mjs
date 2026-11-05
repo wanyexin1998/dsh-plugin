@@ -15,6 +15,8 @@ for (const origin of ['http://127.0.0.1:3000', 'dsh-app://app']) test(`UI carrie
     assert.equal((await call('bootstrap', { context }, { id: 'api-owner', principal: { kind: 'owner' } })).ok, false);
     assert.equal((await call('bootstrap', { context }, { id: 'browser', principal: { kind: 'api' } })).ok, false);
     const { browserId } = (await call('bootstrap', { context })).value;
+    // Local mode keeps its loopback/desktop-only rule; a remote HTTPS origin is not widened here.
+    assert.equal((await call('bootstrap', { context: { origin: 'https://dsh.test', returnPath: '/chat' } })).ok, false);
     assert.equal((await call('status', { browserId: 'spoof' })).ok, false);
     assert.equal((await call('status', { browserId, userId: 'spoof' })).ok, false);
     assert.equal((await call('status', { browserId })).ok, true);

@@ -3,8 +3,8 @@
 # Build context: dsh-dingtalk/  ->  docker build -f connector/docker/Dockerfile -t dsh-dingtalk-connector:<tag> .
 # The pinned official DWS linux-amd64 artifact is verified twice: archive SHA256, then the single
 # extracted binary SHA256. The build fails on any mismatch and never downloads at runtime.
-# The build stage uses Node only (no apt/curl): the install script validates, extracts and executes
-# `dws --version` against the pinned version and commit.
+# The Connector bundle is built from source in a locked builder stage; no host node_modules or
+# pre-generated lib/ is required.
 ARG NODE_IMAGE=node:22-bookworm-slim
 ARG DWS_VERSION=1.0.66
 ARG DWS_COMMIT=f215043e676d6889e1ddce3464828d8b1ec40c31
@@ -27,6 +27,16 @@ RUN node /tmp/verify-dws-artifact.mjs \
       --commit "${DWS_COMMIT}" \
       --output /opt/dws/bin/dws
 
+FROM ${NODE_IMAGE} AS connector-build
+WORKDIR /app/connector
+COPY connector/package.json connector/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY enhancements/src /app/enhancements/src
+COPY connector/src ./src
+COPY connector/scripts ./scripts
+# Fails the build if the CLI entry cannot execute or has a duplicate shebang.
+RUN node scripts/build.mjs && test -s lib/connector.mjs && test -s lib/main.mjs && node lib/main.mjs version
+
 FROM ${NODE_IMAGE} AS runtime
 ARG DWS_VERSION
 LABEL org.opencontainers.image.title="dsh-dingtalk-connector" \
@@ -35,9 +45,10 @@ LABEL org.opencontainers.image.title="dsh-dingtalk-connector" \
       org.opencontainers.image.dws.version="${DWS_VERSION}"
 RUN groupadd --gid 10001 connector \
  && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin connector
-COPY --from=dws-artifact --chown=root:root --chmod=0555 /opt/dws/bin/dws /opt/dws/bin/dws
+COPY --from=dws-artifact /opt/dws/bin/dws /opt/dws/bin/dws
+RUN chown root:root /opt/dws/bin/dws && chmod 0555 /opt/dws/bin/dws
 WORKDIR /app
-COPY --chown=root:root connector/lib ./lib
+COPY --from=connector-build --chown=root:root /app/connector/lib ./lib
 COPY --chown=root:root connector/version.json ./version.json
 COPY --chown=root:root enhancements/dws.lock.json ./dws.lock.json
 ENV NODE_ENV=production \

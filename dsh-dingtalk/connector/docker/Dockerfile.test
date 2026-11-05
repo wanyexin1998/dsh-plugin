@@ -21,4 +21,4 @@ ENV DSH_TEST_DWS_BINARY=/opt/dws/bin/dws \
     DSH_DINGTALK_DWS_LOCK=/app/enhancements/dws.lock.json \
     HOME=/home/node
 WORKDIR /app/connector
-CMD ["node", "--test", "--test-concurrency=1", "tests/unit.test.mjs", "tests/linux.test.mjs"]
+CMD ["node", "--test", "--test-concurrency=1", "tests/unit.test.mjs", "tests/cli.test.mjs", "tests/linux.test.mjs"]

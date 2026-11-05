@@ -69,25 +69,49 @@ export async function createRemoteConnection(settings: RemoteSettings, limits: E
   let identity: { corpId: string; userId: string } | undefined;
   let callbackOrigin: string | undefined;
   let preparation: PreparationStatus = { state: 'idle' };
-  let preparationTask: Promise<void> | undefined;
-  const startup = client.call<ConnectorHealthValue>(CONNECTOR_ROUTES.health, undefined).then(value => {
-    if (!value || value.protocol !== CONNECTOR_PROTOCOL) throw new ConnectionServiceError('backend_not_ready');
-    if (typeof value.callbackOrigin === 'string') callbackOrigin = value.callbackOrigin;
-  });
-  startup.catch(() => {});
+  let preparationGeneration = 0;
+  let preparationTask: { generation: number; controller: AbortController; promise: Promise<void> } | undefined;
+  // Readiness is re-probeable: a failed health check must not poison this connection forever.
+  let probing: Promise<void> | undefined;
+  let verified = false;
+  const invalidate = (): void => { verified = false; };
+  const probe = (): Promise<void> => {
+    if (closed) return Promise.reject(new ConnectionServiceError('service_disposed'));
+    if (verified) return Promise.resolve();
+    if (probing) return probing;
+    probing = (async () => {
+      try {
+        const value = await client.call<ConnectorHealthValue>(CONNECTOR_ROUTES.health, undefined);
+        if (closed) throw new ConnectionServiceError('service_disposed');
+        if (!value || value.protocol !== CONNECTOR_PROTOCOL) throw new ConnectionServiceError('backend_not_ready');
+        if (typeof value.callbackOrigin === 'string') callbackOrigin = value.callbackOrigin;
+        verified = true;
+      } finally { probing = undefined; }
+    })();
+    return probing;
+  };
+  const call = async <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> => {
+    try { return await client.call<T>(path, body, signal); }
+    catch (error) {
+      if (error instanceof ConnectionServiceError && ['service_unavailable', 'backend_not_ready'].includes(error.reasonCode)) invalidate();
+      throw error;
+    }
+  };
   const ready = async (): Promise<void> => {
     if (closed) throw new ConnectionServiceError('service_disposed');
-    try { await startup; } catch (error) { throw new ConnectionServiceError(error instanceof ConnectionServiceError ? error.reasonCode : 'backend_not_ready'); }
+    try { await probe(); } catch (error) {
+      throw new ConnectionServiceError(error instanceof ConnectionServiceError ? error.reasonCode : 'backend_not_ready');
+    }
   };
-  const callStatus = async (call: CallOptions = {}): Promise<ConnectionStatus> => {
+  const callStatus = async (callOptions: CallOptions = {}): Promise<ConnectionStatus> => {
     await ready();
-    const value = await client.call<{ status: ConnectionStatus; identity?: { corpId: string; userId: string } | null }>(CONNECTOR_ROUTES.status, {}, call.signal);
+    const value = await call<{ status: ConnectionStatus; identity?: { corpId: string; userId: string } | null }>(CONNECTOR_ROUTES.status, {}, callOptions.signal);
     const status = publicStatus(value.status);
     identity = value.identity && typeof value.identity.corpId === 'string' && typeof value.identity.userId === 'string' ? { corpId: value.identity.corpId, userId: value.identity.userId } : undefined;
     if (status.state !== lastState) { lastState = status.state; if (status.state === 'connected') revision++; }
     return status;
   };
-  const invoke = async (input: InvokeInput, call: CallOptions = {}): Promise<InvokeResult> => {
+  const invoke = async (input: InvokeInput, callOptions: CallOptions = {}): Promise<InvokeResult> => {
     try {
       await ready();
       const request = parseInvokeInput(input);
@@ -95,7 +119,7 @@ export async function createRemoteConnection(settings: RemoteSettings, limits: E
       if (request.operationId === 'dws.describe') return { status: 'ok', data: describe(request.args.command) };
       if (request.operationId !== 'identity.getSelf' && request.operationId !== 'calendar.listEvents' && request.operationId !== 'docs.search')
         return { status: 'denied', reasonCode: 'command_unavailable', retryable: false };
-      const value = await client.call<{ result: InvokeResult }>(CONNECTOR_ROUTES.invoke, request, call.signal);
+      const value = await call<{ result: InvokeResult }>(CONNECTOR_ROUTES.invoke, request, callOptions.signal);
       return publicInvokeResult(value.result);
     } catch (error) {
       const reasonCode = error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable';
@@ -109,30 +133,30 @@ export async function createRemoteConnection(settings: RemoteSettings, limits: E
     async status(call) {
       try { return await callStatus(call); } catch (error) { return failure(error); }
     },
-    async beginAuthorization(context: AuthorizationContext, call: CallOptions = {}) {
+    async beginAuthorization(context: AuthorizationContext, callOptions: CallOptions = {}) {
       await ready();
       const caller = ui.getStore();
       if (!caller) throw new ConnectionServiceError('invalid_request');
       const context2 = browserContext({ origin: caller.context.origin, returnPath: caller.context.returnPath }, settings);
-      const value = await client.call<ConnectorAuthorizeStart>(CONNECTOR_ROUTES.authorizationBegin, context2, call.signal);
+      const value = await call<ConnectorAuthorizeStart>(CONNECTOR_ROUTES.authorizationBegin, context2, callOptions.signal);
       revision++;
       return publicAuthStart({ transactionId: value.transactionId, authorizeUrl: value.authorizeUrl, expiresAt: value.expiresAt });
     },
     async getAuthorizationStatus(id: string) {
       await ready();
       try {
-        const value = await client.call<{ status: ConnectionStatus }>(CONNECTOR_ROUTES.authorizationStatus, { transactionId: transactionId(id) });
+        const value = await call<{ status: ConnectionStatus }>(CONNECTOR_ROUTES.authorizationStatus, { transactionId: transactionId(id) });
         return publicStatus(value.status);
       } catch (error) {
         if (error instanceof ConnectionServiceError && error.reasonCode === 'invalid_auth_state') throw error;
         return failure(error);
       }
     },
-    async invoke(input, call) { return invoke(input, call); },
+    async invoke(input, callOptions) { return invoke(input, callOptions); },
     async disconnect() {
       await ready();
       if (!ui.getStore()) throw new ConnectionServiceError('invalid_request');
-      const value = await client.call<{ disconnected: boolean }>(CONNECTOR_ROUTES.disconnect, {});
+      const value = await call<{ disconnected: boolean }>(CONNECTOR_ROUTES.disconnect, {});
       identity = undefined;
       revision++;
       return { disconnected: value.disconnected === true };
@@ -141,35 +165,59 @@ export async function createRemoteConnection(settings: RemoteSettings, limits: E
   };
   const startPreparation = (): PreparationStatus => {
     if (!ui.getStore()) throw new ConnectionServiceError('invalid_request');
-    if (preparation.state === 'running') return { state: 'running' };
+    if (preparation.state === 'running' && preparationTask) return { state: 'running' };
+    const generation = ++preparationGeneration;
+    const controller = new AbortController();
     preparation = { state: 'running' };
-    preparationTask = (async () => {
+    const promise = (async () => {
       try {
-        const value = await client.call<ConnectorPrepareValue>(CONNECTOR_ROUTES.prepare, {});
+        const value = await call<ConnectorPrepareValue>(CONNECTOR_ROUTES.prepare, {}, controller.signal);
+        if (generation !== preparationGeneration || preparation.state !== 'running') return;
         if (typeof value.callbackOrigin === 'string') callbackOrigin = value.callbackOrigin;
         if (value.state === 'ready') preparation = { state: 'ready' };
         else preparation = { state: 'failed', reasonCode: reasonCodeOf(value.reasonCode) ?? 'service_unavailable' };
       } catch (error) {
+        if (generation !== preparationGeneration || preparation.state !== 'running') return;
+        if (controller.signal.aborted) { preparation = { state: 'cancelled', reasonCode: 'user_cancelled' }; return; }
         preparation = { state: 'failed', reasonCode: error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable' };
       }
     })();
+    preparationTask = { generation, controller, promise };
     return { state: 'running' };
   };
   return {
     backend,
-    async invokeFor(principal, input, call) {
+    async invokeFor(principal, input, callOptions) {
       const current = identity;
       if (!current || current.corpId !== principal.corpId || current.userId !== principal.userId) return { status: 'denied', reasonCode: 'identity_mismatch', retryable: false };
-      return invoke(input, call);
+      return invoke(input, callOptions);
     },
     ui: (browser, context, action) => ui.run({ browser, context }, action),
-    cancel: (id, browser) => { void browser; void client.call(CONNECTOR_ROUTES.authorizationCancel, { transactionId: transactionId(id) }).catch(() => {}); return { state: 'unknown', reasonCode: 'connection_unknown' }; },
+    context: (input: unknown) => browserContext(input, settings),
+    async cancel(id: string, browser: string) {
+      void browser;
+      await ready();
+      const value = await call<{ status: ConnectionStatus }>(CONNECTOR_ROUTES.authorizationCancel, { transactionId: transactionId(id) });
+      return publicStatus(value.status);
+    },
     prepareStart: startPreparation,
     prepareStatus: () => ({ ...preparation }),
-    async prepareCancel() { preparation = { state: 'cancelled', reasonCode: 'user_cancelled' }; await preparationTask?.catch(() => {}); return { ...preparation }; },
+    async prepareCancel() {
+      // Invalidate the old task generation before waiting so a late response can never overwrite it.
+      preparationGeneration++;
+      const task = preparationTask;
+      preparationTask = undefined;
+      preparation = { state: 'cancelled', reasonCode: 'user_cancelled' };
+      task?.controller.abort('execution_cancelled');
+      await task?.promise.catch(() => {});
+      return { ...preparation };
+    },
     revision: () => revision,
     identity: () => identity,
-    async callbackOriginReady() { try { await startup; } catch { /* offline is handled by status */ } return callbackOrigin; },
+    async callbackOriginReady() {
+      try { await ready(); } catch { /* offline is handled by status */ }
+      return callbackOrigin;
+    },
     get callbackOrigin() { return callbackOrigin; },
   };
 }

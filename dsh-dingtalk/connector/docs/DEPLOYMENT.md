@@ -25,7 +25,7 @@ docker build -f connector/docker/Dockerfile -t dsh-dingtalk-connector:0.1.0 .
 docker run --rm --entrypoint node dsh-dingtalk-connector:0.1.0 /app/lib/main.mjs version
 ```
 
-镜像内容：非 root `10001:10001`、只读根文件系统可用、`/opt/dws/bin/dws`（root 所有、0555）、`/app/lib`、`/app/version.json`、`/app/dws.lock.json`、私有卷 `/var/lib/dsh-dingtalk-connector`、健康检查命令。模型/会话不进入 Connector。
+镜像由两个 builder stage 组成：一是固定 DWS 下载/校验/安装，二是用 `connector/package-lock.json` 执行 `npm ci` 并从源码构建 Connector（`scripts/build.mjs` 会拒绝双 shebang 并实跑 `node lib/main.mjs version`）。因此干净检出、无宿主 `connector/lib`、无宿主 `node_modules` 也能构建；构建机需要访问 npm registry 与固定 DWS release URL（可用 `DWS_ARCHIVE_URL` 指向镜像，但 SHA256 仍由锁文件固定）。运行时镜像内容：非 root `10001:10001`、只读根文件系统可用、`/opt/dws/bin/dws`（root 所有、0555）、`/app/lib`、`/app/version.json`、`/app/dws.lock.json`、私有卷 `/var/lib/dsh-dingtalk-connector`、健康检查命令。模型/会话不进入 Connector。
 
 镜像摘要由发布流水或人工记录：
 
@@ -38,8 +38,8 @@ docker inspect --format '{{index .RepoDigests 0}}' dsh-dingtalk-connector:0.1.0
 
 ```bash
 cd dsh-dingtalk/connector/deploy
-cp connector.env.example connector.env      # 填入 clientId/scope/origin，绝不提交
-cp nginx-oauth.conf.example nginx-oauth.conf  # 按实际域名调整（见 deploy/nginx-oauth.conf）
+cp connector.env.example connector.env          # 填入 clientId/scope/origin，绝不提交
+cp nginx-oauth.conf.example nginx-oauth.conf    # 按实际域名调整；compose 挂载 ./nginx-oauth.conf
 mkdir -p /srv/dsh-tls && cp fullchain.pem privkey.pem /srv/dsh-tls/
 export CONNECTOR_IMAGE=<pinned-by-digest>
 export OAUTH_TLS_DIR=/srv/dsh-tls OAUTH_PUBLIC_PORT=443
@@ -47,17 +47,22 @@ docker compose up -d connector oauth-tls
 docker compose exec connector node /app/lib/main.mjs health
 ```
 
-- Connector 默认以 `unix` 传输监听私有卷内 `sockets/<callerId>.sock`；`oauth-tls` 通过 `network_mode: service:connector` 共享命名空间，Connector 只监听 `127.0.0.1:8787`，浏览器只经 HTTPS 代理访问。
+- Connector 默认以 `unix` 传输监听私有卷内 `<callerId>/dsh.sock`；`oauth-tls` 通过 `network_mode: service:connector` 共享命名空间，Connector 只监听 `127.0.0.1:8787`，浏览器只经 HTTPS 代理访问。共享命名空间时端口发布写在 `connector` 服务上，代理服务不声明 `ports`；对外只暴露代理 TLS 端口，`8787`、管理面与业务 socket 均不发布。
 - 默认 Compose 不包含任何机器人 Stream 服务；`gateway.compose.yaml` 使用 `profiles: ["robot"]`，未显式启用时不会启动。
 - 反向代理必须设置 `X-Forwarded-Proto: https` 且 Host 与 `DSH_CONNECTOR_OAUTH_PUBLIC_ORIGIN` 完全一致；直连 HTTP、错误 Host、错误 Origin 均被拒绝（403）。
 
-调用方（DSH）接入：将 `<state>/sockets/caller-a.sock` 以文件方式挂载到调用方容器（例如 `/run/dsh-connector/caller-a.sock`），并设置：
+调用方（DSH）接入：把该调用方的 socket **目录** `<state>/sockets/caller-a` 挂载到调用方容器（例如 `/run/dsh-connector`），并设置：
 
 ```bash
-DSH_DINGTALK_CONNECTOR_SOCKET=/run/dsh-connector/caller-a.sock
+DSH_DINGTALK_CONNECTOR_SOCKET=/run/dsh-connector/dsh.sock
 DSH_DINGTALK_TRUSTED_ORIGINS=https://dsh.example.com
 # 插件配置由部署方写入：{ "mode": "connector" }
 ```
+
+挂载目录而不是单个 socket 文件，是因为 Connector 重启会重建 socket；目录挂载可让同一路径恢复，无需重启调用方容器。目录内只有该调用方的 socket，不包含其他调用方的 socket、admin socket 或私有状态卷。
+
+- 默认 socket 目录 `0700`、socket `0600`；调用方必须与 Connector 使用相同 UID，或设置 `DSH_CONNECTOR_SOCKET_MODE=0660` 并用同一共享组（目录自动放宽为 `0750`），同时通过部署环境的 `--group-add` 让调用方进程加入该组。
+- 只挂载 `<state>/sockets/<callerId>` 这一层的只读目录；不要挂载 `<state>/sockets`（会暴露其他调用方）、`<state>/admin`（管理面）或整个私有卷。
 
 绑定创建：本期只有显式测试身份适配器（`admin test-bind`，仅 `test-*` 合成身份）用于验证；生产身份绑定入口留给未来平台实现，见 `docs/CELLGENT-INTERFACE.md`。禁止把测试适配器用于生产。
 
@@ -74,10 +79,13 @@ docker compose down        # 移除容器，保留命名卷
 cd dsh-dingtalk && pnpm run build && npm pack --pack-destination artifacts
 docker build -f connector/deploy/gateway/Dockerfile -t dsh-dingtalk-gateway:0.2.0-dev.12 artifacts
 cd connector/deploy
-cp gateway/gateway.json.example gateway.json   # 填入真实机器人凭据（不进 Git/镜像）
+cp gateway/gateway.json.example gateway.json   # 填入 clientId/clientSecret/corpId/publicOrigin（不进 Git/镜像）
+cp gateway/gateway.env.example gateway.env     # 进程环境；如 NODE_OPTIONS，可按需调整
 export GATEWAY_IMAGE=dsh-dingtalk-gateway:0.2.0-dev.12
 docker compose -f gateway.compose.yaml --profile robot up -d
 ```
+
+`gateway.compose.yaml` 挂载 `./gateway.json` 与 `./gateway.env`，两者都必须先按上面的命令从示例文件生成；`gateway.json` 中的 `stateDirectory` 固定为容器内 `/var/lib/dsh-dingtalk-gateway`（对应独立命名卷），`publicOrigin`、`clientId`、`clientSecret`、`corpId` 需要操作者填写。
 
 gateway 与 Connector 分进程、分状态目录、分权限；gateway 不保存个人 DWS Token，也不重造消息路由。默认不启动该服务，因此默认模板不会连接现有真实机器人 Stream，也不会替换机器人接收者。
 

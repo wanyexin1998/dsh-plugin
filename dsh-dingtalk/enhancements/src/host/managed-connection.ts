@@ -9,7 +9,7 @@ import { ExecutionQueue } from '../adapters/local/queue.js';
 import { createLocalBackend } from '../adapters/local/index.js';
 import { BindingStore } from './binding-store.js';
 import type { BindingRecord } from './binding-store.js';
-import { OAuthController } from './oauth.js';
+import { OAuthController, browserContext } from './oauth.js';
 import type { BrowserContext } from './oauth.js';
 import type { PrivateSettings } from './private-settings.js';
 import { provisionPrivateRuntime, verifyPrivacyGuard } from './privacy.js';
@@ -31,6 +31,8 @@ export interface ManagedConnection {
   prepareCancel(): Promise<PreparationStatus>;
   revision(): number;
   identity(): { corpId: string; userId: string } | undefined;
+  /** Backend-owned browser origin/returnPath validation. Local keeps loopback rules; remote uses its trusted origins. */
+  context?(input: unknown): BrowserContext;
   callbackOrigin?: string | undefined;
   /** Remote backend: resolves the trusted callback origin once the Connector answers. */
   callbackOriginReady?: () => Promise<string | undefined>;
@@ -224,7 +226,7 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
     } } : {}) });
   }
   const preparationCaller = () => { if (closed) throw new ConnectionServiceError('service_disposed'); if (!scope.getStore()) throw new ConnectionServiceError('invalid_request'); };
-  return { backend, invokeFor, ui,
+  return { backend, invokeFor, ui, context: browserContext,
     prepareStart() {
       preparationCaller();
       if (busy || record.revocationPending) throw new ConnectionServiceError('authorization_busy');

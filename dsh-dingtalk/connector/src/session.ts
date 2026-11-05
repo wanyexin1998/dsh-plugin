@@ -141,17 +141,23 @@ export class UserSession {
   private createBackend(): DingtalkBackend {
     return createLocalBackend(this.settings(), this.config.limits, this.runtime())
   }
-  async preparation(): Promise<PreparedValue> {
+  async preparation(signal?: AbortSignal): Promise<PreparedValue> {
+    const checkAborted = (): void => {
+      if (signal?.aborted) throw new ConnectionServiceError('execution_cancelled')
+    }
     const target = platformTarget()
     if (!target) return { state: 'failed', reasonCode: 'cli_platform_unsupported', protocol: CONNECTOR_PROTOCOL }
     if (this.mismatch) return { state: 'failed', reasonCode: 'identity_mismatch', protocol: CONNECTOR_PROTOCOL }
     try {
       // A test-mode replacement CLI is a fixture, not a pinned artifact; production always verifies the hash.
+      checkAborted()
       if (this.config.testDwsBinary) {
         await stat(this.config.testDwsBinary)
         await access(this.config.testDwsBinary, constants.X_OK)
-      } else await verifyExecutable(this.config.dwsBinary, undefined, target)
-      await this.executor.check(new AbortController().signal)
+      } else await verifyExecutable(this.config.dwsBinary, signal, target)
+      checkAborted()
+      await this.executor.check(signal ?? new AbortController().signal)
+      checkAborted()
       this.lastPreparation = { state: 'ready' }
       return {
         state: 'ready',
@@ -189,8 +195,8 @@ export class UserSession {
     }
     return this.guard(run, call)
   }
-  async identity(): Promise<{ identity: SessionBinding | null; state: string }> {
-    const status = await this.status()
+  async identity(call: CallOptions = {}): Promise<{ identity: SessionBinding | null; state: string }> {
+    const status = await this.status(call)
     const connected =
       status.state === 'connected' ||
       (status.state === 'unknown' &&
@@ -313,8 +319,9 @@ export class UserSession {
       this.authorizing = false
     }
   }
-  async disconnect(): Promise<{ disconnected: boolean }> {
+  async disconnect(call: CallOptions = {}): Promise<{ disconnected: boolean }> {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
+    if (call.signal?.aborted) throw new ConnectionServiceError('execution_cancelled')
     this.authorizing = true
     try {
       return await this.state.withRefreshLock(this.callerId, async () => {
@@ -332,7 +339,7 @@ export class UserSession {
           try {
             await this.executor.execute(
               ['auth', 'logout', `--profile=${target}`, '--format=json'],
-              new AbortController().signal,
+              call.signal ?? new AbortController().signal,
               '',
               false,
             )
@@ -360,11 +367,23 @@ export class UserSession {
     this.auth()?.invalidate(this.callerId)
     const previous = this.backend
     this.backend = undefined
+    // A never-authorized caller has no profile and no credentials: clear local state without a
+    // meaningless remote logout that could leave a false revocation_failed marker.
+    const profile = this.record.profile ?? (previous ? this.profile : undefined)
+    if (!profile) {
+      try {
+        await this.store.write({ version: 1, revoked: true })
+      } catch {
+        /* state stays closed either way */
+      }
+      await Promise.resolve(previous?.dispose()).catch(() => {})
+      return
+    }
     try {
       await this.store.write({
         version: 1,
         revoked: true,
-        ...(this.record.profile ? { profile: this.record.profile } : {}),
+        profile,
         revocationPending: true,
       })
     } catch {
@@ -373,7 +392,7 @@ export class UserSession {
     await Promise.resolve(previous?.dispose()).catch(() => {})
     try {
       await this.executor.execute(
-        ['auth', 'logout', `--profile=${this.profile}`, '--format=json'],
+        ['auth', 'logout', `--profile=${profile}`, '--format=json'],
         new AbortController().signal,
         '',
         false,

@@ -41,7 +41,7 @@ async function bind(env, callerId, corpId, userId) {
 async function remoteFor(env, callerId, limits = DEFAULT_LIMITS) {
   return remote.createRemoteConnection(
     {
-      endpoint: { socketPath: join(env.DSH_CONNECTOR_STATE_DIR, 'sockets', `${callerId}.sock`) },
+      endpoint: { socketPath: join(env.DSH_CONNECTOR_STATE_DIR, 'sockets', callerId, 'dsh.sock') },
       trustedOrigins: ['https://dsh.example.test'],
       testTransport: false,
     },
@@ -117,11 +117,12 @@ test(
       env.__adminToken = await adminToken(env)
       await bind(env, 'caller-a', 'test-corp', 'test-user-a')
       await bind(env, 'caller-b', 'test-corp', 'test-user-b')
-      // Private filesystem shape: 0700 state, 0600 sockets, no capability tokens on the unix transport.
+      // Private filesystem shape: 0700 caller socket directories, 0600 sockets, no capability tokens on the unix transport.
       const socketsDirectory = join(isolated.stateDir, 'sockets')
       assert.equal((await stat(socketsDirectory)).mode & 0o777, 0o700)
       for (const callerId of ['caller-a', 'caller-b']) {
-        assert.equal((await stat(join(socketsDirectory, `${callerId}.sock`))).mode & 0o777, 0o600)
+        assert.equal((await stat(join(socketsDirectory, callerId))).mode & 0o777, 0o700)
+        assert.equal((await stat(join(socketsDirectory, callerId, 'dsh.sock'))).mode & 0o777, 0o600)
         assert.equal((await stat(join(isolated.stateDir, 'callers', callerId))).mode & 0o777, 0o700)
         assert.equal((await stat(join(isolated.stateDir, 'callers', callerId, 'dws'))).mode & 0o777, 0o700)
       }
@@ -302,7 +303,8 @@ test('linux unix-socket connector: binding creates exactly one caller socket', {
     env.__adminToken = await adminToken(env)
     await bind(env, 'caller-a', 'test-corp', 'test-user-a')
     const files = await readdir(join(isolated.stateDir, 'sockets'))
-    assert.deepEqual(files.sort(), ['caller-a.sock'])
+    assert.deepEqual(files.sort(), ['caller-a'])
+    assert.deepEqual((await readdir(join(isolated.stateDir, 'sockets', 'caller-a'))).sort(), ['dsh.sock'])
     assert.equal((await readFile(join(isolated.stateDir, 'admin.token'), 'utf8')).trim().length, 64)
   } finally {
     await server?.close().catch(() => {})
@@ -310,3 +312,182 @@ test('linux unix-socket connector: binding creates exactly one caller socket', {
     await rmState(isolated.root)
   }
 })
+
+test(
+  'duplicate test-bind is idempotent and never creates a false revocation state',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server
+    let ownerA
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+      const a = await remoteFor(env, 'caller-a')
+      ownerA = serviceModule.createConnectionService(a.backend)
+      await prepare(a)
+      const authorized = await authorize(ownerA.service, a, env)
+      assert.equal(authorized.state, 'connected', JSON.stringify(authorized))
+      const trace = join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'trace.log')
+      const logoutCount = async () =>
+        (await readFile(trace, 'utf8')).split('\n').filter((line) => line.includes('auth logout')).length
+      assert.equal(await logoutCount(), 0)
+      // Re-running initialization with the same identity must keep the live authorization.
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      assert.equal((await ownerA.service.status()).state, 'connected')
+      assert.equal((await ownerA.service.invoke({ operationId: 'calendar.listEvents', args: {} })).status, 'ok')
+      assert.equal(await logoutCount(), 0, 'duplicate binding must not log out an authorized caller')
+      // Explicit revocation still performs one real logout.
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await ownerA.service.status()).state, 'unlinked')
+      assert.equal(await logoutCount(), 1)
+      // A caller that was never authorized is revoked without a meaningless logout or pending marker.
+      await bind(env, 'caller-c', 'test-corp', 'test-user-c')
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-c' })).status, 200)
+      const c = await remoteFor(env, 'caller-c')
+      const statusC = await c.backend.status()
+      assert.equal(statusC.state, 'unlinked')
+      assert.notEqual(statusC.reasonCode, 'revocation_failed')
+      const traceC = join(isolated.stateDir, 'callers', 'caller-c', 'dws', 'trace.log')
+      const lines = await readFile(traceC, 'utf8').catch(() => '')
+      assert.ok(!lines.includes('auth logout'))
+      await ownerA.dispose()
+    } finally {
+      await ownerA?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+test(
+  'client abort cancels the server-side execution and frees the queue without affecting another caller',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server
+    let ownerA
+    let ownerB
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      for (const callerId of ['caller-a', 'caller-b']) {
+        await bind(env, callerId, 'test-corp', `test-user-${callerId.slice(-1)}`)
+      }
+      const a = await remoteFor(env, 'caller-a')
+      const b = await remoteFor(env, 'caller-b')
+      ownerA = serviceModule.createConnectionService(a.backend)
+      ownerB = serviceModule.createConnectionService(b.backend)
+      await prepare(a)
+      await prepare(b)
+      assert.equal((await authorize(ownerA.service, a, env)).state, 'connected')
+      assert.equal((await authorize(ownerB.service, b, env)).state, 'connected')
+      const delayFile = join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'delay_ms')
+      await writeFile(delayFile, '4000')
+      const controller = new AbortController()
+      const started = Date.now()
+      const pending = ownerA.service.invoke(
+        { operationId: 'calendar.listEvents', args: {} },
+        { signal: controller.signal },
+      )
+      await new Promise((done) => setTimeout(done, 150))
+      // The other caller is a separate session/socket and is not blocked by A's slow execution.
+      const otherStarted = Date.now()
+      assert.equal((await ownerB.service.invoke({ operationId: 'calendar.listEvents', args: {} })).status, 'ok')
+      assert.ok(Date.now() - otherStarted < 3000, 'another caller is unaffected')
+      controller.abort()
+      const aborted = await pending
+      assert.notEqual(aborted.status, 'ok')
+      assert.ok(Date.now() - started < 10000, 'client abort returns promptly')
+      await writeFile(delayFile, '0')
+      const after = Date.now()
+      assert.equal((await ownerA.service.invoke({ operationId: 'calendar.listEvents', args: {} })).status, 'ok')
+      assert.ok(Date.now() - after < 3000, 'the per-caller queue is released after abort')
+      await ownerA.dispose()
+      await ownerB.dispose()
+    } finally {
+      await ownerA?.dispose().catch(() => {})
+      await ownerB?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+test(
+  'caller socket directory is recreated at the same path after a Connector restart',
+  { skip, timeout: 120000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      const socketPath = join(isolated.stateDir, 'sockets', 'caller-a', 'dsh.sock')
+      const before = await stat(socketPath)
+      await server.close()
+      server = undefined
+      assert.equal(
+        await stat(socketPath).then(
+          () => true,
+          () => false,
+        ),
+        false,
+        'socket is removed on shutdown',
+      )
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      const after = await stat(socketPath)
+      assert.equal(after.mode & 0o777, 0o600)
+      assert.notEqual(after.ino, before.ino, 'socket is recreated, not reused')
+      const connection = await remoteFor(env, 'caller-a')
+      assert.equal((await connection.backend.status()).state, 'unlinked')
+      await connection.backend.dispose()
+    } finally {
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'failed or unknown logout stays a visible revocation block instead of being cleared',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server
+    let ownerA
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      const a = await remoteFor(env, 'caller-a')
+      ownerA = serviceModule.createConnectionService(a.backend)
+      await prepare(a)
+      assert.equal((await authorize(ownerA.service, a, env)).state, 'connected')
+      await writeFile(join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'fail_logout'), '1')
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      const blocked = await ownerA.service.status()
+      assert.equal(blocked.state, 'unknown')
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      // A retry clears the marker only after a real successful logout.
+      await rm(join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'fail_logout'))
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      const cleared = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(cleared.state, 'unlinked')
+      assert.notEqual(cleared.reasonCode, 'revocation_failed')
+      await ownerA.dispose()
+    } finally {
+      await ownerA?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
