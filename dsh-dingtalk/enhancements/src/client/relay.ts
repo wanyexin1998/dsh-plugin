@@ -5,6 +5,8 @@ import { localize } from './i18n.js';
 import { showAuthorizationLoading } from './loading.js';
 interface State { status: string; url?: string; authorizeUrl?: string | undefined; expires?: number | undefined; mode?: 'personal' | 'enterprise'; configured?: boolean; hosting?: boolean; callbackUrl?: string; displayName?: string }
 const labels: Record<string, string> = { device_in_use: '此配置已在另一 DSH 实例运行', loading: '检查中', unavailable: '当前通道未提供连接管理', unconfigured: '未配置', enterprise_configuration_invalid: '企业配置有误', mode_conflict: '请先停用个人托管', local_configuration_invalid: '本机配置有误', gateway_in_use: '端口被占用或另一 DSH 正在托管', gateway_unavailable: '本机服务暂不可用', stream_failed: '机器人消息连接失败', disconnected: '未连接', connecting: '连接中', authorizing: '等待登录确认', connected: '已连接', offline: '离线 · 正在重连', auth_required: '请重新授权', replaced: '已在其他设备连接', cancelled: '已取消', expired: '登录已超时', failed: '连接未完成' };
+const firstConfigurationHelp = '首次配置需确认企业信息；尚无企业信息时，请先在上方完成 DWS 授权。配置后连接机器人并按提示完成设备配对。';
+const personalConnectionHelp = '机器人通过应用登录与此设备配对。钉钉数据授权在上方单独管理。';
 const uncertainMessage = '机器人操作结果尚未确认，请刷新状态。';
 const actionErrors: Record<string, string> = { auth_required: '请先完成上方钉钉账号授权。', invalid_credentials: '应用凭据无效或验证暂不可用，请检查后重试。', identity_mismatch: '请使用与当前 DWS 相同的企业账号。', gateway_in_use: '本机端口被占用，或另一 DSH 正在托管此机器人。', device_in_use: '此配置已在另一 DSH 实例运行。', stop_before_configure: '请先停止托管，再修改应用凭据。' };
 export function RelaySection({ store, language = 'zh' }: { store: ConnectionStore; language?: string }) {
@@ -67,7 +69,10 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
       closePopup(); const code = (failure as { reasonCode?: string }).reasonCode || '';
       recover = failure === deadline;
       if (recover) { recoveryRequired.current = true; setUncertain(true); }
-      setError(recover ? uncertainMessage : actionErrors[code] || '连接未完成，请检查应用设置后重试。');
+      const message = personal && code === 'auth_required'
+        ? method === 'configure' && !state.configured ? firstConfigurationHelp : '请重新连接机器人，按提示完成应用登录与设备配对。'
+        : personal && code === 'identity_mismatch' ? '请使用此机器人所属企业的账号完成配对。' : actionErrors[code];
+      setError(recover ? uncertainMessage : message || '连接未完成，请检查应用设置后重试。');
     } finally {
       if (timer !== undefined) { clearTimeout(timer); readTimers.current.delete(timer); }
       if (active.current && generation.current === revision) { mutating.current = false; setBusy(false); if (recover) void refresh(); }
@@ -76,7 +81,7 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
   const blocked = busy || uncertain;
   const canDisconnect = ['connected', 'authorizing', 'offline', 'auth_required'].includes(state.status);
   const unavailable = ['enterprise_configuration_invalid', 'mode_conflict', 'local_configuration_invalid', 'device_in_use', 'authorizing', 'connected', 'connecting'].includes(state.status);
-  const status = state.status === 'loading' && statusError ? '状态未知' : labels[state.status] || '状态未知';
+  const status = state.status === 'loading' && statusError ? '状态未知' : personal && state.status === 'auth_required' ? '请重新登录机器人' : labels[state.status] || '状态未知';
   const tone = statusError ? 'warning' : state.status === 'connected' ? 'success' : ['failed', 'offline', 'auth_required', 'expired', 'stream_failed', 'enterprise_configuration_invalid', 'local_configuration_invalid', 'gateway_unavailable', 'gateway_in_use', 'mode_conflict', 'device_in_use'].includes(state.status) ? 'warning' : undefined;
   return localize(h('section', { className: 'dsh-dt-robot dsh-dt-section', 'aria-label': '钉钉机器人', 'aria-busy': busy || refreshing },
     h('div', { className: 'dsh-dt-strip', 'data-tone': tone },
@@ -96,7 +101,7 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
     personal && state.configured && state.status !== 'connected' && !editing ? h('div', { className: 'dsh-dt-callback' }, h('p', null, '在钉钉应用的安全设置中登记重定向 URL：'), h('code', null, state.callbackUrl), h(IconButton, { label: '复制回调地址', caption: '复制', symbol: 'copy', disabled: blocked || !state.callbackUrl, onClick: () => { void (async () => { try { await navigator.clipboard.writeText(state.callbackUrl || ''); } catch { if (active.current) setError('请手动复制回调地址。'); } })(); } })) : null,
     legacy && !editing ? h('div', { className: 'dsh-dt-form' }, h('label', null, '网关地址', h('input', { placeholder: 'wss://gateway.example/relay', value: url, disabled: blocked || state.status === 'authorizing', onChange: (e: any) => setUrl(e.target.value) }))) : null,
     personal && state.hosting && !editing ? h('div', { className: 'dsh-dt-form-actions' }, h(IconButton, { label: '停止托管', caption: '停止托管', symbol: 'disconnect', className: 'dsh-dt-danger', disabled: blocked, onClick: () => void action('stop') })) : null,
-    state.status === 'authorizing' && state.authorizeUrl ? h('p', { className: 'dsh-dt-notice' }, '请在打开的页面确认。', ' ', h('a', { className: 'dsh-dt-link', href: state.authorizeUrl, target: '_blank', rel: 'noopener noreferrer' }, '继续登录')) : null,
-    state.status !== 'connected' && state.status !== 'authorizing' ? h('p', { className: 'dsh-dt-notice' }, personal ? '随此 DSH 运行。请先完成上方个人钉钉授权。' : '连接后，机器人消息将交给这台 DSH。') : null,
+    state.status === 'authorizing' && state.authorizeUrl ? h('p', { className: 'dsh-dt-notice' }, '请在机器人应用登录页确认账号与此设备的配对。', ' ', h('a', { className: 'dsh-dt-link', href: state.authorizeUrl, target: '_blank', rel: 'noopener noreferrer' }, '继续登录')) : null,
+    state.status !== 'connected' && state.status !== 'authorizing' ? h('p', { className: 'dsh-dt-notice' }, personal ? state.configured ? personalConnectionHelp : firstConfigurationHelp : '连接后，机器人消息将交给这台 DSH。') : null,
     error ? h('p', { role: 'alert', className: 'dsh-dt-notice', 'data-tone': 'warning' }, error) : null), language);
 }

@@ -232,8 +232,24 @@ try {
   assert.equal(await count(page, 'begin'), 0);
   checks.push('DWS unlinked / robot connected and DWS connected / robot offline are rendered independently, with no implicit authorization.');
 
+  await page.evaluate(async () => {
+    window.harness.setDws({ state: 'unlinked', reasonCode: 'not_connected' });
+    window.harness.setRobot({ mode: 'personal', displayName: '演示个人机器人', configured: true, hosting: true, status: 'disconnected', callbackUrl: 'http://127.0.0.1:19878/relay/callback' });
+    await window.harness.store.refresh();
+  });
+  await flushRobot(page);
+  await robot.getByText('机器人通过应用登录与此设备配对。钉钉数据授权在上方单独管理。', { exact: true }).waitFor();
+  assert.equal(await robot.getByRole('button', { name: '连接', exact: true }).isEnabled(), true);
+  assert.doesNotMatch(await robot.innerText(), /请先完成上方|首次配置需确认企业信息|与当前 DWS 相同/);
+  assert.equal(await count(page, 'begin'), 0);
+  await assertFits(page);
+  await shot(page, 'personal-pairing-dws-unlinked.png');
+  await page.evaluate(async () => { window.harness.setDws(window.harness.connected); await window.harness.store.refresh(); });
+  checks.push('Configured personal robot offers application sign-in/device pairing while DWS is unlinked, without a DWS prerequisite or implicit OAuth; first-time configuration guidance remains scoped to missing organization details.');
+
   await page.evaluate(() => window.harness.setRobot({ mode: 'personal', displayName: '演示个人机器人', configured: false, hosting: false, status: 'unconfigured' }));
   await flushRobot(page);
+  await robot.getByText('首次配置需确认企业信息；尚无企业信息时，请先在上方完成 DWS 授权。配置后连接机器人并按提示完成设备配对。', { exact: true }).waitFor();
   await robot.getByRole('button', { name: '配置', exact: true }).click();
   const clientId = robot.getByLabel('Client ID', { exact: true });
   const secret = robot.getByLabel('Client Secret', { exact: true });

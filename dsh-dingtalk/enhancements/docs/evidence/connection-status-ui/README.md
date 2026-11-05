@@ -18,6 +18,7 @@ DSH_TEST_BROWSER=/usr/bin/chromium node enhancements/scripts/verify-connection-s
 | [stale-connected-light.png](stale-connected-light.png) | 已连接账户保留，并标注读取失败/待更新 |
 | [stale-connected-dark-mobile.png](stale-connected-dark-mobile.png) | 同一陈旧状态，深色 360px 布局 |
 | [unknown-envelope-dark-mobile.png](unknown-envelope-dark-mobile.png) | 模拟 Host RPC 成功但结果为 unknown，仍显示旧账户与原确认时间 |
+| [personal-pairing-dws-unlinked.png](personal-pairing-dws-unlinked.png) | DWS 未连接时，已配置个人机器人只提示应用登录与设备配对 |
 | [personal-config-dark-mobile.png](personal-config-dark-mobile.png) | 个人机器人配置表单，深色 360px 布局 |
 | [independent-connected-light.png](independent-connected-light.png) | DWS 与企业机器人各自显示已连接 |
 

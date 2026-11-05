@@ -10,11 +10,11 @@ const executablePath = process.env.DSH_TEST_BROWSER || ['/usr/bin/chromium', '/u
 
 test('robot UI uses independent mocked RPCs with shared presentation and guarded async updates', { skip: !executablePath && 'Set DSH_TEST_BROWSER to run the React browser regression' }, async t => {
   const source = `import React from 'react';import{createRoot}from'react-dom/client';import{RelaySection}from'./src/client/relay.ts';import{connectionCss}from'./src/client/styles.ts';
-const h=window.harness={state:{mode:'enterprise',displayName:'测试机器人',configured:true,status:'disconnected'},calls:[],pending:[],readMode:'normal',actionMode:'normal',popups:[],language:'zh'};
+const h=window.harness={state:{mode:'enterprise',displayName:'测试机器人',configured:true,status:'disconnected'},calls:[],pending:[],readMode:'normal',actionMode:'normal',actionError:'auth_required',popups:[],language:'zh'};
 window.open=()=>{const popup={closed:false,opener:null,document:{open(){},write(){},close(){}},location:{replace(url){popup.url=url;}},close(){this.closed=true;}};h.popups.push(popup);return popup;};
 const store={get(){throw Error('Robot UI must not infer state from DWS authorization');},relay(method,payload={}){h.calls.push({method,payload});
 if(method==='status'){if(h.readMode==='hold')return new Promise((resolve,reject)=>h.pending.push({resolve,reject}));if(h.readMode==='fail')return Promise.reject(Error('offline'));return Promise.resolve({...h.state});}
-const complete=()=>{if(h.actionMode==='fail')throw Object.assign(Error('denied'),{reasonCode:'auth_required'});
+const complete=()=>{if(h.actionMode==='fail')throw Object.assign(Error('denied'),{reasonCode:h.actionError});
 if(method==='configure')h.state={...h.state,configured:true,hosting:true,status:'disconnected',callbackUrl:'http://127.0.0.1:19878/relay/callback'};
 if(method==='connect')h.state={...h.state,status:'authorizing',authorizeUrl:location.origin+'/mock-authorization'};
 if(method==='disconnect')h.state={...h.state,status:'disconnected',authorizeUrl:undefined};
@@ -112,13 +112,92 @@ const root=createRoot(document.getElementById('app'));h.render=()=>root.render(R
     assert.equal(await page.getByLabel('Client Secret', { exact: true }).count(), 0);
     assert.deepEqual(await page.evaluate(() => window.harness.calls.find(call => call.method === 'configure').payload), { clientId: 'synthetic-app', clientSecret: 'synthetic-secret' });
     await page.evaluate(() => { window.harness.actionMode = 'fail'; }); await page.getByRole('button', { name: '连接', exact: true }).click();
-    await page.getByRole('alert').filter({ hasText: '请先完成上方钉钉账号授权' }).waitFor(); assert.match(await status().innerText(), /未连接/);
+    await page.getByRole('alert').filter({ hasText: '请重新连接机器人，按提示完成应用登录与设备配对。' }).waitFor(); assert.match(await status().innerText(), /未连接/);
     await page.evaluate(() => { window.harness.actionMode = 'normal'; }); await page.getByRole('button', { name: '停止托管', exact: true }).click();
     await page.getByRole('button', { name: '配置', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: '停止托管', exact: true }).count(), 0);
     await page.getByRole('button', { name: '配置', exact: true }).click(); assert.equal(await page.getByLabel('Client Secret', { exact: true }).inputValue(), '');
     await page.getByLabel('Client Secret', { exact: true }).fill('discarded-secret'); await page.getByRole('button', { name: '取消配置', exact: true }).click();
     await page.getByRole('button', { name: '配置', exact: true }).click(); assert.equal(await page.getByLabel('Client Secret', { exact: true }).inputValue(), '');
+  });
+
+  await t.test('configured personal status explains robot pairing independently from DWS data authorization', async () => {
+    const help = '机器人通过应用登录与此设备配对。钉钉数据授权在上方单独管理。';
+    for (const [state, label] of [['disconnected', '未连接'], ['offline', '离线 · 正在重连'], ['auth_required', '请重新登录机器人']]) {
+      await load({ mode: 'personal', displayName: '测试个人机器人', configured: true, hosting: true, status: state }); await waitStatus(label);
+      await page.getByText(help, { exact: true }).waitFor();
+      assert.doesNotMatch(await page.locator('.dsh-dt-robot').innerText(), /请先完成上方|先在上方完成 DWS|首次配置需/);
+      assert.equal(await page.getByRole('button', { name: '连接', exact: true }).isDisabled(), false);
+    }
+    await page.getByRole('button', { name: '连接', exact: true }).click(); await waitStatus('等待登录确认');
+    await page.locator('.dsh-dt-notice').filter({ hasText: '请在机器人应用登录页确认账号与此设备的配对。' }).waitFor();
+    assert.equal(await page.getByRole('link', { name: '继续登录', exact: true }).count(), 1);
+    assert.deepEqual(await page.evaluate(() => window.harness.calls.find(call => call.method === 'connect').payload), {});
+  });
+
+  await t.test('only missing first-configuration enterprise context requests DWS discovery; personal pairing errors do not', async () => {
+    const firstSetup = '首次配置需确认企业信息；尚无企业信息时，请先在上方完成 DWS 授权。配置后连接机器人并按提示完成设备配对。';
+    const reconnect = '请重新连接机器人，按提示完成应用登录与设备配对。';
+    for (const configured of [false, true]) {
+      await load({ mode: 'personal', displayName: '测试个人机器人', configured, hosting: false, status: configured ? 'disconnected' : 'unconfigured' });
+      await waitStatus(configured ? '未连接' : '未配置');
+      assert.equal(await page.getByText(firstSetup, { exact: true }).count(), configured ? 0 : 1);
+      await page.getByRole('button', { name: '配置', exact: true }).click();
+      await page.getByLabel('Client ID', { exact: true }).fill('synthetic-app'); await page.getByLabel('Client Secret', { exact: true }).fill('synthetic-secret');
+      await page.evaluate(() => { window.harness.actionMode = 'fail'; });
+      await page.getByRole('button', { name: '下一步', exact: true }).click();
+      const alert = page.getByRole('alert'); await alert.waitFor();
+      assert.equal(await alert.innerText(), configured ? reconnect : firstSetup);
+      if (configured) assert.doesNotMatch(await page.locator('.dsh-dt-robot').innerText(), /先在上方完成 DWS|首次配置需/);
+    }
+    await load({ mode: 'personal', configured: true, hosting: true, status: 'disconnected' }); await waitStatus('未连接');
+    await page.evaluate(() => { window.harness.actionMode = 'fail'; window.harness.actionError = 'identity_mismatch'; });
+    await page.getByRole('button', { name: '连接', exact: true }).click();
+    const mismatch = page.getByRole('alert'); await mismatch.waitFor();
+    assert.equal(await mismatch.innerText(), '请使用此机器人所属企业的账号完成配对。');
+    assert.doesNotMatch(await mismatch.innerText(), /DWS|上方/);
+  });
+
+  await t.test('enterprise and legacy authentication and identity guidance keep their existing DWS boundary', async () => {
+    for (const state of [{ mode: 'enterprise', configured: true, status: 'auth_required' }, { status: 'auth_required', url: 'ws://gateway.example/relay' }]) {
+      await load(state); await waitStatus('请重新授权');
+      for (const [code, message] of [['auth_required', '请先完成上方钉钉账号授权。'], ['identity_mismatch', '请使用与当前 DWS 相同的企业账号。']]) {
+        await page.evaluate(code => { window.harness.actionMode = 'fail'; window.harness.actionError = code; }, code);
+        await page.getByRole('button', { name: '连接', exact: true }).click();
+        const alert = page.getByRole('alert'); await alert.filter({ hasText: message }).waitFor();
+        assert.equal(await alert.innerText(), message);
+      }
+      assert.equal(await page.getByText('机器人通过应用登录与此设备配对。钉钉数据授权在上方单独管理。', { exact: true }).count(), 0);
+    }
+  });
+
+  await t.test('personal setup, pairing status and action guidance are localized in English', async () => {
+    for (const configured of [false, true]) {
+      await load({ mode: 'personal', displayName: 'Synthetic robot', configured, hosting: false, status: configured ? 'auth_required' : 'unconfigured' });
+      await waitStatus(configured ? '请重新登录机器人' : '未配置');
+      await page.evaluate(() => { window.harness.language = 'en'; window.harness.render(); });
+      await page.getByRole('button', { name: 'Configure', exact: true }).waitFor();
+      const section = page.locator('.dsh-dt-robot');
+      const content = await section.innerText();
+      assert.doesNotMatch(content, /[\u3400-\u9fff]/);
+      assert.match(content, /pair/i);
+      if (!configured) { assert.match(content, /DWS/); assert.match(content, /enterprise|organization/i); }
+      else { assert.match(await status().innerText(), /robot/i); assert.doesNotMatch(content, /complete.*DWS.*first/i); }
+      await page.getByRole('button', { name: 'Configure', exact: true }).click();
+      await page.getByLabel('Client ID', { exact: true }).fill('synthetic-app'); await page.getByLabel('Client Secret', { exact: true }).fill('synthetic-secret');
+      await page.evaluate(() => { window.harness.actionMode = 'fail'; }); await page.getByRole('button', { name: 'Next', exact: true }).click();
+      const alert = page.getByRole('alert'); await alert.waitFor();
+      assert.doesNotMatch(await alert.innerText(), /[\u3400-\u9fff]/); assert.match(await alert.innerText(), /pair/i);
+      if (!configured) assert.match(await alert.innerText(), /DWS/); else assert.doesNotMatch(await alert.innerText(), /DWS/);
+    }
+    await page.getByRole('button', { name: 'Cancel configuration', exact: true }).click();
+    await page.evaluate(() => { window.harness.actionError = 'identity_mismatch'; }); await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: /enterprise|organization/i }).waitFor();
+    assert.doesNotMatch(await page.getByRole('alert').innerText(), /[\u3400-\u9fff]|DWS/);
+    await page.evaluate(() => { window.harness.actionMode = 'normal'; }); await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.getByRole('link', { name: 'Continue sign-in', exact: true }).waitFor();
+    assert.match(await page.locator('.dsh-dt-robot .dsh-dt-notice').last().innerText(), /pair/i);
+    assert.doesNotMatch(await page.locator('.dsh-dt-robot').innerText(), /[\u3400-\u9fff]/);
   });
 
   await t.test('legacy gateway input, unmount cleanup and narrow themed keyboard controls work', async () => {

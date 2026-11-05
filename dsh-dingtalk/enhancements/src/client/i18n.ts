@@ -2,6 +2,13 @@ import { Children, cloneElement, isValidElement } from 'react';
 import type { ReactNode, ReactElement } from 'react';
 export interface LocaleFace { getSnapshot(): { active: string }; subscribe(fn: () => void): () => void }
 const english: Record<string, string> = {
+  '首次配置需确认企业信息；尚无企业信息时，请先在上方完成 DWS 授权。配置后连接机器人并按提示完成设备配对。': 'First-time setup needs confirmed organization details. If none are available, authorize DWS above to obtain them. Then connect the robot and follow the device pairing prompts.',
+  '机器人通过应用登录与此设备配对。钉钉数据授权在上方单独管理。': 'The robot pairs with this device through application sign-in. DingTalk data authorization is managed separately above.',
+  '请重新连接机器人，按提示完成应用登录与设备配对。': 'Reconnect the robot and follow the application sign-in and device pairing prompts.',
+  '请使用此机器人所属企业的账号完成配对。': 'Pair using an account from the organization configured for this robot.',
+  '请重新登录机器人': 'Sign in to the robot again',
+  '请在机器人应用登录页确认账号与此设备的配对。': 'Confirm the account and device pairing on the robot application sign-in page.',
+
   '机器人操作结果尚未确认，请刷新状态。': 'Robot action outcome is unconfirmed. Refresh status.',
   '状态未知': 'Status unknown', '刷新机器人状态': 'Refresh robot status', '正在刷新机器人状态…': 'Refreshing robot status…',
   '暂时无法读取机器人状态，请重试。': 'Could not read robot status. Retry.', '机器人状态读取失败；显示上次确认状态。': 'Robot status read failed; showing the last confirmed status.',
@@ -16,7 +23,7 @@ const english: Record<string, string> = {
   '此配置已在另一 DSH 实例运行。': 'This configuration is running in another DSH instance.', '请先停止托管，再修改应用凭据。': 'Stop hosting before editing application credentials.',
   '连接未完成，请检查应用设置后重试。': 'Connection incomplete. Check application settings and retry.', '在钉钉应用的安全设置中登记重定向 URL：': 'Register this redirect URL in the DingTalk application security settings:',
   '复制回调地址': 'Copy callback URL', '请手动复制回调地址。': 'Copy the callback URL manually.', '请在打开的页面确认。': 'Confirm on the page that opened.',
-  '随此 DSH 运行。请先完成上方个人钉钉授权。': 'Runs with this DSH instance. Complete personal DingTalk authorization above first.', '连接后，机器人消息将交给这台 DSH。': 'Once connected, robot messages go to this DSH instance.',
+  '连接后，机器人消息将交给这台 DSH。': 'Once connected, robot messages go to this DSH instance.',
 
   '检查中': 'Checking', '正在读取连接状态，请稍候。': 'Reading connection status. Please wait.',
   '连接状态读取失败': 'Could not read connection status', '暂无法确认授权状态，请刷新重试。': 'Authorization status is unknown. Refresh to retry.',

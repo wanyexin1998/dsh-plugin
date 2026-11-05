@@ -11,6 +11,7 @@
     "Window focus and the 15-second scheduled refresh retain the connected account while reads are pending.",
     "Definitive Host results replace a previously connected account immediately for expiry, identity mismatch, enterprise/application permission, unknown/revocation_failed, unknown/org_policy_denied and unlink.",
     "DWS unlinked / robot connected and DWS connected / robot offline are rendered independently, with no implicit authorization.",
+    "Configured personal robot offers application sign-in/device pairing while DWS is unlinked, without a DWS prerequisite or implicit OAuth; first-time configuration guidance remains scoped to missing organization details.",
     "Personal configuration fields align and fit mobile, successful configure clears secret, pending login retains continue/cancel, stop hosting and reconfigure remain available.",
     "Enterprise connection sends no configuration fields; robot read error preserves its own last state and recovery clears the error without affecting DWS.",
     "Keyboard activation opens unlink confirmation with safe initial focus; Escape preserves binding and restores focus; confirmed DWS disconnect leaves robot state independent.",
@@ -22,6 +23,7 @@
     "stale-connected-light.png",
     "stale-connected-dark-mobile.png",
     "unknown-envelope-dark-mobile.png",
+    "personal-pairing-dws-unlinked.png",
     "personal-config-dark-mobile.png",
     "independent-connected-light.png"
   ],
