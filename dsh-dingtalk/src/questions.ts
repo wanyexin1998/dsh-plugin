@@ -85,6 +85,8 @@ export interface QuestionManagerOptions {
   timeoutMs: number
   approvalTimeoutMs?: number
   approvalUserId?: () => string | undefined
+  /** Channel authority, rechecked before requesting and granting approval. */
+  authorize?(agent: HostAgent): boolean
   interactionCards?: InteractionCardSender
   log(line: string): void
 }
@@ -264,8 +266,11 @@ export class QuestionManager {
           async (request) => {
             // Once a request reaches this IM scope, missing/foreign context
             // cannot borrow a Web approval handler or another Agent's route.
-            if (request.agent !== agent || !this.routes.has(agent.id)) return 'unavailable'
-            return this.askApproval(agent, request)
+            if (request.agent !== agent || !this.routes.has(agent.id) || !this.authorized(agent)) return 'unavailable'
+            const outcome = await this.askApproval(agent, request)
+            // A binding may be revoked/replaced while the human is deciding.
+            // Preserve explicit refusal/cancellation, but never grant stale authority.
+            return outcome === 'allowed-once' && !this.authorized(agent) ? 'unavailable' : outcome
           },
           { prepend: true },
         ),
@@ -282,6 +287,14 @@ export class QuestionManager {
   /** Ensure an Agent loaded by another host surface also receives the shadow. */
   installFor(agent: HostAgent): void {
     this.install(agent.ctx, agent)
+  }
+
+  private authorized(agent: HostAgent): boolean {
+    try {
+      return this.opts.authorize === undefined || this.opts.authorize(agent) === true
+    } catch {
+      return false
+    }
   }
 
   /** Consume a matching human answer before commands and the serial task queue. */

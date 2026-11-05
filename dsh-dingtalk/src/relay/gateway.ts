@@ -31,6 +31,8 @@ export interface GatewayOptions {
   port?: number
   allowedCorpId: string
   allowedGroups: readonly string[]
+  /** Local personal onboarding can derive the user from robot OAuth itself. */
+  allowUnclaimedPersonalLogin?: boolean
   notice(message: InboundMessage, text: string): Promise<unknown>
   operation(message: InboundMessage, method: string, data: any): Promise<unknown>
 }
@@ -97,11 +99,16 @@ export class Gateway {
             senderCorpId: data?.identity?.corpId,
             senderStaffId: data?.identity?.userId,
           })
-          if (!identity || identity.corpId !== options.allowedCorpId || !this.login)
+          const unclaimed =
+            options.allowUnclaimedPersonalLogin === true &&
+            data?.identity === undefined &&
+            ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')
+          if ((!identity && !unclaimed) || (identity && identity.corpId !== options.allowedCorpId) || !this.login)
             throw new Error('login_unavailable')
           const attempt = this.login.begin(
             async (verified) => {
-              if (!sameIdentity(identity, verified)) throw new Error('identity_mismatch')
+              if (verified.corpId !== options.allowedCorpId || (identity && !sameIdentity(identity, verified)))
+                throw new Error('identity_mismatch')
               await this.activate(peer, verified, (value) => {
                 binding = value
               })
@@ -191,6 +198,32 @@ export class Gateway {
       onlineUsers: this.online.size,
       requests: this.requests.size,
       lastLogin: this.login?.status() ?? 'unconfigured',
+    }
+  }
+  /** Live local proof; a stale device record or replaced/offline peer grants nothing. */
+  authorizes(identity: DingTalkIdentity, device: string): boolean {
+    const route = this.online.get(key(identity))
+    if (
+      !route ||
+      route.peer.socket.readyState !== 1 ||
+      route.binding.device !== device ||
+      !this.bindings.includes(route.binding) ||
+      !sameIdentity(route.binding.identity, identity)
+    )
+      return false
+    try {
+      const stored = readState<Binding[]>(this.options.stateFile, [])
+      return (
+        Array.isArray(stored) &&
+        stored.some(
+          (binding) =>
+            binding.device === device &&
+            binding.hash === route.binding.hash &&
+            sameIdentity(binding.identity, identity),
+        )
+      )
+    } catch {
+      return false
     }
   }
   private async activate(peer: Peer, identity: DingTalkIdentity, assign: (binding: Binding) => void) {

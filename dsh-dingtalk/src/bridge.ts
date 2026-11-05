@@ -5,7 +5,16 @@
  * serializes on that completion). Rendering lives in renderer.ts.
  */
 import { randomUUID } from 'node:crypto'
-import type { AgentHandle, HostAgent, AgentSetup, HostAgentRegistry, ImageBlock, TextBlock } from './host.js'
+import type {
+  AgentHandle,
+  HostAgent,
+  HostAgentContext,
+  AgentSetup,
+  AgentSetupCommit,
+  HostAgentRegistry,
+  ImageBlock,
+  TextBlock,
+} from './host.js'
 import { sessionId } from './host.js'
 import type { InboundContentPart, InboundMessage } from './stream.js'
 import type { JsonStore } from './jsonstore.js'
@@ -18,12 +27,23 @@ export interface TurnRenderer {
   onInbound(sessionId: string, msg: InboundMessage): Promise<void>
 }
 
+/** Trusted channel-owned admission, captured before enqueue and rechecked at use. */
+export interface BridgeAuthorization {
+  readonly cwd: string
+  check(): void
+  checkAgent(agent: HostAgent): void
+  canReuse(agent: HostAgent): boolean
+  canResume(id: string): boolean
+  setup(ctx: HostAgentContext, agent: HostAgent, restoring: boolean): AgentSetupCommit
+}
+
 export interface BridgeOptions {
   /** 数字员工不借用 Web UI 或其他 Channel 持有的运行实例。 */
   exclusiveOwnership?: boolean
   /** Keep the foreign Agent untouched and bind a fresh channel session instead. */
   recoverForeignSession?: boolean
   cwd: string
+  authorize?(msg: InboundMessage, scopeKey: string, cwd: string): BridgeAuthorization
   log(line: string): void
   /** Per-conversation model override store (set via /model use). */
   modelOverrides: JsonStore<ModelOverride>
@@ -67,11 +87,15 @@ export class Bridge {
   ) {}
 
   /** Drive one message through its agent; resolves when the turn settles. */
-  async process(msg: InboundMessage, scopeKey: string): Promise<string> {
+  async process(msg: InboundMessage, scopeKey: string, admission?: BridgeAuthorization): Promise<string> {
     if (this.closed) throw new Error('employee_stopping')
-    const cwd = this.opts.workspaceOverrides.get(scopeKey) ?? this.opts.cwd
-    const agent = await this.agentFor(scopeKey, cwd)
+    const selected = this.opts.workspaceOverrides.get(scopeKey) ?? this.opts.cwd
+    const authorization = admission ?? this.opts.authorize?.(msg, scopeKey, selected)
+    authorization?.check()
+    const cwd = authorization?.cwd ?? selected
+    const agent = await this.agentFor(scopeKey, cwd, authorization)
     await this.opts.onAgentMessage(agent, msg, cwd)
+    authorization?.checkAgent(agent)
     if (this.closed) throw new Error('employee_stopping')
     const settled = this.renderer.onInbound(agent.id, msg)
     const content: Array<TextBlock | ImageBlock> = []
@@ -97,6 +121,7 @@ export class Bridge {
       }
     }
     if (content.length === 0) content.push({ type: 'text', text: '（用户发来一张图片）' })
+    authorization?.checkAgent(agent)
     agent.followup({
       id: randomUUID(),
       role: 'user',
@@ -107,25 +132,48 @@ export class Bridge {
     return agent.id
   }
 
-  private async agentFor(conversationId: string, cwd: string): Promise<HostAgent> {
+  private async agentFor(conversationId: string, cwd: string, authorization?: BridgeAuthorization): Promise<HostAgent> {
     // Entry-point-created agents carry no session-local model selection, so the
     // route must be supplied here or prompt assembly fails ({{model}} unset).
     // Likewise the preset must be composed via setup, or the agent has no tools.
     const agentOptions = this.opts.modelOverrides.get(conversationId) ?? this.opts.modelSelection()
     const composition = await this.opts.compose()
+    const setup = (restoring: boolean): AgentSetup | undefined =>
+      !authorization
+        ? composition.setup
+        : async (ctx, agent) => {
+            authorization.check()
+            const composed = await composition.setup?.(ctx, agent)
+            const admission = authorization.setup(ctx, agent, restoring)
+            return {
+              commit() {
+                composed?.commit()
+                admission.commit()
+              },
+            }
+          }
     const bound = this.bindings.get(conversationId)
     if (bound) {
       const running = this.agents.get(sessionId(bound))
       if (running) {
-        if (!this.opts.exclusiveOwnership || this.owned.get(running.id)?.agent === running) return running
+        if (
+          (!this.opts.exclusiveOwnership || this.owned.get(running.id)?.agent === running) &&
+          (!authorization || authorization.canReuse(running))
+        )
+          return running
+        const owned = this.owned.get(running.id)
+        if (owned?.agent === running && authorization) {
+          await owned.dispose()
+          this.owned.delete(running.id)
+        }
         if (!this.opts.recoverForeignSession) throw new Error('session_owned_by_another_runtime')
         this.opts.log('bound session active in another runtime; creating a fresh channel session')
-      } else
+      } else if (!authorization || authorization.canResume(bound))
         try {
           const handle = await this.agents.resume({
             resumeSessionId: sessionId(bound),
             agentOptions,
-            setup: composition.setup,
+            setup: setup(true),
           })
           this.opts.log(`resumed session ${bound} for conversation ${conversationId}`)
           return this.own(handle)
@@ -141,7 +189,7 @@ export class Bridge {
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       agentOptions,
-      setup: composition.setup,
+      setup: setup(false),
     })
     this.bindings.set(conversationId, id)
     this.opts.log(

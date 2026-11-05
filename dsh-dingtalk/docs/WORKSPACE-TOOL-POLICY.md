@@ -1,49 +1,71 @@
-# 工作区工具权限：Issue #27 阻断记录
+# 个人机器人工作区工具权限（Issue #27）
 
-状态：**未开放，Issue #27 未完成验收**。目标是继承可信绑定用户在对应 DSH 工作区中已有的工具与审批权限；本次不授予新权限。父分支为 `codex/dingtalk-server-runtime`，核查基线为 `0c50a3b063ecc87ee14b51d536bcf8c289af37d7`。
+已支持**已配置的 personal、本机 profile owner、插件自有会话**继承已核实的普通宿主工具。权限依据是机器人渠道自身的可信配对和官方消息 sender，不要求 DWS OAuth 当前有效，不要求重新做工作区绑定，不新增工作区 ACL。
 
-## 权威来源核查
+Enterprise、旧共享 Relay、standalone 和数字员工路径没有因此获得新的工具权限。原生子 Agent、工作流等不具备可靠继承机制的工具仍拒绝，文件/图片发送边界不扩大。
 
-核查插件源码及公开 npm 发布的 `@deepseek-ai/dsh-*` **`0.2.1-rc.5`**，不是从模型参数或前端显示推断权限。
+## 两条独立授权链
 
-| 环节            | 已有证据                                                                                                                                                | 不能证明的事项                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 消息主体        | `src/identity.ts` 从官方消息取 `senderCorpId + senderStaffId`；Relay 再核对已配对主体                                                                   | 该主体在 DSH 的用户身份、工作区授权                                                             |
-| DWS 授权        | `enhancements/src/host/managed-connection.ts` 的 `invokeFor` 逐次校验主体、reader、撤销状态；审批后再核对授权版本                                       | shell、文件、其他插件等宿主工具的授权                                                           |
-| 工作区          | `src/workspace.ts` 与 `@deepseek-ai/dsh-workspace/lib/types/spec.d.ts` 提供真实路径及会话归组                                                           | 用户对该工作区的访问权；`/cd`、目录存在、注册成功都不是授权                                     |
-| Agent 创建/恢复 | `src/host.ts` 与 `@deepseek-ai/dsh-agent/lib/types/index.d.ts` 提供 session、cwd、preset、setup                                                         | 可信 DSH 用户、用户与工作区的有效授权、持久会话的用户归属证明                                   |
-| 工具与审批策略  | `dsh-tools` 的 guard 可继续拒绝；`dsh-permission-presets`、`dsh-sandbox-policy`、`dsh-user-approval` 使用会话覆盖值及部署默认值                         | 这些值是否属于当前钉钉主体，以及主体撤销后的有效策略                                            |
-| 子 Agent        | `dsh-subagent/lib/index.js` 的 `applyChildComposition` 使用 `composeFrom`；`dsh-agent-preset-registry/lib/index.js` 将子 Agent 绑定到 preset generation | 父机器人 Agent 的 IM shadow、guard 和审批监听器会自动继承；`parentAgent` 本身只表达运行时所有权 |
+**机器人渠道**：已认证的 DSH browser owner 经原有 Host RPC 发起连接；机器人应用自己的 OAuth 验证企业与成员；Gateway 提交设备绑定，再向当前 profile 的接收端交付设备凭据。消息由官方 Stream 提供企业和 sender，并由 Gateway 匹配已配对设备。每次普通宿主工具执行核对当前个人配置、在线设备、持久绑定、profile 和连接存活信号。
 
-子 Agent 的原生审批策略为 `never`，本单没有修改它。公开 API 没有提供完整的可信主体到工作区授权映射或机器人子 Agent 的安全组合契约。不能把 DWS 登录相同、机器人 owner、默认 preset、当前 Web 用户或工作目录相同当成替代证明。
+**DWS 数据工具**：`dingtalk_call` 继续使用 Agent 局部 shadow 和 `managed.invokeFor`，独立验证 DWS OAuth、企业/用户、scope、撤销和原生审批。DWS 未授权时普通宿主工具仍可执行，DWS 工具仍返回需要授权；DWS 换号不会改变机器人渠道 owner，也不能借用另一个 DWS 用户的数据。
 
-因此保留入口拒绝。未注册、已禁用及其他非 DWS 工具不会因本单变得可用；返回 `im_tool_unavailable: im_workspace_policy_unavailable`。这不是一个返回“允许”的空壳权限服务，也没有添加 allow-all 配置。
+个人通道的状态、消息接收、owner 判断和工具授权均不再以当前 DWS identity 为条件。机器人断开、被其他设备替换、停止或连接关闭会使通道执行信号失效；DWS 注销不会撤销机器人配对。已有设备重启后用原 token 向 Gateway 验证，旧记录缺少 device 时从已认证握手补齐，无需重新配对。企业和旧 Relay 保留原有策略。
 
-## 本次交付
+全新、尚未配置的个人机器人仍需要首次取得企业信息：当前安装流程用 DWS 身份发现 corpId。本次未新增企业字段或更改设置页；这个初始化限制不适用于已经配置的机器人，也不作为普通工具执行、恢复或重新连接的授权前提。原有 personal 配置不会因 DWS 换号而迁到另一企业。
 
-- `ImTools` 固定实际 Agent 对象及消息主体。guard 和 DWS 局部 shadow 拒绝其他 Agent、相同 session ID 的替代实例，以及借用该 shadow 的子作用域。安装 guard 失败时撤销 shadow，允许宿主安全回滚/重试。
-- 到达机器人作用域的审批缺失会话路由或 Agent 不符时返回 `unavailable`。文字回复按企业、会话类型、会话和发送者匹配；有企业身份的请求不能被缺失或不同企业身份的回复批准。原有无企业字段的事件只匹配同类旧路由，不由此获得 DWS 或工作区权限。
-- 既有 owner 审批策略保留；允许一次、拒绝、AbortSignal 取消、超时和不可达均有回归。尚未实现一般 DSH 用户的审批授权映射。
-- 创建、恢复、setup 回滚、preset 缺失、外部运行实例恢复及 `/cd` 路径都有拒绝策略断言。测试中的目录/工具注册不被当作授权证据。
-- `send_file` / `send_image` 继续独立拒绝，现有文件实现、Agent/会话目标、真实路径、类型、20 MB 限制及未知结果不重试语义未变。
-- Connector 的 `identity.getSelf` / `calendar.listEvents` / `docs.search` operation 白名单未变。本地/远端 DWS 身份校验、每用户凭据、撤销和队列未变。
+## 工作区与会话
 
-## 解除阻断所需契约
+- 默认目录仍是 `config.workspace`，未配置时是 `~/dsh-dingtalk-workspace`，由原安装流程创建。目录存在或自动注册只说明工作目录可用；授权来自已经配对的本机 profile owner。
+- `/cd` 仍是 owner 的显式选择，可用现有路径或已注册工作区序号。选择前沿用目录存在检查；执行时取真实路径，记录为新会话的工作区。没有因为本单获得其他用户或企业工作区的权限。
+- 消息接收时、任何异步等待前保存当前配对、连接 lease 和会话选择版本，入队时再固定真实路径。出队、setup、同步 commit、消息注入前、每次工具 guard、调度后的实际 dispatch、审批前与允许返回时重新核对。`/cd`、`/new` 或模型重开撤销旧选择；旧消息即使正在等待模型能力查询或排队，也不会转到新工作区执行。
+- setup/commit 固定实际 Agent 对象、session ID、主体、设备配对、profile、scope 和工作区。普通工具只在 Host session.header.cwd 与 workingDirectory.get(session) 都匹配时继承。路径不可解析、符号链接改指、上下文缺失或校验失败均拒绝。
+- 私有 `workspace-session-owners.json` 是插件会话归属记录，不是新的授权数据库。恢复必须匹配原配对、主体、profile 和真实工作区。旧版本没有该记录或归属不明时，新建插件会话并保留旧历史；不会接管 Web 或其他运行实例。
+- 恢复后的新 Agent 会撤销同一 session ID 的旧实例授权；撤销期间等待的执行不能移到新配对、新连接或另一个 Agent。取消信号跟随宿主调用，未声称可以强杀不遵守 AbortSignal 的第三方同进程代码。
 
-需要宿主维护者提供并确认：可信消息主体到 DSH 用户及工作区的可撤销映射；创建/恢复前的会话归属验证；每次执行及等待审批后的有效工具、沙箱和审批策略；在子 Agent 发布前安装同一身份边界的机制。未知、失效、撤销、主体不符和无审批承接能力均须拒绝。
+工作区检查保持宿主现有路径、沙箱和审批语义，不把 cwd 冒充操作系统隔离边界，也不覆盖宿主对工作区外访问的拒绝。
 
-本单不修改 DSH/Cellgent 核心，不用新凭据或持久授权绕过缺失契约。等上述契约可验证后，才能实施非 DWS 正向调用、权限动态变化与真实子 Agent 继承验收。当前 draft PR 不应关闭 Issue #27。
+撤销阻止后续授权和工具 dispatch，并向仍在等待的工具调用传递取消信号；已经被宿主接受的后台作业/终端任务按宿主原有生命周期运行，可能继续执行。已经开始的入站附件写入也不承诺回滚。本次没有新增进程沙箱或后台任务清理服务。
 
-## 复现检查
+## 可继承的普通工具
 
-仓库未包含 `.agents/skills`；开发检查遵循 `AGENTS.md`。使用 Node `24.19.0`、pnpm `11.19.0`。
+仅允许已核实的 DSH `0.2.1-rc.5` 普通工具名称进入宿主原有执行链。工具仍须已注册、可见且被宿主有效策略允许；禁用、restriction、guard、沙箱及审批都不会被插件覆盖。
+
+| 类别          | 工具                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| 文件与搜索    | `read`、`write`、`edit`、`read_image`、`glob`、`grep`、`str_replace_editor`                             |
+| 命令          | `bash`、`pwsh`                                                                                          |
+| 宿主作业      | `job_output`、`job_list`、`job_kill`                                                                    |
+| 终端          | `terminal_open`、`terminal_send`、`terminal_read`、`terminal_signal`、`terminal_close`、`terminal_list` |
+| 宿主 PTC 入口 | `run_code`；内层工具仍经过相同 guard                                                                    |
+| 既有 IM 工具  | `dingtalk_call`、`skill`、`ask_user_question`                                                           |
+
+名称依据为固定公开 npm 包的 `lib/index.js`：`dsh-tool-fs`、`dsh-tool-fs-search`、`dsh-tool-str-replace-editor`、`dsh-tool-bash`/`-persistent`、`dsh-tool-pwsh`/`-persistent`、`dsh-tool-jobs`、`dsh-tool-terminal` 和 `dsh-tools`。未注册/未核实的名字拒绝；没有 allow-all 配置。
+
+作业和终端 ID 继续经过宿主归属检查：有属主的作业匹配 session ID，终端匹配实际 Agent 对象，不能借参数访问另一个属主。宿主明确设为无属主的共享作业仍按原有服务语义可见；插件没有另建作业隔离策略。
+
+`subagent`、`spawn_agent` 继续显式拒绝。公开 `dsh-subagent` 经 `composeFrom` 组合到 preset generation，不能保证继承父机器人 Agent 的 shadow、guard 和审批。`workflow`、`ralph`、`spawn_teammate` 及自定义编排名也可能启动 Agent，因此未经核实的工具默认拒绝，不能只靠列出几个禁用名称防护。
+
+`send_file` / `send_image` 独立拒绝；现有发送实现的当前 Agent/会话目标、真实路径、类型、20 MB 和结果未知不重试规则未修改。Connector 的 `identity.getSelf` / `calendar.listEvents` / `docs.search` operation 范围未改变。
+
+## 审批
+
+宿主决定是否需要审批及是否直接拒绝；`never` 等原生策略没有被放宽。机器人按已配对 owner 承接允许一次、拒绝、取消、超时和不可达，文字回复精确匹配企业、聊天类型、会话和 sender。到达 IM 作用域但缺少路由、Agent 不符或授权失效时不回退 Web。
+
+允许结果返回前再次检查原 Agent 的配对与工作区。工具进入 dispatch 时还会检查一次，并合并原调用、渠道、会话选择及 Agent 生命周期取消信号，覆盖审批等待和调度延迟中的撤销。
+
+## 验证
+
+遵循 `AGENTS.md`，仓库未包含 `.agents/skills`。Node `24.19.0`、pnpm `11.19.0`；未改 DSH/Cellgent 核心。
 
 ```bash
 cd dsh-dingtalk
 pnpm install --frozen-lockfile
+umask 0022
 pnpm run ci
+pnpm run test:pack
 
-# 独立目录安装官方发布包，不改项目依赖、不启动 DSH 服务/机器人
+# 独立安装固定公开运行库，不启动 DSH 服务或机器人
 mkdir -p /tmp/dsh-issue27-runtime
 npm install --prefix /tmp/dsh-issue27-runtime --ignore-scripts \
   @deepseek-ai/cordis@4.0.5 \
@@ -53,22 +75,10 @@ npm install --prefix /tmp/dsh-issue27-runtime --ignore-scripts \
 DSH_TEST_RUNTIME=/tmp/dsh-issue27-runtime node scripts/verify-boundary.mjs
 ```
 
-`verify-boundary.mjs` 使用真实发布的 ToolRuntime、Scope 与合成工具。它证明精确 Agent 的 DWS shadow、宿主 guard 仍可拒绝、非 DWS/文件工具拒绝及独立 Web 不受影响；手工挂接父作用域的子 Agent 用于验证拒绝，不代表原生子 Agent 已安全继承。
+`personal-workspace-runtime.test.mjs` 通过公开 apply 使用真实 Bridge/Commands/策略，覆盖无 DWS 授权时普通工具、跨主体拒绝、队列撤销/换绑、setup commit、有效恢复、旧会话/外部实例和 `/cd`。`workspace-tool-policy.test.mjs` 覆盖真实路径、profile/配对隔离、重启和执行期间取消；审批测试覆盖返回前撤销；Relay 测试使用真实本地 socket 和合成 OAuth，区分 DWS 注销与机器人撤销。
 
-公开运行时测试使用模拟 Stream/网络/审批承载；没有连接真实企业、真实机器人，未操作 39/43、部署、发布或合并。最终检查结果记录在 PR，不能把安全阻断测试通过视为权限继承功能通过。
+`verify-boundary.mjs` 使用真实固定 ToolRuntime/Scope，验证普通 `read` 正向调用、宿主 guard/restrict、审批决策、实际 scheduler prepare/dispatch 间撤销及执行中取消。工具、渠道和审批答复为离线夹具；未宣称真实机器人、真实审批 UI 或 PTC 解释器联调通过。
 
-### 2026-11-05 本地结果
+完整结果在 PR 中记录。已知原始基线 `0c50a3b` 的 Web/DWS 环境限制：三个测试固定读取缺失的 `.cache/dingtalk-g0/bin-amd64/dws.exe`，一个进程树超时/Abort 夹具未及时达到预期状态；默认 umask 0077 还会收紧 doctor 的 0644 权限夹具，因此测试子 shell 使用 0022。没有删改/跳过失败测试使 CI 变绿。
 
-| 检查                                                       | 结果                                                 |
-| ---------------------------------------------------------- | ---------------------------------------------------- |
-| `pnpm run ci` 中 secrets / prettier / 两组 TypeScript 检查 | 通过                                                 |
-| `umask 0022 && pnpm run ci` 中消息侧全量测试               | 430 tests：423 pass、7 skip、0 fail                  |
-| 同次 CI 的 Web/DWS 测试                                    | 75 tests：66 pass、5 skip、4 fail；CI 最终非零退出   |
-| 基线 `0c50a3b` 独立 checkout 的 Web/DWS 全量测试           | 相同 66 pass、5 skip、4 fail                         |
-| `pnpm run test:pack`（CI 因上述失败未走到此步，单独运行）  | 通过；包含权限核查文档                               |
-| `DSH_TEST_RUNTIME=… node scripts/verify-boundary.mjs`      | 固定公开 `0.2.1-rc.5` ToolRuntime/Scope 离线验证通过 |
-| `git diff --check`                                         | 通过                                                 |
-
-Web/DWS 的三个失败（`capabilities.test.mjs` 一项、`identity.test.mjs` 两项）因测试固定读取 `.cache/dingtalk-g0/bin-amd64/dws.exe`，本 Linux 环境缺少该制品；第四个是 `local.test.mjs` 的进程树超时/Abort 夹具未在期限内创建预期子进程状态。四项均在未修改基线复现，未跳过或改写测试使检查变绿。远端 backend、Relay、文件边界等其余测试通过；缺制品的本地真实 CLI 身份/撤销场景仍有验证限制。
-
-首次 CI 使用环境默认 `umask 0077`，另有 `doctor-report.test.mjs` 权限夹具失败：其要求创建 `0644` 文件，但被 umask 收紧。该失败也在基线复现；仅在测试子 shell 设为 `0022` 后消息侧全量通过，没有修改应用或全局 umask。安装依赖时使用工作区内的 XDG/pnpm 缓存目录，未改凭据或远端服务。
+未连接真实企业或机器人，未操作 39/43、部署、发布或合并。全新个人配置的 corpId 引导、未核实工具、原生子 Agent 及非 personal 路径仍是明确限制。

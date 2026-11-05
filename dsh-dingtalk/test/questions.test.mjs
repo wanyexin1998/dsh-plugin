@@ -17,7 +17,7 @@ function inbound(overrides = {}) {
   }
 }
 
-function harness(timeoutMs = 1_000, delivered = true, interactionCards, approvalTimeoutMs, approvalUserId) {
+function harness(timeoutMs = 1_000, delivered = true, interactionCards, approvalTimeoutMs, approvalUserId, authorize) {
   const sent = []
   const logs = []
   const listeners = new Map()
@@ -33,6 +33,7 @@ function harness(timeoutMs = 1_000, delivered = true, interactionCards, approval
     timeoutMs,
     approvalTimeoutMs,
     approvalUserId,
+    authorize,
     interactionCards,
     log: (line) => logs.push(line),
   })
@@ -438,6 +439,102 @@ test('到达 IM 作用域的未绑定或其他 Agent 审批不能回退 Web', as
   assert.equal(fallbackCalls, 0)
   assert.equal(h.sent.length, 0)
 })
+
+for (const policy of ['denied', 'unavailable']) {
+  test(`通道审批授权 ${policy} 时不发起审批或回退 Web`, async () => {
+    const h = harness(1_000, true, undefined, undefined, undefined, () => {
+      if (policy === 'unavailable') throw new Error('authority_unavailable')
+      return false
+    })
+    let fallbackCalls = 0
+    assert.equal(
+      await h.listeners.get('approval/request')({ agent: h.agent, toolName: 'bash' }, async () => {
+        fallbackCalls++
+        return 'allowed-once'
+      }),
+      'unavailable',
+    )
+    assert.equal(h.sent.length, 0)
+    assert.equal(fallbackCalls, 0)
+  })
+}
+
+for (const carrier of ['text', 'card']) {
+  for (const change of ['unchanged', 'revoked', 'unavailable']) {
+    test(`${carrier} 允许一次在答复后重新核对通道授权：${change}`, async () => {
+      const cards = []
+      const checks = []
+      let authority = 'unchanged'
+      const h = harness(
+        1_000,
+        true,
+        carrier === 'card'
+          ? {
+              async create(card) {
+                cards.push(card)
+                return true
+              },
+            }
+          : undefined,
+        undefined,
+        undefined,
+        (agent) => {
+          checks.push(agent)
+          if (authority === 'unavailable') throw new Error('authority_unavailable')
+          return authority !== 'revoked'
+        },
+      )
+      let fallbackCalls = 0
+      const outcome = h.listeners.get('approval/request')({ agent: h.agent, toolName: 'bash' }, async () => {
+        fallbackCalls++
+        return 'allowed-once'
+      })
+      await waitUntil(() => h.sent.length + cards.length === 1)
+      authority = change
+      if (carrier === 'card') {
+        assert.equal(
+          h.manager.handleCardCallback({
+            outTrackId: cards[0].outTrackId,
+            userId: 'user-1',
+            actionIds: ['approve'],
+            params: {},
+          }),
+          true,
+        )
+      } else {
+        const code = h.sent[0].text.match(/`确认 ([A-Z0-9]{6})`/)?.[1]
+        assert.ok(code)
+        assert.equal(h.manager.handleInbound(inbound({ text: `确认 ${code}` })), true)
+      }
+      assert.equal(await outcome, change === 'unchanged' ? 'allowed-once' : 'unavailable')
+      assert.deepEqual(checks, [h.agent, h.agent])
+      assert.equal(fallbackCalls, 0)
+    })
+  }
+}
+
+for (const result of ['rejected', 'cancelled']) {
+  test(`审批等待期间通道授权撤销仍保留 ${result} 语义`, async () => {
+    let authorized = true
+    const h = harness(1_000, true, undefined, undefined, undefined, () => authorized)
+    const controller = new AbortController()
+    const outcome = h.listeners.get('approval/request')(
+      { agent: h.agent, toolName: 'bash', signal: controller.signal },
+      async () => {
+        assert.fail('must not fall back to Web approval')
+      },
+    )
+    await waitUntil(() => h.sent.length === 1)
+    authorized = false
+    if (result === 'cancelled') controller.abort()
+    else {
+      const code = h.sent[0].text.match(/`拒绝 ([A-Z0-9]{6})`/)?.[1]
+      assert.ok(code)
+      assert.equal(h.manager.handleInbound(inbound({ text: `拒绝 ${code}` })), true)
+    }
+    assert.equal(await outcome, result)
+  })
+}
 
 test('审批消息不可达时拒绝且不回退 Web', async () => {
   const h = harness(1_000, false)

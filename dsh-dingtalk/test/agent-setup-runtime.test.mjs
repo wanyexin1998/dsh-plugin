@@ -225,8 +225,9 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
         assert.equal(scope.guards.length, 1)
         const guard = scope.guards[0]
         assert.equal(guard({ name: 'dingtalk_call', agent }), undefined)
-        for (const name of ['fixture-preset-tool', 'subagent', 'bash'])
+        for (const name of ['fixture-preset-tool', 'bash'])
           assert.match(guard({ name, agent }), /im_workspace_policy_unavailable/)
+        assert.match(guard({ name: 'subagent', agent }), /im_subagent_inheritance_unavailable/)
         assert.match(guard({ name: 'send_file', agent }), /im_file_transfer_unavailable/)
         assert.equal(guard({ name: 'dingtalk_call', agent: { ...agent } }), 'im_agent_mismatch')
       }

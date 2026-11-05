@@ -5,13 +5,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 let failNextStart = false
+let gatewayAuthorized = true
+const gatewayConfigs = []
 let started = 0,
   enabled = 0,
   stopped = 0
 mock.module('../lib/relay/robot.js', {
   namedExports: {
-    startRobotGateway: async (_config, deferred) => {
+    startRobotGateway: async (config, deferred) => {
       assert.equal(deferred, true)
+      gatewayConfigs.push(config)
       started++
       if (failNextStart) {
         failNextStart = false
@@ -22,6 +25,7 @@ mock.module('../lib/relay/robot.js', {
           enabled++
         },
         status: () => ({ stream: 'connected' }),
+        authorizes: () => gatewayAuthorized,
         close: async () => {
           stopped++
         },
@@ -75,6 +79,84 @@ test('fresh personal install exposes configuration without starting a gateway', 
   assert.equal(c.status().status, 'unconfigured')
   assert.equal(c.status().mode, 'personal')
   assert.equal(started, before)
+})
+test('fresh personal bootstrap without a known enterprise fails closed before credential or gateway writes', async (t) => {
+  const f = await fixture(t, { identity: () => undefined }),
+    c = f.create(),
+    before = started
+  await c.start({ onMessage: async () => {} })
+  await assert.rejects(c.configure({ clientId: 'robot', clientSecret: 'fixture-secret' }), /auth_required/)
+  assert.equal(started, before)
+  assert.equal(c.authority(), undefined)
+  assert.equal(c.status().configured, false)
+})
+
+test('configured personal corp is stable across DWS logout/change and reconnect needs no DWS identity', async (t) => {
+  const { RelayClient } = await import('../lib/relay/client.js')
+  let identity = { corpId: 'corp', userId: 'user' }
+  const f = await fixture(t, { identity: () => identity }),
+    c = f.create()
+  await c.start({ onMessage: async () => {} })
+  await c.configure({ clientId: 'robot', clientSecret: 'fixture-secret' })
+  assert.equal(gatewayConfigs.at(-1).allowUnclaimedPersonalLogin, true)
+  await c.stopHosting()
+  identity = { corpId: 'foreign', userId: 'other' }
+  await c.configure({ clientId: 'robot', clientSecret: 'fixture-secret' })
+  assert.equal(gatewayConfigs.at(-1).corpId, 'corp')
+  await c.stopHosting()
+  identity = undefined
+  await c.configure({ clientId: 'robot', clientSecret: 'fixture-secret' })
+  assert.equal(gatewayConfigs.at(-1).corpId, 'corp')
+  const connect = t.mock.method(RelayClient.prototype, 'connect', async () => ({ status: 'authorizing' }))
+  await c.connect()
+  assert.equal(connect.mock.calls.length, 1)
+  assert.equal(connect.mock.calls[0].arguments[0], 'ws://127.0.0.1:19878/relay')
+  const saved = JSON.parse(await readFile(join(c.directory, 'personal.json'), 'utf8'))
+  assert.equal(saved.corpId, 'corp')
+  assert.equal(c.authority(), undefined, 'configuration without confirmed enabled channel grants nothing')
+})
+
+test('personal authority requires the live local gateway, exact enterprise and enabled profile pairing', async (t) => {
+  const { RelayClient } = await import('../lib/relay/client.js')
+  const f = await fixture(t),
+    first = f.create()
+  await first.start({ onMessage: async () => {} })
+  await first.configure({ clientId: 'robot', clientSecret: 'fixture-secret' })
+  const file = join(first.directory, 'personal.json')
+  const saved = JSON.parse(await readFile(file, 'utf8'))
+  await writeFile(file, JSON.stringify({ ...saved, enabled: true }))
+  await first.close()
+  const lease = new AbortController()
+  const binding = {
+    identity: Object.freeze({ corpId: 'corp', userId: 'paired-owner' }),
+    bindingId: 'fixture-device',
+    signal: lease.signal,
+  }
+  let current = binding
+  t.mock.method(RelayClient.prototype, 'channelBinding', () => current)
+  const restored = f.create({ identity: () => undefined })
+  await restored.start({ onMessage: async () => {} })
+  const authority = restored.authority()
+  assert.ok(Object.isFrozen(authority))
+  assert.equal(authority.profile, join(f.root, 'profile'))
+  assert.equal(authority.identity.userId, 'paired-owner')
+  assert.equal(authority.bindingId, binding.bindingId)
+  assert.equal(authority.signal, lease.signal)
+  gatewayAuthorized = false
+  try {
+    assert.equal(restored.authority(), undefined, 'gateway revocation is checked on every authority read')
+  } finally {
+    gatewayAuthorized = true
+  }
+  current = { ...binding, identity: { corpId: 'foreign', userId: 'paired-owner' } }
+  assert.equal(restored.authority(), undefined)
+  current = undefined
+  assert.equal(restored.authority(), undefined)
+  current = binding
+  const managed = f.create({ enterprise, profile: join(f.root, 'enterprise-profile') })
+  assert.equal(managed.authority(), undefined, 'enterprise never inherits personal authority')
+  await restored.close()
+  assert.equal(restored.authority(), undefined)
 })
 test('enterprise configuration never exposes URL or starts local hosting and rejects credential writes', async (t) => {
   const f = await fixture(t),

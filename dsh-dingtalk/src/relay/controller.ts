@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { RelayClient } from './client.js'
+import { RelayClient, type ChannelBinding } from './client.js'
 import { enterpriseConnection, profileRobotDirectory, type EnterpriseConnection } from './connection-config.js'
 import { readState, saveState } from './state.js'
 import { startRobotGateway } from './robot.js'
@@ -22,6 +22,9 @@ interface Options {
   enterprise?: unknown
   identity(): DingTalkIdentity | undefined
 }
+export interface PersonalRobotAuthority extends ChannelBinding {
+  readonly profile: string
+}
 const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 24)
 const origin = 'http://127.0.0.1:19878'
 
@@ -40,9 +43,15 @@ export class RobotConnection extends RelayClient {
   private deviceLease?: Promise<void>
   private closed = false
   private pending?: Promise<unknown>
+  private readonly channelConfig: { corpId?: string }
   constructor(private options: Options) {
     const directory = profileRobotDirectory(options.root, options.profile)
-    super(join(directory, 'relay-device.json'), options.identity)
+    const channelConfig: { corpId?: string } = {}
+    super(join(directory, 'relay-device.json'), options.identity, {
+      channelOwned: options.enterprise === undefined,
+      expectedCorpId: () => channelConfig.corpId,
+    })
+    this.channelConfig = channelConfig
     this.directory = directory
     try {
       this.enterprise = enterpriseConnection(options.enterprise)
@@ -51,10 +60,24 @@ export class RobotConnection extends RelayClient {
     }
     try {
       this.personal = readState<Personal | undefined>(join(directory, 'personal.json'), undefined)
+      this.channelConfig.corpId = this.personal?.corpId
     } catch {
       this.problem = 'local_configuration_invalid'
     }
     if (options.enterprise !== undefined && this.personal?.enabled) this.problem = 'mode_conflict'
+  }
+  /** Host-only proof of this profile's live personal robot pairing, never a DWS grant. */
+  authority(): PersonalRobotAuthority | undefined {
+    if (this.options.enterprise !== undefined || this.closed || this.problem || !this.personal || !this.gateway)
+      return undefined
+    const binding = this.channelBinding()
+    if (
+      !binding ||
+      binding.identity.corpId !== this.personal.corpId ||
+      !this.gateway.authorizes(binding.identity, binding.bindingId)
+    )
+      return undefined
+    return Object.freeze({ ...binding, profile: this.options.profile })
   }
   override status() {
     const transport = super.status()
@@ -89,8 +112,10 @@ export class RobotConnection extends RelayClient {
       if (this.options.enterprise !== undefined) throw new Error('enterprise_managed')
       if (!this.releaseDevice) throw new Error('device_in_use')
       if (this.gateway) throw new Error('stop_before_configure')
-      const identity = this.options.identity()
-      if (!identity) throw new Error('auth_required')
+      // DWS is only a first-install source for the enterprise identifier. Once
+      // configured, changing/revoking data OAuth cannot move the robot pairing.
+      const corpId = this.personal?.corpId ?? this.confirmedChannelIdentity()?.corpId ?? this.options.identity()?.corpId
+      if (!corpId) throw new Error('auth_required')
       if (
         !data ||
         typeof data.clientId !== 'string' ||
@@ -109,7 +134,8 @@ export class RobotConnection extends RelayClient {
       const credentialId = `p-${fingerprint(this.directory)}`
       await saveDingTalkAccountCredentials(this.options.home, credentialId, data, { layout: 'v1' })
       await super.disconnect()
-      this.personal = { clientId: data.clientId, corpId: identity.corpId, credentialId, enabled: false }
+      this.personal = { clientId: data.clientId, corpId, credentialId, enabled: false }
+      this.channelConfig.corpId = corpId
       saveState(join(this.directory, 'personal.json'), this.personal)
       this.problem = undefined
       await this.prepareGateway()
@@ -137,6 +163,7 @@ export class RobotConnection extends RelayClient {
                 publicOrigin: origin,
                 host: '127.0.0.1',
                 port: 19878,
+                allowUnclaimedPersonalLogin: true,
               },
               true,
             )
@@ -164,9 +191,11 @@ export class RobotConnection extends RelayClient {
         )
       )
         throw new Error(this.problem)
-      const identity = this.options.identity()
-      if (!identity) throw new Error('auth_required')
-      if (identity.corpId !== (this.enterprise?.corpId ?? this.personal?.corpId)) throw new Error('identity_mismatch')
+      if (this.enterprise) {
+        const identity = this.options.identity()
+        if (!identity) throw new Error('auth_required')
+        if (identity.corpId !== this.enterprise.corpId) throw new Error('identity_mismatch')
+      } else if (!this.personal) throw new Error('robot_not_configured')
       this.problem = undefined
       if (!this.enterprise) await this.prepareGateway()
       const result = await super.connect(this.enterprise?.gatewayUrl ?? `${origin.replace('http:', 'ws:')}/relay`)

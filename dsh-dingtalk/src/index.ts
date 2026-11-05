@@ -3,6 +3,8 @@ import { RobotConnection } from './relay/controller.js'
 import { RelayClient } from './relay/client.js'
 import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
+import { WorkspaceToolPolicy, type PersonalAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
+import type { InboundMessage } from './stream.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
  * Inbound: DingTalk Stream long connection (no public endpoint needed).
@@ -494,6 +496,27 @@ async function startAccount(
   const interactionCardTemplateId =
     config.interactionCardTemplateId || process.env.DINGTALK_INTERACTION_CARD_TEMPLATE_ID || ''
   const stateDir = accountStateDir(relay instanceof RobotConnection ? relay.directory : resolveStateDir(), account.id)
+  const personal = relay instanceof RobotConnection && relay.status().mode === 'personal' ? relay : undefined
+  const channelIdentity = () =>
+    personal ? personal.authority()?.identity : (ctx.get('dingtalkImTools') as ImToolFactory).identity?.()
+  const incomingAuthority = new WeakMap<InboundMessage, PersonalAuthority>()
+  const incomingSelection = new WeakMap<InboundMessage, AbortSignal>()
+  const channelOwns = (msg: InboundMessage) => {
+    if (!personal) return true
+    const entered = incomingAuthority.get(msg),
+      current = personal.authority()
+    return (
+      !!entered &&
+      !!current &&
+      incomingSelection.has(msg) &&
+      !incomingSelection.get(msg)!.aborted &&
+      !entered.signal.aborted &&
+      entered.signal === current.signal &&
+      entered.bindingId === current.bindingId &&
+      entered.profile === current.profile &&
+      sameIdentity(messageIdentity(msg), current.identity)
+    )
+  }
   const feedback = new FeedbackDiagnostics(path.join(stateDir, 'feedback.json'))
   let streamStatus: 'connecting' | 'connected' | 'reconnecting' | 'stopped' = 'connecting'
   const localOwner = new OwnerBinding({
@@ -511,10 +534,10 @@ async function startAccount(
         status: () => ({
           ...localOwner.status(),
           bound: true,
-          ownerStaffId: (ctx.get('dingtalkImTools') as ImToolFactory).identity?.()?.userId,
+          ownerStaffId: channelIdentity()?.userId,
         }),
         authorize: (msg: unknown) =>
-          sameIdentity(messageIdentity(msg), (ctx.get('dingtalkImTools') as ImToolFactory).identity?.())
+          sameIdentity(messageIdentity(msg), channelIdentity())
             ? { kind: 'allowed' as const }
             : { kind: 'denied' as const, reason: 'identity-mismatch' },
       }
@@ -631,16 +654,25 @@ async function startAccount(
   const modelOverrides = new JsonStore<ModelOverride>(path.join(stateDir, 'models.json'), log)
   const workspaceOverrides = new JsonStore<string>(path.join(stateDir, 'workspaces.json'), log)
   const queue = new Queue(log)
+  const workspacePolicy = personal
+    ? new WorkspaceToolPolicy({
+        authority: () => personal.authority(),
+        selectedWorkspace: (key) => workspaceOverrides.get(key) ?? cwd,
+        bindings,
+        owners: new JsonStore<WorkspaceSessionOwner>(path.join(stateDir, 'workspace-session-owners.json'), log),
+      })
+    : undefined
   const questions = new QuestionManager({
     outbound: replySink,
     markdownTitle: config.markdownTitle,
     timeoutMs: config.questionTimeoutMs,
     approvalTimeoutMs: config.approvalTimeoutMs,
     approvalUserId: () => owner.status().ownerStaffId,
+    ...(workspacePolicy ? { authorize: (agent: HostAgent) => workspacePolicy.allowed(agent) } : {}),
     interactionCards,
     log,
   })
-  const imTools = new ImTools(() => ctx.get('dingtalkImTools') as ImToolFactory | undefined)
+  const imTools = new ImTools(() => ctx.get('dingtalkImTools') as ImToolFactory | undefined, workspacePolicy)
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
     questions.install(agentCtx, agent)
@@ -650,6 +682,12 @@ async function startAccount(
     exclusiveOwnership: true,
     recoverForeignSession: true,
     cwd,
+    ...(workspacePolicy
+      ? {
+          authorize: (msg: InboundMessage, key: string, selected: string) =>
+            workspacePolicy.capture(msg, key, selected),
+        }
+      : {}),
     log,
     modelOverrides,
     workspaceOverrides,
@@ -738,6 +776,12 @@ async function startAccount(
     toolsStatusLine: () => dwsTools?.statusLine() ?? 'DWS Agent 工具：未启用（不影响 Channel）',
     workspaceOverrides,
     defaultWorkspace: cwd,
+    ...(workspacePolicy
+      ? {
+          authorize: channelOwns,
+          beforeSessionChange: (key: string) => workspacePolicy.invalidate(key),
+        }
+      : {}),
     listWorkspaces: async () => {
       try {
         const registry = (ctx as any).get?.('workspaceRegistry')
@@ -845,6 +889,20 @@ async function startAccount(
       fs.chmodSync(runtimeFile, 0o600)
     },
     onMessage: async (msg) => {
+      // Pin the conversation's selection at receipt, before access replies or
+      // model lookups can yield to /cd, /new or a model change.
+      const scopeKey =
+        account.sessionScope === 'chat-sender' && msg.conversationType === 'group'
+          ? relay
+            ? JSON.stringify([msg.senderCorpId, msg.conversationId, msg.senderStaffId])
+            : `${msg.conversationId}#${msg.senderStaffId}`
+          : msg.conversationId
+      if (personal) {
+        const entered = personal.authority()
+        if (!entered || !sameIdentity(messageIdentity(msg), entered.identity)) return
+        incomingAuthority.set(msg, entered)
+        incomingSelection.set(msg, workspacePolicy!.receipt(scopeKey))
+      }
       const access = owner.authorize(msg)
       if (access.kind === 'bound') {
         log('owner binding completed from direct message')
@@ -870,25 +928,19 @@ async function startAccount(
       }
       if (msg.senderStaffId !== owner.status().ownerStaffId) return
       await accessReplyQueues.get(msg.conversationId)?.catch(() => undefined)
+      if (!channelOwns(msg)) return
       log(`inbound message accepted (${msg.conversationType})`)
 
       // Any new bubble below a live streaming card breaks reading order —
       // mark the turn so its next frame rolls over to a fresh card at the bottom.
       renderer.notifyInterleaved(msg.conversationId)
 
-      // Session scope key: chat-sender isolates each group member's session.
-      const scopeKey =
-        account.sessionScope === 'chat-sender' && msg.conversationType === 'group'
-          ? relay
-            ? JSON.stringify([msg.senderCorpId, msg.conversationId, msg.senderStaffId])
-            : `${msg.conversationId}#${msg.senderStaffId}`
-          : msg.conversationId
-
       // Picture without vision support: answer honestly instead of a silent drop.
       if (msg.imageDownloadCodes?.length) {
         const legacyMode = config.attachImages === true ? 'always' : config.attachImages === false ? 'never' : undefined
         const route = modelOverrides.get(scopeKey) ?? currentDefault()
         const accepted = await modelAcceptsImages(legacyMode ?? config.imageMode, route as any, (ctx as any).llm)
+        if (!channelOwns(msg)) return
         if (!accepted) {
           await queueAccessReply(msg.conversationId, () =>
             outbound.sendMarkdown(
@@ -912,6 +964,16 @@ async function startAccount(
       // Commands and queue choices answer immediately, outside the queue.
       if (await commands.handle(msg, scopeKey)) return
 
+      // Capture the original channel lease and workspace before queueing. A
+      // later re-pair or /cd cannot grant an old bubble a new execution context.
+      if (!channelOwns(msg)) return
+      const admission = workspacePolicy?.capture(
+        msg,
+        scopeKey,
+        workspaceOverrides.get(scopeKey) ?? cwd,
+        incomingAuthority.get(msg),
+      )
+
       if (config.emotionFirstResponse) emotion.add(msg.msgId, msg.conversationId)
       const lane = { skipped: false, started: false }
       queue.run(
@@ -923,7 +985,7 @@ async function startAccount(
             return
           }
           try {
-            await bridge.process(msg, scopeKey)
+            await bridge.process(msg, scopeKey, admission)
           } catch (error) {
             log(`message dispatch failed (${error instanceof Error ? error.message : 'unknown'})`)
             await outbound.sendMarkdown(msg.sessionWebhook, config.markdownTitle, '这条消息未能开始处理，请重试。')
@@ -999,10 +1061,12 @@ async function startAccount(
       await source.start()
     } catch (error) {
       await source.stop()
+      workspacePolicy?.close()
       await files.close()
       throw error
     }
     return async () => {
+      workspacePolicy?.close()
       await source.stop()
       await files.close()
       await bridge.close()
