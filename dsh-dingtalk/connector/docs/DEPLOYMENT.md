@@ -96,6 +96,25 @@ gateway 与 Connector 分进程、分状态目录、分权限；gateway 不保�
 - 诊断只收集：版本、协议、调用方数量、连接状态枚举、错误码；不收集 Token/Code/Keychain/业务正文。
 - Connector 离线时插件状态为 `backend_not_ready`/`service_unavailable`，普通 DSH 对话仍可用；不会借用其他调用方的实例或默认账号。
 
+### OAuth 代理日志
+
+`nginx-oauth.conf.example` 用白名单 JSON 完成日志替代原始请求错误日志。Nginx 的 `error_log ... warn` 仍可能在连接拒绝、上游无效响应或超时时追加完整 request/upstream URL，因此本专用 OAuth server 的原始 `error_log` 定向到 `/dev/null`。这不关闭全部诊断：每个完成的请求仍向 stdout 输出时间、Nginx 生成的 `request_id`、固定阶段（`oauth_start` / `oauth_callback` / `other`）、粗粒度 `error_code`、HTTP/上游状态与耗时；全局启动/配置错误日志保留。
+
+- 浏览器的 `X-Request-ID` 被覆盖，上游同名响应头被隐藏。响应和转发请求均使用同一个 Nginx 生成的 ID，操作者可用响应头在日志中定位单次失败。此 ID 不是 OAuth transactionId，也不标识用户；代理失败时不能据此声称已知道用户身份。
+- `upstream_failed` 只代表 HTTP 502，可能是连接拒绝、连接中断或无效响应；`upstream_timeout` 代表 504。结合状态、连接/首包/总耗时及 Connector 健康检查定位，不把 HTTP 成功当成 OAuth 授权成功，不自动重放授权请求。
+- 不记录原始请求行、路径、查询参数、Cookie、Authorization、Referer、Location、code、token 或其他凭据。未知路径只记录 `other`。不得临时打开原始/debug 请求日志来排障。
+- 该保证针对专用代理及本模板；不要添加其他监听同端口的虚拟主机、额外 `access_log` / `error_log` 或未经检查的 include。外层负载均衡、Ingress、APM 和 Connector 的独立日志也必须采用相同的敏感数据限制。
+
+回归检查（只使用合成请求和本机 fake upstream，不访问真实账号）：
+
+```bash
+cd dsh-dingtalk/connector
+node --test tests/deploy.test.mjs
+REQUIRE_NGINX=1 NGINX_BIN=/path/to/nginx node --test tests/nginx-logging.test.mjs
+```
+
+第二条要求 Nginx 1.27 系列（含 SSL/HTTP2 模块）与 OpenSSL，实跑 TLS 代理并捕获 stdout、stderr 和继承日志；覆盖原始错误日志泄漏正对照、502/503/504、302、未知 Host/无 SNI、404/413/414 及请求 ID 防伪。只缩短测试超时并替换本机端口/临时证书路径，不改日志策略。未设置 `REQUIRE_NGINX=1` 且缺少工具时测试明确跳过，不能视为运行验证。此测试不等于 Docker/Compose 或真实企业 OAuth 验收。
+
 ## 5. 出网与代理
 
 DWS 子进程不继承宿主的任意环境变量，仅继承白名单变量与显式配置：

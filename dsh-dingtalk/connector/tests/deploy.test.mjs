@@ -47,16 +47,49 @@ test('shared network namespace publishes only the proxy TLS port on the namespac
   assert.ok(!proxyService.includes('ports:'), 'a service sharing another network namespace must not declare ports')
   assert.ok(!compose.includes('8787:'), 'the internal OAuth listener is never published')
 })
-test('nginx OAuth proxy disables access logging and cannot record request URIs or cookies', () => {
-  assert.match(nginx, /access_log off;/)
-  for (const leaky of ['$request', '$request_uri', '$args', '$http_authorization', 'log_format']) {
-    assert.ok(!nginx.includes(leaky), `nginx config must not log ${leaky}`)
-  }
-  for (const line of nginx.split('\n')) if (line.includes('access_log')) assert.equal(line.trim(), 'access_log off;')
-  for (const line of nginx.split('\n'))
-    if (line.includes('$http_cookie')) assert.match(line.trim(), /^proxy_set_header Cookie /)
-  assert.match(nginx, /proxy_set_header X-Forwarded-Proto https;/)
-  assert.match(nginx, /proxy_set_header Cookie \$http_cookie;/)
+test('nginx OAuth proxy replaces raw error logs with allowlisted diagnostics', () => {
+  const active = nginx.replace(/^\s*#.*$/gm, '')
+  assert.match(active, /error_log \/dev\/null;/)
+  assert.match(active, /access_log \/dev\/stdout dsh_oauth_safe;/)
+  assert.equal((active.match(/error_log /g) ?? []).length, 1)
+  assert.equal((active.match(/access_log /g) ?? []).length, 1)
+  const format = active.match(/log_format dsh_oauth_safe escape=json([\s\S]*?);/)[1]
+  assert.deepEqual(
+    [...format.matchAll(/\$[a-z_0-9]+/g)].map(([name]) => name),
+    [
+      '$time_iso8601',
+      '$request_id',
+      '$dsh_oauth_stage',
+      '$dsh_oauth_error_code',
+      '$status',
+      '$upstream_status',
+      '$request_time',
+      '$upstream_connect_time',
+      '$upstream_header_time',
+      '$upstream_response_time',
+    ],
+  )
+  // Stage values must be constants: unknown paths, including secrets in a path, become "other".
+  const stage = active.match(/map \$uri \$dsh_oauth_stage\s*{([^}]+)}/)[1]
+  assert.deepEqual(
+    stage
+      .trim()
+      .split(/;\s*/)
+      .filter(Boolean)
+      .map((line) => line.trim().split(/\s+/)),
+    [
+      ['default', 'other'],
+      ['/dsh-dingtalk/start', 'oauth_start'],
+      ['/dsh-dingtalk/callback', 'oauth_callback'],
+    ],
+  )
+  const codes = active.match(/map \$status \$dsh_oauth_error_code\s*{([^}]+)}/)[1]
+  assert.ok(!codes.includes('$'), 'error codes must not interpolate request data')
+  assert.match(active, /add_header X-Request-ID \$request_id always;/)
+  assert.match(active, /proxy_set_header X-Request-ID \$request_id;/)
+  assert.match(active, /proxy_hide_header X-Request-ID;/)
+  assert.match(active, /proxy_set_header X-Forwarded-Proto https;/)
+  assert.match(active, /proxy_set_header Cookie \$http_cookie;/)
 })
 test('production Dockerfile builds the Connector from source without a pre-existing lib', () => {
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS connector-build/)
