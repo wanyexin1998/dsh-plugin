@@ -87,6 +87,8 @@ export interface QuestionManagerOptions {
   approvalUserId?: () => string | undefined
   /** Channel authority, rechecked before requesting and granting approval. */
   authorize?(agent: HostAgent): boolean
+  /** Lifetime of this exact channel/session generation, including pre-dispatch approval. */
+  authorizationSignal?(agent: HostAgent): AbortSignal
   interactionCards?: InteractionCardSender
   log(line: string): void
 }
@@ -267,7 +269,14 @@ export class QuestionManager {
             // Once a request reaches this IM scope, missing/foreign context
             // cannot borrow a Web approval handler or another Agent's route.
             if (request.agent !== agent || !this.routes.has(agent.id) || !this.authorized(agent)) return 'unavailable'
-            const outcome = await this.askApproval(agent, request)
+            let signal = request.signal
+            try {
+              const authority = this.opts.authorizationSignal?.(agent)
+              if (authority) signal = AbortSignal.any(signal ? [signal, authority] : [authority])
+            } catch {
+              return 'unavailable'
+            }
+            const outcome = await this.askApproval(agent, { ...request, signal })
             // A binding may be revoked/replaced while the human is deciding.
             // Preserve explicit refusal/cancellation, but never grant stale authority.
             return outcome === 'allowed-once' && !this.authorized(agent) ? 'unavailable' : outcome

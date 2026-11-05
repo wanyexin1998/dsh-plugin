@@ -54,9 +54,13 @@ const HELP = [
 ].join('\n')
 
 /** Commands that must win over a pending human-interaction answer. */
-export function isSessionControl(text: string): boolean {
-  const command = text.trim().split(/\s+/, 1)[0]
-  return command === '/new' || command === '/stop'
+export function isSessionControl(text: string, workspaceLifecycle = false): boolean {
+  const [command, sub] = text.trim().split(/\s+/, 2)
+  return (
+    command === '/new' ||
+    command === '/stop' ||
+    (workspaceLifecycle && (command === '/cd' || (command === '/model' && (sub === 'use' || sub === 'reset'))))
+  )
 }
 
 /** The queued message a busy notice refers to, plus the hook that drops it from the lane. */

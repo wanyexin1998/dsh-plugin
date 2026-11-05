@@ -668,7 +668,12 @@ async function startAccount(
     timeoutMs: config.questionTimeoutMs,
     approvalTimeoutMs: config.approvalTimeoutMs,
     approvalUserId: () => owner.status().ownerStaffId,
-    ...(workspacePolicy ? { authorize: (agent: HostAgent) => workspacePolicy.allowed(agent) } : {}),
+    ...(workspacePolicy
+      ? {
+          authorize: (agent: HostAgent) => workspacePolicy.allowed(agent),
+          authorizationSignal: (agent: HostAgent) => workspacePolicy.signal(agent),
+        }
+      : {}),
     interactionCards,
     log,
   })
@@ -955,7 +960,7 @@ async function startAccount(
 
       // Session lifecycle must win over an outstanding question. Otherwise
       // `/new` would be consumed as a free-text answer and preserve old work.
-      if (isSessionControl(msg.text) && (await commands.handle(msg, scopeKey))) return
+      if (isSessionControl(msg.text, !!workspacePolicy) && (await commands.handle(msg, scopeKey))) return
 
       // A tool may be waiting inside the active queued turn. Consume its
       // matching answer before commands/queue to avoid a circular wait.

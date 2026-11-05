@@ -17,7 +17,15 @@ function inbound(overrides = {}) {
   }
 }
 
-function harness(timeoutMs = 1_000, delivered = true, interactionCards, approvalTimeoutMs, approvalUserId, authorize) {
+function harness(
+  timeoutMs = 1_000,
+  delivered = true,
+  interactionCards,
+  approvalTimeoutMs,
+  approvalUserId,
+  authorize,
+  authorizationSignal,
+) {
   const sent = []
   const logs = []
   const listeners = new Map()
@@ -34,6 +42,7 @@ function harness(timeoutMs = 1_000, delivered = true, interactionCards, approval
     approvalTimeoutMs,
     approvalUserId,
     authorize,
+    authorizationSignal,
     interactionCards,
     log: (line) => logs.push(line),
   })
@@ -60,6 +69,70 @@ function harness(timeoutMs = 1_000, delivered = true, interactionCards, approval
   manager.bindSession(agent.id, inbound())
   return { manager, agent, sent, logs, definition, listeners }
 }
+
+test('channel cancellation during card delivery releases the route; late old delivery cannot disturb the next approval', async () => {
+  let lease = new AbortController(),
+    releaseOld,
+    oldCard,
+    cards = 0
+  const h = harness(
+    1_000,
+    true,
+    {
+      create(request) {
+        if (++cards > 1) return Promise.resolve(false)
+        oldCard = request.outTrackId
+        return new Promise((resolve) => {
+          releaseOld = resolve
+        })
+      },
+    },
+    undefined,
+    undefined,
+    () => true,
+    () => lease.signal,
+  )
+  const caller = new AbortController()
+  try {
+    const approve = h.listeners.get('approval/request')
+    const old = approve({ agent: h.agent, toolName: 'bash', signal: caller.signal })
+    await waitUntil(() => !!releaseOld)
+    lease.abort()
+    assert.equal(await old, 'cancelled')
+    assert.equal(h.manager.handleInbound(inbound({ text: 'new task' })), false)
+    lease = new AbortController()
+    let settled = false
+    const fresh = approve({ agent: h.agent, toolName: 'bash', signal: caller.signal }).then((outcome) => {
+      settled = true
+      return outcome
+    })
+    await waitUntil(() => h.sent.length === 1)
+    releaseOld(false)
+    await Promise.resolve()
+    assert.equal(h.manager.handleCardCallback({ outTrackId: oldCard, userId: 'user-1', actionIds: ['approve'] }), false)
+    assert.equal(settled, false)
+    const code = h.sent[0].text.match(/确认 ([A-F0-9]{6})/)[1]
+    h.manager.handleInbound(inbound({ text: `确认 ${code}` }))
+    assert.equal(await fresh, 'allowed-once')
+  } finally {
+    caller.abort()
+  }
+})
+
+test('an already revoked or unavailable authorization lifetime cannot publish approval UI', async () => {
+  for (const signal of [
+    () => AbortSignal.abort(),
+    () => {
+      throw new Error('authority_unavailable')
+    },
+  ]) {
+    const h = harness(1_000, true, undefined, undefined, undefined, () => true, signal)
+    const result = await h.listeners.get('approval/request')({ agent: h.agent, toolName: 'bash' })
+    assert.ok(['cancelled', 'unavailable'].includes(result))
+    assert.equal(h.sent.length, 0)
+    assert.equal(h.manager.handleInbound(inbound({ text: 'fresh task' })), false)
+  }
+})
 
 function execute(h, questions, signal = new AbortController().signal) {
   return h.definition.execute({ questions }, { agent: h.agent, signal })

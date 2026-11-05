@@ -29,6 +29,7 @@ interface Grant {
   readonly selection: AbortController
   readonly owner: WorkspaceSessionOwner
   readonly controller: AbortController
+  readonly signal: AbortSignal
   ready: boolean
 }
 
@@ -157,6 +158,7 @@ export class WorkspaceToolPolicy {
       setup: (ctx, agent, restoring) => {
         checkContext(ctx, agent)
         if (restoring && !matches(this.options.owners.get(agent.id))) throw new Error('im_session_owner_mismatch')
+        const controller = new AbortController()
         const grant: Grant = {
           agent,
           ctx,
@@ -164,7 +166,8 @@ export class WorkspaceToolPolicy {
           authority,
           selection: lease,
           owner,
-          controller: new AbortController(),
+          controller,
+          signal: AbortSignal.any([authority.signal, lease.signal, controller.signal]),
           ready: false,
         }
         this.grants.set(agent, grant)
@@ -175,7 +178,7 @@ export class WorkspaceToolPolicy {
           async (exec, next) => {
             if (exec.agent !== agent || !this.allowed(agent)) throw new Error('im_channel_authorization_changed')
             const previous = exec.signal
-            exec.signal = AbortSignal.any([previous, authority.signal, lease.signal, grant.controller.signal])
+            exec.signal = AbortSignal.any([previous, grant.signal])
             try {
               return await next()
             } finally {
@@ -198,6 +201,11 @@ export class WorkspaceToolPolicy {
     }
     check()
     return admission
+  }
+
+  /** Also used before dispatch, while native tool approval is still pending. */
+  signal(agent: HostAgent): AbortSignal {
+    return this.allowed(agent) ? this.grants.get(agent)!.signal : AbortSignal.abort()
   }
 
   /** Synchronous final guard: no cached DWS identity or async permission window. */

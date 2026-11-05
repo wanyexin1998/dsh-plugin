@@ -193,6 +193,9 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       guard(name) {
         return guards.map((fn) => fn({ name, agent })).find(Boolean)
       },
+      requestApproval(signal) {
+        return listeners.get('approval/request')[0]({ agent, toolName: 'bash', signal })
+      },
       async invoke(name) {
         const definition = tools.get(name)
         if (!definition) throw new Error('tool_not_registered')
@@ -384,6 +387,86 @@ test('personal /cd invalidates old active and queued work before opening the sel
   const owners = JSON.parse(await readFile(path.join(h.account, 'workspace-session-owners.json'), 'utf8'))
   assert.equal(owners[current.id].cwd, h.target)
   assert.equal(owners[current.id].bindingId, h.connection.authority().bindingId)
+})
+
+for (const change of ['revoke', 'replace', 'reconnect', '/cd', '/new', '/model use fixture/new', '/model reset']) {
+  test(`personal pre-dispatch approval is cancelled by ${change} without consuming the next task`, async (t) => {
+    const h = await fixture(t)
+    await h.send('first task')
+    await waitUntil(() => h.followups.length === 1)
+    const request = new AbortController()
+    t.after(() => request.abort())
+    let settled = false
+    const outcome = h.followups[0].agent.requestApproval(request.signal).then((value) => {
+      settled = true
+      return value
+    })
+    const approvalTexts = () =>
+      h.connection.operations.filter((op) => op.name === 'markdown' && /回复 `确认/.test(op.value.text))
+    await waitUntil(() => approvalTexts().length === 1)
+    if (change === 'revoke') h.connection.revoke()
+    else if (change === 'replace') h.connection.pair({ corpId: 'corp-a', userId: 'new-owner' })
+    else if (change === 'reconnect') h.connection.pair()
+    else await h.send(change === '/cd' ? `/cd ${h.target}` : change)
+    await waitUntil(() => settled)
+    assert.equal(await outcome, 'cancelled')
+    assert.equal(request.signal.aborted, false, 'channel cancellation does not abort the host controller')
+    if (change === 'revoke') h.connection.pair()
+    await h.send('new task after cancelled approval', change === 'replace' ? { senderStaffId: 'new-owner' } : {})
+    await waitUntil(() => h.followups.length === 2)
+    const next = h.followups[1].agent
+    assert.notEqual(next, h.followups[0].agent)
+    let freshSettled = false
+    const fresh = next.requestApproval(request.signal).then((value) => {
+      freshSettled = true
+      return value
+    })
+    await waitUntil(() => approvalTexts().length === 2)
+    await flush()
+    assert.equal(freshSettled, false, 'old generation cleanup must not cancel the new approval')
+    const code = approvalTexts()[1].value.text.match(/确认 ([A-F0-9]{6})/)[1]
+    await h.send(`确认 ${code}`, change === 'replace' ? { senderStaffId: 'new-owner' } : {})
+    assert.equal(await fresh, 'allowed-once')
+    assert.equal(h.followups.length, 2, 'the approval answer is consumed only by the new generation')
+  })
+}
+
+test('personal workspace cancellation isolates concurrent routes and leaves both new and unrelated approvals intact', async (t) => {
+  const h = await fixture(t)
+  await h.send('first task')
+  await h.send('other task', { conversationId: 'other' })
+  await waitUntil(() => h.followups.length === 2)
+  const controller = new AbortController()
+  t.after(() => controller.abort())
+  const old = h.followups[0].agent.requestApproval(controller.signal)
+  let otherSettled = false
+  const other = h.followups[1].agent.requestApproval(controller.signal).then((value) => {
+    otherSettled = true
+    return value
+  })
+  const texts = () => h.connection.operations.filter((op) => op.name === 'markdown' && /回复 `确认/.test(op.value.text))
+  await waitUntil(() => texts().length === 2)
+  const oldCode = texts()[0].value.text.match(/确认 ([A-F0-9]{6})/)[1]
+  const otherCode = texts()[1].value.text.match(/确认 ([A-F0-9]{6})/)[1]
+  await h.send(`/cd ${h.target}`)
+  assert.equal(await old, 'cancelled')
+  assert.equal(otherSettled, false)
+  await h.send('new task')
+  await waitUntil(() => h.followups.length === 3)
+  let freshSettled = false
+  const fresh = h.followups[2].agent.requestApproval(controller.signal).then((value) => {
+    freshSettled = true
+    return value
+  })
+  await waitUntil(() => texts().length === 3)
+  await h.send(`确认 ${oldCode}`)
+  assert.equal(freshSettled, false, 'a stale confirmation cannot settle the new approval')
+  await h.send(`确认 ${otherCode}`, { conversationId: 'other' })
+  assert.equal(await other, 'allowed-once')
+  assert.equal(freshSettled, false, 'another route cannot settle this approval')
+  const freshCode = texts()[2].value.text.match(/确认 ([A-F0-9]{6})/)[1]
+  await h.send(`确认 ${freshCode}`)
+  assert.equal(await fresh, 'allowed-once')
 })
 
 for (const change of ['/cd', '/cd away and back', '/new']) {

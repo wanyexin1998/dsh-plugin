@@ -113,6 +113,11 @@ test('等待交互时 /new 和 /stop 必须先走会话控制而不是作为问�
   assert.equal(isSessionControl('/new'), true)
   assert.equal(isSessionControl(' /stop '), true)
   assert.equal(isSessionControl('/help'), false)
+  for (const command of ['/cd /fixture', '/model use fixture/new', '/model reset']) {
+    assert.equal(isSessionControl(command), false, 'other channel paths keep their existing command priority')
+    assert.equal(isSessionControl(command, true), true)
+  }
+  assert.equal(isSessionControl('/model', true), false)
   assert.equal(isSessionControl('1'), false)
 })
 
