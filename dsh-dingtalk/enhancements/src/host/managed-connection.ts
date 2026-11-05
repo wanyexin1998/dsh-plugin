@@ -25,13 +25,15 @@ export interface ManagedConnection {
   /** Host-only entry: principal must come from the verified transport context. */
   invokeFor(principal: { corpId: string; userId: string }, input: InvokeInput, options?: CallOptions): Promise<InvokeResult>;
   ui<T>(browser: string, context: BrowserContext, action: () => Promise<T>): Promise<T>;
-  cancel(id: string, browser: string): ConnectionStatus;
+  cancel(id: string, browser: string): ConnectionStatus | Promise<ConnectionStatus>;
   prepareStart(): PreparationStatus;
   prepareStatus(): PreparationStatus;
   prepareCancel(): Promise<PreparationStatus>;
   revision(): number;
   identity(): { corpId: string; userId: string } | undefined;
-  callbackOrigin?: string;
+  callbackOrigin?: string | undefined;
+  /** Remote backend: resolves the trusted callback origin once the Connector answers. */
+  callbackOriginReady?: () => Promise<string | undefined>;
 }
 export async function createManagedConnection(local: LocalSettings, options: PrivateSettings, limits: ExecutionLimits,
   runtime: LocalRuntime & BootstrapRuntime = {}, providerForTest?: string): Promise<ManagedConnection> {
@@ -53,7 +55,7 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
   if (local.configDirectory && local.configDirectory !== directory) throw new ConnectionServiceError('privacy_guard_required');
   if (local.profile && expected && local.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
   const autoInstall = !local.binaryPath;
-  const settings: LocalSettings = { ...local, binaryPath: local.binaryPath || join(stateDirectory, 'bin', 'dws.exe'), configDirectory: directory };
+  const settings: LocalSettings = { ...local, binaryPath: local.binaryPath || join(stateDirectory, 'bin', process.platform === 'win32' ? 'dws.exe' : 'dws'), configDirectory: directory };
   const store = new BindingStore(stateDirectory);
   let record = await store.read();
   if (record.profile && expected && record.profile !== expected) throw new ConnectionServiceError('identity_mismatch');

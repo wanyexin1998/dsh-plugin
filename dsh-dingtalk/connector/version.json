@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "product": "dsh-dingtalk-connector",
+  "connectorVersion": "0.1.0",
+  "protocolVersion": 1,
+  "plugin": {
+    "name": "@wanyexin1998/dsh-dingtalk",
+    "version": "0.2.0-dev.12",
+    "remoteMode": "connector"
+  },
+  "dsh": {
+    "apiTestedVersion": "0.2.1-rc.5",
+    "profile": "web"
+  },
+  "dws": {
+    "version": "1.0.66",
+    "tag": "v1.0.66",
+    "commit": "f215043e676d6889e1ddce3464828d8b1ec40c31",
+    "releaseRepository": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli",
+    "linuxAmd64": {
+      "archive": "dws-linux-amd64.tar.gz",
+      "archiveSize": 19396103,
+      "archiveSha256": "27cd2821e1f6523d1eeaf5688c23502bddbdd858cf82e32c197853065418bef8",
+      "binary": "dws",
+      "binarySize": 58091152,
+      "binarySha256": "4ee71b2e1d1d4b888dd41dbda6193d213636971196f0641d4ef1c74d12b49607",
+      "mode": "0755",
+      "verifiedRuntime": "debian:bookworm-slim, non-root uid 10001, read-only rootfs"
+    }
+  },
+  "node": {
+    "range": "^22.19.0 || >=24.0.0",
+    "image": "node:22-bookworm-slim"
+  },
+  "serverOperations": ["identity.getSelf", "calendar.listEvents", "docs.search"],
+  "transport": {
+    "production": "unix-domain-socket-per-caller",
+    "testOnly": "loopback+capability-token"
+  }
+}

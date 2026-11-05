@@ -8,7 +8,8 @@
     "tag": "v1.0.66",
     "commit": "f215043e676d6889e1ddce3464828d8b1ec40c31",
     "binaryChecksums": {
-      "win32-x64": "0db4ed09c0a9524b39980878d4b51a020a32a127bad757b852ec1173b149ec74"
+      "win32-x64": "0db4ed09c0a9524b39980878d4b51a020a32a127bad757b852ec1173b149ec74",
+      "linux-x64": "4ee71b2e1d1d4b888dd41dbda6193d213636971196f0641d4ef1c74d12b49607"
     },
     "releaseUrl": "https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/tag/v1.0.66",
     "publishedAt": "2026-10-28T07:59:55Z",

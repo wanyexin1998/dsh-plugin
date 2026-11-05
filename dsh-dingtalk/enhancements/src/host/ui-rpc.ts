@@ -37,7 +37,8 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
           id = token();
         }
         sessions.set(id, { peer: peer.id, context, expires: Date.now() + 8 * 3600000 });
-        return { ok: true, value: { browserId: id, callbackOrigin: managed.callbackOrigin ?? null } };
+        const callbackOrigin = managed.callbackOriginReady ? await managed.callbackOriginReady() : managed.callbackOrigin;
+        return { ok: true, value: { browserId: id, callbackOrigin: callbackOrigin ?? null } };
       }
       const keys = method === 'relay-configure' ? ['browserId', 'clientId', 'clientSecret'] : method === 'relay-connect' ? ['browserId', 'url'] : method === 'begin' ? ['browserId', 'context'] : method === 'transaction' || method === 'cancel' ? ['browserId', 'transactionId'] : method === 'disconnect-confirm' ? ['browserId', 'confirmation'] : ['browserId'];
       const data = request(input, keys);
@@ -47,6 +48,10 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
       return await managed.ui(id, browser.context, async () => {
         let value: unknown;
         switch (method) {
+          case 'callback-origin': {
+            const origin = managed.callbackOriginReady ? await managed.callbackOriginReady() : undefined;
+            value = { callbackOrigin: origin ?? managed.callbackOrigin ?? null }; break;
+          }
           case 'relay-status': value = relay()?.status() ?? { status: 'unavailable' }; break;
           case 'relay-connect': {
             if (data.url !== undefined && (typeof data.url !== 'string' || data.url.length > 2048)) throw new ConnectionServiceError('invalid_request');
@@ -69,7 +74,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
             value = await service.getAuthorizationStatus(data.transactionId); break;
           case 'cancel':
             if (typeof data.transactionId !== 'string') throw new ConnectionServiceError('invalid_request');
-            value = managed.cancel(data.transactionId, id); break;
+            value = await managed.cancel(data.transactionId, id); break;
           case 'disconnect-preview':
             browser.confirmation = { token: token(), revision: managed.revision(), expires: Date.now() + 30000 };
             value = { confirmation: browser.confirmation.token }; break;
@@ -92,7 +97,7 @@ export function createUIRpc(connection: HostConnection, managed: ManagedConnecti
   // Public exact routes coexist with the native Gateway's single /api interceptor.
   // DSH applies authenticated admission/body limits first; re-read the actual Peer
   // because an owner API credential is deliberately not a human browser carrier.
-  const methods = ['bootstrap', 'status', 'prepare-start', 'prepare-status', 'prepare-cancel', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm', 'relay-status', 'relay-connect', 'relay-disconnect', 'relay-configure', 'relay-stop'];
+  const methods = ['bootstrap', 'callback-origin', 'status', 'prepare-start', 'prepare-status', 'prepare-cancel', 'begin', 'transaction', 'cancel', 'disconnect-preview', 'disconnect-confirm', 'relay-status', 'relay-connect', 'relay-disconnect', 'relay-configure', 'relay-stop'];
   const registrations = methods.map(method => connection.fetch.register({
     path: `/api/dsh-dingtalk/${method}`, methods: ['POST'], requestBody: 'buffered',
     async fetch(request) {

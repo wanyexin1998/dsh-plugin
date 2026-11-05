@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "platform": "linux-x64",
+  "version": "1.0.66",
+  "commit": "f215043e676d6889e1ddce3464828d8b1ec40c31",
+  "archive": {
+    "file": "..\\.cache\\dws-artifact\\dws-linux-amd64.tar.gz",
+    "size": 19396103,
+    "sha256": "27cd2821e1f6523d1eeaf5688c23502bddbdd858cf82e32c197853065418bef8"
+  },
+  "binary": {
+    "sha256": "4ee71b2e1d1d4b888dd41dbda6193d213636971196f0641d4ef1c74d12b49607",
+    "size": 58091152
+  },
+  "verified": ["archive_size", "archive_sha256", "single_binary_extract", "binary_sha256"]
+}

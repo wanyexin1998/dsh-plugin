@@ -21,7 +21,7 @@ export const REASON_CODES = [
   'connection_preparing', 'unknown_command', 'command_unavailable', 'host_managed_operation', 'confirmation_required', 'confirmation_rejected', 'file_access_denied', 'job_not_found', 'job_limit', 'outcome_unknown',
 ] as const;
 export type ReasonCode = typeof REASON_CODES[number];
-export type BackendMode = 'local' | 'cellgent';
+export type BackendMode = 'local' | 'connector' | 'cellgent';
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 /** Public display information only. No IDs, profile paths, codes or credentials. */

@@ -9,3 +9,12 @@ lib/
 artifacts/
 
 enhancements/artifacts/
+
+# Connector deployment secrets: never commit real values, certificates or runtime state.
+connector/deploy/connector.env
+connector/deploy/gateway.json
+connector/deploy/gateway.env
+connector/deploy/tls/
+connector/deploy/*.pem
+connector/deploy/*.crt
+connector/deploy/*.key

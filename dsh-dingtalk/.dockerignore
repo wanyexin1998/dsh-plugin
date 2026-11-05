@@ -1,0 +1,27 @@
+# Container build context for connector/docker/Dockerfile.
+node_modules
+**/node_modules
+.cache
+.tmp
+artifacts
+*.tgz
+.git
+.gitignore
+pnpm-lock.yaml
+pnpm-workspace.yaml
+src
+test
+enhancements/src
+enhancements/scripts
+enhancements/tests
+enhancements/docs
+enhancements/skills
+enhancements/artifacts
+docs
+assets
+connector/deploy
+connector/docs
+connector/scripts
+connector/tests
+connector/tsconfig.json
+connector/.cache
