@@ -1,0 +1,14 @@
+Environment: Linux, Node v24.19.0, Chromium 151.0.7922.173.
+Working directory: dsh-dingtalk/enhancements
+
+Command: DSH_TEST_BROWSER=/usr/bin/chromium node scripts/verify-robot-browser.mjs
+Exit: 0
+PASS: personal form alignment, secret clearing, enterprise no-input connection, mobile overflow; synthetic transport only
+
+Command: DSH_TEST_BROWSER=/usr/bin/chromium node scripts/verify-browser.mjs
+Exit: 1 (environment prerequisite missing, before browser launch)
+Error: ENOENT: no such file or directory, open 'dsh-dingtalk/.cache/dingtalk-g0/bin-amd64/dws.exe'
+  at verifiedBinary (enhancements/scripts/g0/runtime.mjs:16)
+  at fixture (enhancements/scripts/p0-fixture.mjs:14)
+  at enhancements/scripts/verify-browser.mjs:10
+The existing fixture requires a fixed Windows DWS executable and archive. They are not present in this Linux checkout. No fixture/script changes, service deployment, real OAuth or robot actions were performed.

@@ -1,5 +1,5 @@
 import { createElement as h, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode, ButtonHTMLAttributes } from 'react';
+import type { ReactNode } from 'react';
 import type { Context } from '@deepseek-ai/cordis';
 import { parseConfig } from '../shared/config.js';
 import type { AuthorizationContext } from '../shared/models.js';
@@ -11,6 +11,8 @@ import type { LocaleFace } from './i18n.js';
 import { toolLabel } from './tool-label.js';
 import type { ToolArgumentView } from './tool-label.js';
 import { connectionCss } from './styles.js';
+import { icon, IconButton } from './components.js';
+import type { IconName } from './components.js';
 import { RelaySection } from './relay.js';
 import { authorizationTail } from './tail.js';
 import type { ChatSnapshot } from './tail.js';
@@ -18,31 +20,13 @@ import type { ChatSnapshot } from './tail.js';
 interface SettingsSlots { register(options: object, component: (props: any) => ReactNode): () => void; inject?(name: string, action: () => void): unknown }
 export const name = 'dsh-dingtalk';
 export const inject = ['slots', 'connection', 'locale'];
-type IconName = 'connect' | 'refresh' | 'disconnect' | 'close' | 'hide' | 'copy' | 'external' | 'check' | 'clock' | 'warning' | 'more' | 'user' | 'calendar' | 'file' | 'shield';
-const paths: Record<IconName, string> = {
-  connect: 'M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 0 1 0 10h-2M8 12h8',
-  refresh: 'M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M18 17a7 7 0 0 1-12 2l-2-3',
-  disconnect: 'M9 5H4v14h5M13 8l4 4-4 4M8 12h13',
-  close: 'M6 6l12 12M18 6 6 18', hide: 'm6 14 6-6 6 6',
-  copy: 'M9 8h11v13H9zM15 8V3H4v13h5', external: 'M14 3h7v7M21 3l-11 11M10 4H4v16h16v-6',
-  check: 'm5 12 4 4L19 6', clock: 'M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
-  warning: 'm12 3 10 18H2L12 3Zm0 5v6m0 3v.5', more: 'M5 12h.01M12 12h.01M19 12h.01',
-  user: 'M20 21v-2a6 6 0 0 0-6-6h-4a6 6 0 0 0-6 6v2M16 6a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
-  calendar: 'M3 5h18v16H3zM7 2v6M17 2v6M3 10h18',
-  file: 'M14 2H5v20h14V7l-5-5Zm0 0v6h5',
-  shield: 'm12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6l8-4Zm-4 10 3 3 5-6',
-};
-function icon(name: IconName) { return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: name === 'more' ? 3 : 1.65, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false }, h('path', { d: paths[name] })); }
-function IconButton({ label, symbol, caption, className = '', ...props }: { label: string; symbol: IconName; caption?: string } & ButtonHTMLAttributes<HTMLButtonElement>) {
-  return h('button', { type: 'button', title: label, 'aria-label': label, ...props, className: 'dsh-dt-icon' + (caption ? ' dsh-dt-caption' : '') + ' ' + className }, icon(symbol), caption ? h('span', null, caption) : null);
-}
 function DisconnectDialog({ store, confirmation, close, language = 'zh' }: { store: ConnectionStore; confirmation: string; close(): void; language?: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { const previous = document.activeElement as HTMLElement | null; dialog.current?.showModal(); dialog.current?.querySelector<HTMLButtonElement>('.dsh-dt-dialog-actions button')?.focus(); return () => { dialog.current?.close(); previous?.focus(); }; }, []);
   return localize(h('dialog', { ref: dialog, className: 'dsh-dt-dialog', 'aria-labelledby': 'dsh-dt-unlink-title', onCancel: (event: Event) => { event.preventDefault(); close(); } },
     h('div', { className: 'dsh-dt-dialog-top' }, h('span', null, '钉钉连接'), h(IconButton, { label: '关闭弹窗', symbol: 'close', onClick: close })),
     h('h3', { id: 'dsh-dt-unlink-title' }, '解除钉钉连接？'), h('p', null, '解除后将停止调用与后台任务。再次使用需重新连接。'),
-    h('div', { className: 'dsh-dt-dialog-actions' }, h(IconButton, { label: '保留连接', caption: '保留连接', symbol: 'close', autoFocus: true, onClick: close }), h(IconButton, { label: '确认解除连接', caption: '解除', symbol: 'disconnect', className: 'dsh-dt-primary', onClick: () => { close(); void store.disconnect(confirmation); } }))), language);
+    h('div', { className: 'dsh-dt-dialog-actions' }, h(IconButton, { label: '保留连接', caption: '保留连接', symbol: 'close', autoFocus: true, onClick: close }), h(IconButton, { label: '确认解除连接', caption: '解除', symbol: 'disconnect', className: 'dsh-dt-danger', onClick: () => { close(); void store.disconnect(confirmation); } }))), language);
 }
 function permissions() {
   return h('div', { className: 'dsh-dt-scopes' }, ...([['calendar', '日程与待办', '查询与管理'], ['file', '文档与表格', '读取与编辑'], ['user', '消息与更多', '按账号权限']] as const).map(([symbol, label, detail]) => h('div', { className: 'dsh-dt-scope', key: symbol }, icon(symbol), h('span', null, label), h('small', null, detail))));
@@ -62,46 +46,55 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [menu]);
   const activeError = source.reason === errorReason && source.revision === (snap.actionRevision || 0) ? errorReason : undefined;
-  const reason = snap.preparing ? 'connection_preparing' : activeError || snap.error || snap.status.reasonCode;
-  const connected = snap.status.state === 'connected' && !activeError && !snap.preparing && !snap.error && !snap.transaction;
   const working = !!snap.transaction || !!snap.preparing;
+  const checking = !snap.checked && !working && !snap.error && !activeError;
+  const reason = snap.preparing ? 'connection_preparing' : activeError || snap.error || snap.status.reasonCode || (snap.status.state === 'unlinked' ? 'not_connected' : 'connection_unknown');
+  const connected = snap.status.state === 'connected' && !activeError && !working && snap.error !== 'revocation_failed';
   const text = messageFor(reason);
+  const stale = !!snap.refreshError;
+  const historical = connected && (stale || snap.refreshing || snap.pending || !!snap.error && snap.error !== 'user_cancelled');
+  const readFailed = !working && stale && !snap.checkedAt;
+  const statusTitle = checking ? '检查中' : readFailed ? '连接状态读取失败' : connected ? historical ? '上次确认已连接' : '钉钉已连接' : text.title;
+  const freshness = stale ? '读取失败 · 状态待更新，请重试。' : snap.refreshing && !checking ? '刷新中 · 保留上次确认状态。' : undefined;
   const download = snap.preparing && snap.progress?.phase === 'download' ? snap.progress : undefined;
   const progressDetail = download ? `正在下载组件 · ${(download.received / 1048576).toFixed(1)} / ${(download.total / 1048576).toFixed(1)} MB` : snap.preparing && snap.progress?.phase === 'verify' ? '正在校验组件…' : undefined;
   const downloadRetry = reason === 'cli_download_failed' || reason === 'cli_download_timeout';
-  const reconnect = !reason || downloadRetry || ['not_connected', 'authorization_expired', 'auth_timeout', 'user_cancelled', 'verification_failed_after_save', 'identity_mismatch', 'scope_authorization_required', 'invalid_auth_state', 'cli_missing', 'service_unavailable'].includes(reason);
+  const reconnect = !checking && !readFailed && (downloadRetry || ['not_connected', 'authorization_expired', 'auth_timeout', 'user_cancelled', 'verification_failed_after_save', 'identity_mismatch', 'scope_authorization_required', 'invalid_auth_state', 'cli_missing'].includes(reason));
   const admin = text.admin || ['app_permission_denied', 'permission_denied', 'scope_authorization_required', 'cli_integrity_failed', 'oauth_not_configured', 'privacy_guard_required'].includes(reason || '');
   const copy = () => { void (async () => { try { await navigator.clipboard.writeText(translate(IT_REQUEST, language)); setCopied(true); setCopyFailed(false); } catch { setCopyFailed(true); } })(); };
   const unlink = () => { setMenu(false); menuButton.current?.focus(); void store.previewDisconnect().then(setConfirmation); };
-  const symbol: IconName = connected ? 'check' : working ? 'clock' : admin || reason === 'identity_mismatch' ? 'warning' : 'connect';
-  const primary = snap.fallback
+  const symbol: IconName = historical ? 'clock' : connected ? 'check' : working || checking ? 'clock' : admin || reason === 'identity_mismatch' ? 'warning' : 'connect';
+  const primary = checking ? h('span', { className: 'dsh-dt-action dsh-dt-status' }, '检查中')
+    : snap.fallback
     ? h('a', { className: 'dsh-dt-primary dsh-dt-action', title: '打开授权页', 'aria-label': '浏览器拦截了弹窗，点击打开授权页', href: snap.fallback, target: '_blank', rel: 'noopener noreferrer' }, icon('external'), h('span', null, '打开'))
     : snap.preparing ? null
     : working ? h('button', { className: 'dsh-dt-action', type: 'button', disabled: true }, '等待中')
+    : connected && stale ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', disabled: snap.pending || snap.refreshing, onClick: () => { void store.refresh(true); } })
     : connected ? h('span', { className: 'dsh-dt-action dsh-dt-ready', 'aria-hidden': true })
     : reason === 'revocation_failed' ? h(IconButton, { label: '重试解除连接', caption: '重试', symbol: 'disconnect', onClick: unlink, disabled: snap.pending })
     : !reconnect && admin ? h(IconButton, { label: copied ? '已复制申请文案' : '复制给 IT 的申请文案', caption: copied ? '已复制' : '复制', symbol: 'copy', onClick: copy })
-    : !reconnect ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', onClick: () => { void store.refresh(true); }, disabled: snap.pending })
+    : !reconnect ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', onClick: () => { void store.refresh(true); }, disabled: snap.pending || snap.refreshing })
     : h('button', { className: 'dsh-dt-action dsh-dt-primary', type: 'button', 'aria-label': '连接钉钉', disabled: snap.pending, onClick: () => { void store.begin(context); } }, downloadRetry ? '重试' : reason === 'not_connected' ? '连接' : '重连');
-  const strip = (asCard: boolean) => h('section', { className: (asCard ? 'dsh-dt-card ' : '') + 'dsh-dt-strip', 'aria-label': '钉钉工具连接', 'data-tone': connected ? 'success' : admin ? 'warning' : 'neutral' },
+  const strip = (asCard: boolean) => h('section', { className: (asCard ? 'dsh-dt-card ' : '') + 'dsh-dt-strip', 'aria-label': '钉钉工具连接', 'aria-busy': checking || snap.refreshing || snap.pending, 'data-tone': stale || admin ? 'warning' : connected ? 'success' : 'neutral' },
     h('span', { className: 'dsh-dt-symbol' }, icon(symbol)),
-    h('div', { className: 'dsh-dt-copy' }, h('strong', { role: 'status', 'aria-live': 'polite' }, connected ? '钉钉已连接' : text.title), h('p', { className: download ? 'dsh-dt-download-size' : undefined }, connected ? '可继续刚才的查询。' : progressDetail || text.detail),
+    h('div', { className: 'dsh-dt-copy' }, h('strong', { role: 'status', 'aria-live': 'polite' }, statusTitle), h('p', { className: download ? 'dsh-dt-download-size' : undefined }, checking ? '正在读取连接状态，请稍候。' : readFailed ? '暂无法确认授权状态，请刷新重试。' : connected ? historical ? '账户信息来自上次确认。' : '可继续刚才的查询。' : progressDetail || text.detail),
       download ? h('div', { className: 'dsh-dt-progress', role: 'progressbar', 'aria-label': '组件下载进度', 'aria-valuemin': 0, 'aria-valuemax': download.total, 'aria-valuenow': download.received, 'aria-valuetext': progressDetail }, h('span', { style: { width: `${Math.max(0, Math.min(100, download.received / download.total * 100))}%` } })) : null),
-    h('div', { className: 'dsh-dt-actions' + (snap.preparing ? ' dsh-dt-preparing-actions' : '') }, primary, working ? h(IconButton, { label: '取消本次授权', symbol: 'close', onClick: () => { void store.cancel(); } }) : dismiss ? h(IconButton, { label: connected ? '收起' : '暂不连接', symbol: 'close', onClick: dismiss }) : h('span', { className: 'dsh-dt-action-spacer', 'aria-hidden': true })));
+    h('div', { className: 'dsh-dt-actions' + (snap.preparing ? ' dsh-dt-preparing-actions' : '') }, primary, working ? h(IconButton, { label: '取消本次授权', symbol: 'close', disabled: snap.pending && !snap.preparing, onClick: () => { void store.cancel(); } }) : dismiss ? h(IconButton, { label: connected ? '收起' : '暂不连接', symbol: 'close', onClick: dismiss }) : h('span', { className: 'dsh-dt-action-spacer', 'aria-hidden': true })));
+  const notice = h('div', { className: 'dsh-dt-notices', role: 'status', 'aria-live': 'polite' }, freshness ? h('p', { className: 'dsh-dt-notice', 'data-tone': stale ? 'warning' : 'neutral' }, freshness) : null, connected && snap.error ? h('p', { className: 'dsh-dt-notice', 'data-tone': 'warning' }, text.title, ' · ', text.detail) : null);
   const extras = copyFailed ? h('div', { className: 'dsh-dt-copy-fallback' }, h('p', null, '复制未成功，请手动复制：'), h('textarea', { readOnly: true, 'aria-label': '申请文案', value: translate(IT_REQUEST, language), onFocus: (event: { currentTarget: HTMLTextAreaElement }) => event.currentTarget.select() })) : null;
   const modal = confirmation ? h(DisconnectDialog, { store, confirmation, close: () => setConfirmation(undefined), language }) : null;
-  if (compact) return localize(h('div', { className: 'dsh-dt-shell' }, h('style', null, connectionCss), strip(true), extras, modal), language);
+  if (compact) return localize(h('div', { className: 'dsh-dt-shell' }, h('style', null, connectionCss), strip(true), notice, extras, modal), language);
   const account = snap.status.account;
   return localize(h('section', { className: 'dsh-dt', 'aria-label': '钉钉连接' }, h('style', null, connectionCss),
     h('div', { className: 'dsh-dt-heading' }, h('div', null, h('h2', null, '钉钉'), h('p', null, '在对话中使用你的工作信息。')),
       h('div', { className: 'dsh-dt-menu-anchor', ref: menuRoot }, h('button', { className: 'dsh-dt-icon', ref: menuButton, type: 'button', 'aria-label': '连接管理', title: '连接管理', 'aria-expanded': menu, onClick: () => setMenu(!menu) }, icon('more')),
-        h('div', { className: 'dsh-dt-menu', hidden: !menu }, h(IconButton, { label: '重新授权', caption: '重新授权', symbol: 'refresh', disabled: snap.pending || working, onClick: () => { setMenu(false); void store.begin(context); } }), h(IconButton, { label: '解除连接', caption: '解除连接', symbol: 'disconnect', disabled: snap.pending || working, onClick: unlink })))),
-    connected ? h('div', { className: 'dsh-dt-account' }, h('span', { className: 'dsh-dt-avatar' }, icon('user')), h('div', { className: 'dsh-dt-account-copy' }, h('strong', null, account?.displayName || '已授权账号'), h('p', null, account?.organizationName || '已验证企业')), h('span', { className: 'dsh-dt-connected', role: 'status', 'aria-live': 'polite' }, icon('check'), '钉钉已连接')) : strip(false),
-    h(RelaySection, { store }),
+        h('div', { className: 'dsh-dt-menu', hidden: !menu }, h(IconButton, { label: '重新授权', caption: '重新授权', symbol: 'refresh', disabled: checking || snap.pending || working, onClick: () => { setMenu(false); void store.begin(context); } }), h(IconButton, { label: '解除连接', caption: '解除连接', symbol: 'disconnect', className: 'dsh-dt-danger', disabled: checking || snap.pending || working, onClick: unlink })))),
+    connected ? h('div', { className: 'dsh-dt-account', 'aria-busy': snap.refreshing || snap.pending }, h('span', { className: 'dsh-dt-avatar' }, icon('user')), h('div', { className: 'dsh-dt-account-copy' }, h('strong', null, account?.displayName || '已授权账号'), h('p', null, account?.organizationName || '已验证企业')), h('span', { className: 'dsh-dt-connected', 'data-tone': stale ? 'warning' : 'success', role: 'status', 'aria-live': 'polite' }, icon(historical ? 'clock' : 'check'), statusTitle)) : strip(false), notice,
+    h(RelaySection, { store, language }),
     h('div', { className: 'dsh-dt-list-label' }, '连接后可用'), permissions(),
     h('p', { className: 'dsh-dt-privacy' }, icon('shield'), h('span', null, '按你的指令操作，写入前确认。')),
     admin && reconnect ? h(IconButton, { label: copied ? '已复制申请文案' : '复制给 IT 的申请文案', caption: copied ? '已复制' : '复制给管理员', symbol: 'copy', onClick: copy }) : null,
-    h('div', { className: 'dsh-dt-bottom' }, h('span', null, snap.status.checkedAt && Number.isFinite(Date.parse(snap.status.checkedAt)) ? new Intl.DateTimeFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit' }).format(new Date(snap.status.checkedAt)) : '连接状态'), h(IconButton, { label: '刷新状态', caption: '刷新状态', symbol: 'refresh', disabled: snap.pending, onClick: () => { void store.refresh(true); } })), extras, modal), language);
+    h('div', { className: 'dsh-dt-bottom' }, h('span', null, (snap.checkedAt || snap.status.checkedAt) && Number.isFinite(Date.parse((snap.checkedAt || snap.status.checkedAt)!)) ? h('time', { dateTime: snap.checkedAt || snap.status.checkedAt }, '上次确认：', new Intl.DateTimeFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date((snap.checkedAt || snap.status.checkedAt)!))) : '连接状态'), h(IconButton, { label: '刷新状态', caption: '刷新状态', symbol: 'refresh', disabled: snap.pending || snap.refreshing, onClick: () => { void store.refresh(true); } })), extras, modal), language);
 }
 interface ToolProps { phase: string; sessionId?: string; callId: string; block?: { args?: ToolArgumentView; content?: readonly { type: string; text?: string }[] } }
 function AuthorizationFeedback({ store, language, sessionId = 'current', callId, reason }: { store: ConnectionStore; language: string; sessionId?: string | undefined; callId: string; reason: import('../shared/models.js').ReasonCode }) {

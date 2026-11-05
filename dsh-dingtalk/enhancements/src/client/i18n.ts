@@ -2,6 +2,27 @@ import { Children, cloneElement, isValidElement } from 'react';
 import type { ReactNode, ReactElement } from 'react';
 export interface LocaleFace { getSnapshot(): { active: string }; subscribe(fn: () => void): () => void }
 const english: Record<string, string> = {
+  '机器人操作结果尚未确认，请刷新状态。': 'Robot action outcome is unconfirmed. Refresh status.',
+  '状态未知': 'Status unknown', '刷新机器人状态': 'Refresh robot status', '正在刷新机器人状态…': 'Refreshing robot status…',
+  '暂时无法读取机器人状态，请重试。': 'Could not read robot status. Retry.', '机器人状态读取失败；显示上次确认状态。': 'Robot status read failed; showing the last confirmed status.',
+  '钉钉机器人': 'DingTalk robot', '配置': 'Configure', '未配置': 'Not configured', '连接中': 'Connecting', '等待登录确认': 'Waiting for sign-in', '未连接': 'Not connected',
+  '取消登录': 'Cancel sign-in', '断开机器人': 'Disconnect robot', '停止托管': 'Stop hosting', '验证中': 'Verifying', '下一步': 'Next', '取消配置': 'Cancel configuration', '继续登录': 'Continue sign-in', '网关地址': 'Gateway address',
+  '此配置已在另一 DSH 实例运行': 'Configuration active in another DSH instance', '当前通道未提供连接管理': 'Connection management unavailable in this channel',
+  '企业配置有误': 'Invalid enterprise configuration', '请先停用个人托管': 'Stop personal hosting first', '本机配置有误': 'Invalid local configuration',
+  '端口被占用或另一 DSH 正在托管': 'Port in use or hosted by another DSH instance', '本机服务暂不可用': 'Local service unavailable', '机器人消息连接失败': 'Robot message connection failed',
+  '离线 · 正在重连': 'Offline · Reconnecting', '请重新授权': 'Please reauthorize', '已在其他设备连接': 'Connected on another device', '已取消': 'Cancelled', '登录已超时': 'Sign-in timed out', '连接未完成': 'Connection incomplete',
+  '请先完成上方钉钉账号授权。': 'Complete DingTalk account authorization above first.', '应用凭据无效或验证暂不可用，请检查后重试。': 'Invalid application credentials or verification unavailable. Check and retry.',
+  '请使用与当前 DWS 相同的企业账号。': 'Use the same enterprise account as the current DWS connection.', '本机端口被占用，或另一 DSH 正在托管此机器人。': 'Local port in use, or this robot is hosted by another DSH instance.',
+  '此配置已在另一 DSH 实例运行。': 'This configuration is running in another DSH instance.', '请先停止托管，再修改应用凭据。': 'Stop hosting before editing application credentials.',
+  '连接未完成，请检查应用设置后重试。': 'Connection incomplete. Check application settings and retry.', '在钉钉应用的安全设置中登记重定向 URL：': 'Register this redirect URL in the DingTalk application security settings:',
+  '复制回调地址': 'Copy callback URL', '请手动复制回调地址。': 'Copy the callback URL manually.', '请在打开的页面确认。': 'Confirm on the page that opened.',
+  '随此 DSH 运行。请先完成上方个人钉钉授权。': 'Runs with this DSH instance. Complete personal DingTalk authorization above first.', '连接后，机器人消息将交给这台 DSH。': 'Once connected, robot messages go to this DSH instance.',
+
+  '检查中': 'Checking', '正在读取连接状态，请稍候。': 'Reading connection status. Please wait.',
+  '连接状态读取失败': 'Could not read connection status', '暂无法确认授权状态，请刷新重试。': 'Authorization status is unknown. Refresh to retry.',
+  '上次确认已连接': 'Last confirmed connected', '读取失败 · 状态待更新，请重试。': 'Read failed · Status needs updating. Retry.',
+  '刷新中 · 保留上次确认状态。': 'Refreshing · Showing the last confirmed status.', '账户信息来自上次确认。': 'Account details are from the last successful check.', '上次确认：': 'Last confirmed: ',
+
   '组件下载中断': 'Component download interrupted', '组件下载超时': 'Component download timed out', '请检查网络后重试，将继续下载。': 'Check your network and retry to resume.', '正在校验组件…': 'Verifying component…', '组件下载进度': 'Component download progress',
   '日程与待办': 'Calendar & tasks', '查询与管理': 'View & manage', '文档与表格': 'Docs & sheets', '读取与编辑': 'Read & edit', '消息与更多': 'Messages & more', '按账号权限': 'Account permissions',
   '按你的指令操作，写入前确认。': 'Act on your instructions. Confirm before changes.', '解除后将停止调用与后台任务。再次使用需重新连接。': 'Disconnect stops calls and background tasks. Reconnect to use again.',
