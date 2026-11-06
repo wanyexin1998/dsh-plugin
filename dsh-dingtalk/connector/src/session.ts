@@ -85,25 +85,47 @@ export class UserSession {
   private async initialize(): Promise<void> {
     this.paths = await this.state.provisionUser(this.callerId)
     this.store = new BindingStore(this.paths.root)
+    let recordReadable = true
     try {
       this.record = await this.store.read()
     } catch {
+      // An unreadable binding record cannot be confirmed either way: block instead of restoring.
       this.record = { version: 1, revoked: true }
+      recordReadable = false
     }
     // A binding change must never reuse the token of a previously bound account.
     this.mismatch = !!this.record.profile && this.record.profile !== this.profile
-    const pendingMarker = await this.state.hasRevocationPending(this.callerId).catch(() => false)
-    if (pendingMarker && !this.record.revoked) {
-      // A fallback marker records a revocation that could not be written into the caller
-      // directory: never restore a usable authorization from the stale binding.
+    let pendingMarker: boolean | undefined
+    try {
+      pendingMarker = await this.state.hasRevocationPending(this.callerId)
+    } catch {
+      // The fallback marker itself is unreadable: stay fail-closed, keep the marker untouched.
+      pendingMarker = undefined
+    }
+    const blockAsPending = (): void => {
       this.record = {
         version: 1,
         revoked: true,
         ...(this.record.profile ? { profile: this.record.profile } : {}),
         revocationPending: true,
       }
+    }
+    if (pendingMarker === undefined) {
+      // Unknown marker state: never restore and never delete a marker we could not read.
+      blockAsPending()
+      this.storageBlocked = true
     } else if (pendingMarker) {
-      await this.state.clearRevocationPending(this.callerId).catch(() => {})
+      if (recordReadable && this.record.revoked) {
+        // The readable record explicitly confirms a completed revocation; the marker is stale.
+        await this.state.clearRevocationPending(this.callerId).catch(() => {})
+      } else {
+        // Cannot confirm a safe state: keep the marker and stay blocked.
+        blockAsPending()
+        if (!recordReadable) this.storageBlocked = true
+      }
+    } else if (!recordReadable) {
+      // No marker, but the old record cannot be read: fail closed rather than guess.
+      this.storageBlocked = true
     }
     try {
       await this.state.assertCallerWritable(this.callerId)
@@ -345,6 +367,9 @@ export class UserSession {
           await this.commitBarrier(epoch, signal)
           await this.store.write({ version: 1, revoked: false, profile })
           await this.commitBarrier(epoch, signal)
+          // A successful new authorization supersedes any leftover revocation marker; otherwise a
+          // restart would wrongly block the account the user just re-authorized.
+          await this.state.clearRevocationPending(this.callerId).catch(() => {})
           return { ...status, account: { organizationName: '已验证企业', displayName: '已授权账号' } }
         } catch (error) {
           await this.backend?.dispose()

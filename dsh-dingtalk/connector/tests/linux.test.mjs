@@ -795,3 +795,116 @@ test(
     }
   },
 )
+
+test(
+  'an unreadable revocation marker keeps the caller blocked and is preserved',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const markerDir = join(isolated.stateDir, 'pending-revocations')
+    const marker = join(markerDir, 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      await mkdir(markerDir, { recursive: true })
+      await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+      await chmod(markerDir, 0o000)
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      assert.notEqual(blocked.state, 'connected')
+      await chmod(markerDir, 0o700)
+      await stat(marker)
+      await server.close()
+      server = await startConnector(env)
+      const still = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(still.reasonCode, 'revocation_failed')
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(markerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test('an unreadable old binding keeps the revocation marker and stays blocked', { skip, timeout: 180000 }, async () => {
+  const { synthetic, isolated, env } = await fakeEnv()
+  const markerDir = join(isolated.stateDir, 'pending-revocations')
+  const marker = join(markerDir, 'caller-a.json')
+  const binding = join(isolated.stateDir, 'callers', 'caller-a', 'binding.json')
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+    await mkdir(markerDir, { recursive: true })
+    await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+    await chmod(binding, 0o000)
+    await owner.dispose()
+    await server.close()
+    server = await startConnector(env)
+    const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(blocked.reasonCode, 'revocation_failed')
+    assert.notEqual(blocked.state, 'connected')
+    await chmod(binding, 0o600)
+    await stat(marker)
+    await server.close()
+    server = await startConnector(env)
+    const still = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(still.reasonCode, 'revocation_failed')
+    assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+    assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    await assert.rejects(stat(marker))
+  } finally {
+    await chmod(binding, 0o600).catch(() => {})
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})
+
+test('a successful re-authorization clears a leftover revocation marker', { skip, timeout: 180000 }, async () => {
+  const { synthetic, isolated, env } = await fakeEnv()
+  const markerDir = join(isolated.stateDir, 'pending-revocations')
+  const marker = join(markerDir, 'caller-a.json')
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    await mkdir(markerDir, { recursive: true })
+    await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+    assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+    await assert.rejects(stat(marker))
+    await owner.dispose()
+    await server.close()
+    server = await startConnector(env)
+    const afterRestart = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(afterRestart.state, 'connected')
+  } finally {
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})

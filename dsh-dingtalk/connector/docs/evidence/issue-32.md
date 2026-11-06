@@ -24,19 +24,23 @@
 1. 取消时间窗口：`auth exchange` 子进程已把凭据写入磁盘、但尚未返回结果时取消，之前会被当成“未发生”并恢复旧会话。现在只要 exchange 已启动，取消就执行隔离清理（logout + `revoked`；清理失败或结果未知保留 `revocationPending`），不再依赖“已成功返回”的标志，也不会在重启后恢复授权。
 2. 撤销失败后的重启：新增每个 caller 私有目录可写性探测，以及根目录 `pending-revocations/<callerId>.json` 回退标记。当 caller 目录不可写导致撤销无法落盘时，重启后依据回退标记保持阻断（`revocation_failed`），只有显式重试成功后才清除标记并恢复 `unlinked`。
 
-回归测试（在上一版 head `5c1b413` 上先失败、本次修复后通过）：
+## 第三轮补修（复审反馈）
 
-- `cancelling after the exchange persisted credentials but before it returns stays unlinked`
-- `revocation that cannot write the caller directory blocks the caller after restart`
+1. 标记或旧授权记录读取失败时保持阻断：`hasRevocationPending` 读取失败不再当作“无标记”；`BindingStore.read` 读取失败不再当作已撤销记录。无法确认状态时设置 `storageBlocked` 并保留标记，绝不删除读不到的标记。
+2. 残留标记不再误阻断重新授权：exchange 提交成功后清除该 caller 的 `pending-revocations` 回退标记，用户重新授权成功后，后续重启不会被旧标记错误阻断。
+3. 回归覆盖（上一版 head `38e4f8b` 上失败、本提交通过）：
+   - `an unreadable revocation marker keeps the caller blocked and is preserved`
+   - `an unreadable old binding keeps the revocation marker and stays blocked`
+   - `a successful re-authorization clears a leftover revocation marker`
 
-## fail-first 回归（基线 `608e21a` 先失败，修复后通过）
+## fail-first 回归
 
-| 测试                                                | 基线 `608e21a`          | 上一版 head `5c1b413`            | 本提交                           |
-| --------------------------------------------------- | ----------------------- | -------------------------------- | -------------------------------- |
-| `connector/tests/unit.test.mjs`                     | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail |
-| `connector/tests/linux.test.mjs`（含新增 6 个用例） | 20 项：14 pass / 6 fail | 22 项：20 pass / 2 fail          | 22 项：22 pass / 0 fail          |
+| 测试集                           | 基线 `608e21a`          | `5c1b413`                        | `38e4f8b`                        | 本提交                           |
+| -------------------------------- | ----------------------- | -------------------------------- | -------------------------------- | -------------------------------- |
+| `connector/tests/unit.test.mjs`  | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail |
+| `connector/tests/linux.test.mjs` | 20 项：14 pass / 6 fail | 22 项：20 pass / 2 fail          | 25 项：22 pass / 3 fail          | 25 项：25 pass / 0 fail          |
 
-基线失败项：
+基线失败项（第一轮）：
 
 - configuration fails closed for transport, paths, OAuth origins and test seams
 - ConnectorServer refuses to start when the private state volume is not writable
@@ -45,16 +49,14 @@
 - a cancelled exchange whose credential cleanup fails stays blocked across restart
 - a revocation that cannot persist fails closed without reviving the caller or affecting others
 
-新增 linux 用例覆盖：status 等待中取消、持久化屏障处取消、取消后清理失败（logout 失败）并重启验证、撤销标记无法持久化时 admin 返回失败且 A/B 隔离与显式重试，以及第二轮审查指出的“换码已保存但未返回”取消窗口与“caller 目录不可写时重启恢复”场景。
-
 ## 全量检查
 
-| 检查                    | 命令                                                                       | 结果                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 全仓 CI                 | `pnpm run ci`                                                              | PASS：425 项 418 pass / 7 skip / 0 fail；75 项 68 pass / 7 skip / 0 fail；tarball 400 files |
-| 类型与格式              | `pnpm run typecheck`、`pnpm run lint`                                      | PASS                                                                                        |
-| Connector 单元/CLI/部署 | `node --test tests/unit.test.mjs tests/cli.test.mjs tests/deploy.test.mjs` | 14 项：11 pass / 3 skip / 0 fail                                                            |
-| Connector Linux 容器    | `node scripts/test-linux.mjs`                                              | 22/22 PASS（真实固定 DWS 1.0.66 制品）                                                      |
+| 检查                                                            | 结果                                                                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm run ci`（secrets/lint/typecheck/test/test:web/test:pack） | PASS：425 项 418 pass / 7 skip / 0 fail；75 项 68 pass / 7 skip / 0 fail；tarball 400 files |
+| 类型与格式                                                      | `pnpm run typecheck`、`pnpm run lint`                                                       | PASS |
+| Connector 单元/CLI/部署                                         | 14 项：11 pass / 3 skip / 0 fail                                                            |
+| Connector Linux 容器                                            | 25/25 PASS（真实固定 DWS 1.0.66 制品）                                                      |
 
 ## 真实 Nginx + Compose/TLS（非 443）
 
