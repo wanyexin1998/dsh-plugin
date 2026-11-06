@@ -31,6 +31,11 @@ class RobotConnection extends RelayClient {
       signal: this.controller.signal,
     })
   }
+  reconnect() {
+    this.controller?.abort()
+    this.controller = new AbortController()
+    if (this.current) this.current = Object.freeze({ ...this.current, signal: this.controller.signal })
+  }
   revoke() {
     this.controller.abort()
     this.current = undefined
@@ -516,6 +521,22 @@ test('personal owned session resumes with a new scoped Agent and the same select
   assert.equal(h.resumeCalls, 1)
   await assert.rejects(first.invoke('read'), /im_channel_authorization_changed/)
   assert.equal(await restored.invoke('read'), h.target)
+})
+
+test('personal same-device reconnect resumes the owned session instead of starting a new one', async (t) => {
+  const h = await fixture(t)
+  await h.send('first task')
+  await waitUntil(() => h.followups.length === 1)
+  const first = h.followups[0].agent
+  h.connection.reconnect()
+  await h.send('after reconnect')
+  await waitUntil(() => h.followups.length === 2)
+  const resumed = h.followups[1].agent
+  assert.equal(resumed.id, first.id)
+  assert.notEqual(resumed, first)
+  assert.equal(h.resumeCalls, 1)
+  await assert.rejects(first.invoke('read'), /im_channel_authorization_changed/)
+  assert.equal(await resumed.invoke('read'), h.root)
 })
 
 test('personal setup cannot publish an Agent when its pairing is revoked before commit', async (t) => {

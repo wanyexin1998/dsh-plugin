@@ -155,6 +155,7 @@ export class Bridge {
     const bound = this.bindings.get(conversationId)
     if (bound) {
       const running = this.agents.get(sessionId(bound))
+      let disposedOwned = false
       if (running) {
         if (
           (!this.opts.exclusiveOwnership || this.owned.get(running.id)?.agent === running) &&
@@ -163,12 +164,17 @@ export class Bridge {
           return running
         const owned = this.owned.get(running.id)
         if (owned?.agent === running && authorization) {
+          // A new lease (e.g. the same device reconnecting) makes the live Agent
+          // unresumable for dispatch but the saved session may still be owned by
+          // this channel; prefer resuming it over silently starting a new session.
           await owned.dispose()
           this.owned.delete(running.id)
+          disposedOwned = true
         }
         if (!this.opts.recoverForeignSession) throw new Error('session_owned_by_another_runtime')
-        this.opts.log('bound session active in another runtime; creating a fresh channel session')
-      } else if (!authorization || authorization.canResume(bound))
+        this.opts.log('bound session active in another runtime; replacing it with a fresh channel session')
+      }
+      if ((!running || disposedOwned) && (!authorization || authorization.canResume(bound)))
         try {
           const handle = await this.agents.resume({
             resumeSessionId: sessionId(bound),

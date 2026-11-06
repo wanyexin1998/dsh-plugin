@@ -45,6 +45,26 @@ test('IM shadows the Web tool, installs once, and permits only scoped DingTalk a
     assert.match(f.guards[0]({ name, agent: f.agent }), /im_file_transfer_unavailable/)
 })
 
+test('a committed workspace policy still denies the unverified PTC entry while allowing reviewed tools', () => {
+  const guards = []
+  const ctx = {
+    tools: {
+      register: () => () => {},
+      guard(fn) {
+        guards.push(fn)
+        return () => {}
+      },
+    },
+    get: () => undefined,
+  }
+  const im = new ImTools(() => ({ createTool: () => ({ name: 'dingtalk_call', execute: async () => ({}) }) }), {
+    allowed: () => true,
+  })
+  const agent = { id: 'session', ctx }
+  im.install(ctx, agent)
+  assert.equal(guards[0]({ name: 'bash', agent }), undefined)
+  assert.match(guards[0]({ name: 'run_code', agent }), /im_tool_inheritance_unreviewed/)
+})
 test('trusted message identity is pinned per Agent; model arguments and another chat cannot select it', async () => {
   const f = fixture(),
     second = fixture()

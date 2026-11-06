@@ -37,12 +37,14 @@ Enterprise、旧共享 Relay、standalone 和数字员工路径没有因此获�
 | 命令          | `bash`、`pwsh`                                                                                          |
 | 宿主作业      | `job_output`、`job_list`、`job_kill`                                                                    |
 | 终端          | `terminal_open`、`terminal_send`、`terminal_read`、`terminal_signal`、`terminal_close`、`terminal_list` |
-| 宿主 PTC 入口 | `run_code`；内层工具仍经过相同 guard                                                                    |
+| 宿主 PTC 入口 | `run_code` 暂不开放：内层权限/审批/撤销尚未由固定版本探针覆盖，保持 fail-closed；验证通过后另行开启     |
 | 既有 IM 工具  | `dingtalk_call`、`skill`、`ask_user_question`                                                           |
 
 名称依据为固定公开 npm 包的 `lib/index.js`：`dsh-tool-fs`、`dsh-tool-fs-search`、`dsh-tool-str-replace-editor`、`dsh-tool-bash`/`-persistent`、`dsh-tool-pwsh`/`-persistent`、`dsh-tool-jobs`、`dsh-tool-terminal` 和 `dsh-tools`。未注册/未核实的名字拒绝；没有 allow-all 配置。
 
 作业和终端 ID 继续经过宿主归属检查：有属主的作业匹配 session ID，终端匹配实际 Agent 对象，不能借参数访问另一个属主。宿主明确设为无属主的共享作业仍按原有服务语义可见；插件没有另建作业隔离策略。
+
+`run_code` 是 PTC 内层工具入口：固定版本 `dsh-tools` 的嵌套 dispatch 会复用同一 scheduler/guard，但本仓库尚无覆盖“内层审批与撤销”的固定版本探针，因此暂不纳入本名单，按未核实工具默认拒绝。
 
 `subagent`、`spawn_agent` 继续显式拒绝。公开 `dsh-subagent` 经 `composeFrom` 组合到 preset generation，不能保证继承父机器人 Agent 的 shadow、guard 和审批。`workflow`、`ralph`、`spawn_teammate` 及自定义编排名也可能启动 Agent，因此未经核实的工具默认拒绝，不能只靠列出几个禁用名称防护。
 

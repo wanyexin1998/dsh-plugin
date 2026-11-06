@@ -23,8 +23,6 @@ const workspaceTools = new Set([
   'terminal_signal',
   'terminal_close',
   'terminal_list',
-  // PTC nested dispatches still pass the same scoped host and channel guards.
-  'run_code',
 ])
 
 /** Structural bridge between the independently built channel and Web extension. */
