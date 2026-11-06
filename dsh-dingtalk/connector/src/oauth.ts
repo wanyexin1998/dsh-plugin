@@ -3,6 +3,7 @@ import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { readFileSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { ConnectionServiceError } from '../../enhancements/src/shared/models.js'
 import type { ConnectionStatus } from '../../enhancements/src/shared/models.js'
 
@@ -37,9 +38,13 @@ export interface ServerOAuthSettings {
   listenPort: number
   tlsCert?: string
   tlsKey?: string
+  /** Test-only barrier after the exchange commit, used to inject a late cancellation. */
+  testFinalizeGate?: string
 }
 export interface ExchangeOperations {
-  exchange(callerId: string, code: string, signal: AbortSignal): Promise<ConnectionStatus>
+  exchange(callerId: string, code: string, signal: AbortSignal, transactionId?: string): Promise<ConnectionStatus>
+  /** Roll back an exchange that committed after the user already cancelled the transaction. */
+  rollback?(callerId: string, transactionId: string): Promise<void> | void
 }
 /** Server-side browser OAuth. Loopback stays in the plugin; this path is HTTPS-only and origin-bound. */
 export class ServerOAuth {
@@ -318,8 +323,17 @@ export class ServerOAuth {
           : { state: 'unknown', reasonCode: 'connection_unknown' }
     else {
       try {
-        const outcome = await this.operations.exchange(tx.callerId, codes[0]!, tx.controller.signal)
-        if (!tx.controller.signal.aborted && tx.expires > this.clock()) tx.result = outcome
+        const outcome = await this.operations.exchange(tx.callerId, codes[0]!, tx.controller.signal, tx.id)
+        await this.finalizeBarrier()
+        if (tx.controller.signal.aborted) {
+          // The exchange committed after the user cancelled: never leave a usable authorization.
+          try {
+            await this.operations.rollback?.(tx.callerId, tx.id)
+          } catch {
+            /* keep the cancelled result; the session keeps its fail-closed state */
+          }
+          if (tx.result.state === 'authorizing') tx.result = { state: 'user_cancelled', reasonCode: 'user_cancelled' }
+        } else if (tx.expires > this.clock()) tx.result = outcome
         else if (tx.result.state === 'authorizing') tx.result = { state: 'auth_timeout', reasonCode: 'auth_timeout' }
       } catch (error) {
         if (!tx.controller.signal.aborted)
@@ -333,6 +347,21 @@ export class ServerOAuth {
     }
     clearTimeout(tx.timer)
     this.completePage(res, tx)
+  }
+  /** Test-only barrier after a successful exchange, before the finalize decision. */
+  private async finalizeBarrier(): Promise<void> {
+    const gate = this.settings.testFinalizeGate
+    if (!gate) return
+    const deadline = Date.now() + 15_000
+    while (Date.now() < deadline) {
+      try {
+        await stat(gate)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+        throw new ConnectionServiceError('service_unavailable')
+      }
+      await new Promise((done) => setTimeout(done, 10))
+    }
   }
   private completePage(res: ServerResponse, tx: Transaction): void {
     const nonce = random()

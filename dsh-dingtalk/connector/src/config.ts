@@ -11,6 +11,8 @@ export interface OAuthConfig {
   scopes: string
   tlsCert?: string
   tlsKey?: string
+  /** Test-only finalize barrier used to inject a cancellation after the exchange commit. */
+  testFinalizeGate?: string
 }
 export interface ProxyConfig {
   http: string
@@ -100,6 +102,12 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     key = env.DSH_CONNECTOR_OAUTH_TLS_KEY
   if ((cert && !key) || (!cert && key)) throw new Error('incomplete DSH_CONNECTOR_OAUTH_TLS configuration')
   if (cert && (!absolute(cert) || !absolute(key!))) throw new Error('DSH_CONNECTOR_OAUTH_TLS paths must be absolute')
+  const finalizeGate = env.DSH_CONNECTOR_TEST_FINALIZE_GATE
+  if (finalizeGate !== undefined) {
+    if (env.DSH_CONNECTOR_ALLOW_TEST_TRANSPORT !== '1' && env.DSH_CONNECTOR_TEST_IDENTITY !== '1')
+      throw new Error('DSH_CONNECTOR_TEST_FINALIZE_GATE requires an explicit test mode')
+    if (!absolute(finalizeGate)) throw new Error('DSH_CONNECTOR_TEST_FINALIZE_GATE must be absolute')
+  }
   return {
     publicOrigin,
     listenPort: integer('DSH_CONNECTOR_OAUTH_LISTEN_PORT', port, 8787, 1, 65535),
@@ -107,6 +115,7 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     clientId,
     scopes,
     ...(cert ? { tlsCert: cert, tlsKey: key! } : {}),
+    ...(finalizeGate ? { testFinalizeGate: finalizeGate } : {}),
   }
 }
 export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): ConnectorConfig {

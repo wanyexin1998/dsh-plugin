@@ -1,53 +1,53 @@
-# #32 修复记录：OAuth 取消竞态、撤销持久化与非 443 代理 Host
+# #32 修复记录：授权生命周期、撤销状态与非 443 代理 Host
 
 - 审查基线：`608e21a`（`main`）
 - 修复分支：`fix/oauth-cancel-revoke-host`（提交与 head 以 PR #33 为准）
 - 环境：WSL2 Ubuntu 24.04.5，Node `22.19.0`，pnpm `11.7.0`，Docker `29.9.3`，Docker Compose `v5.7.0`，`umask 0022`，干净 ext4 clone
 
+## 授权生命周期与状态
+
+| 阶段     | 状态与最终生效点                                                                                                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 开始授权 | 事务在 `ServerOAuth` 创建，仅生成一次性 ticket/state/proof；此时没有可用的 DWS 凭据。                                                                                                                                       |
+| 换码     | 子进程开始写入凭据；从这一刻起取消不能再被当作“未发生”。                                                                                                                                                                    |
+| 校验     | 身份与 status 校验通过后才允许进入提交。                                                                                                                                                                                    |
+| 提交     | 先过提交屏障，再写 `binding.json revoked:false`，再过一次屏障；期间任意取消/关闭/新事务都使本次授权不生效。                                                                                                                 |
+| 标记清理 | 提交后删除遗留的 `pending-revocations/<callerId>.json`；删除失败时不报告 connected，转为持久阻断。                                                                                                                          |
+| 流程完成 | 回调记录 `lastExchange`；若用户在回调最终返回前取消，`rollbackExchange` 撤销刚提交的授权。                                                                                                                                  |
+| 用户取消 | 换码前取消不产生状态；换码开始后取消隔离凭据（logout + `revoked`，清理失败保留 `revocationPending`）；提交后取消由回滚路径处理。                                                                                            |
+| 撤销     | 关闭会话并中止在途授权 → 与授权/断开串行 → 写撤销标记 → 清理遗留标记 → logout → 清空绑定；任一步无法确认都保持阻断并报错。                                                                                                  |
+| 并发     | 会话内 `mutate` 串行化 exchange/disconnect/revoke；撤销会中止在途 exchange，旧授权流程不能覆盖或删除新撤销标记。                                                                                                            |
+| 进程重启 | 结合 `binding.json`、`pending-revocations` 标记、记录/标记可读性与 caller 目录可写性判定：可确认则恢复，不确定则 `revocation_failed`/`service_unavailable` 阻断；显式恢复路径为存储修复后 admin revoke 重试（或重启重读）。 |
+
 ## 修复摘要
 
 1. OAuth 取消与授权提交的先后关系
-   - `UserSession.exchange` 增加授权代次与取消检查：换码后、身份校验后、status 等待后、持久化前与持久化后都判定取消/关闭/新事务。
-   - 换码成功后发生取消时执行隔离清理：立即写 `revoked:true`（logout 失败或结果未知则保留 `revocationPending`），不重建 backend，不让旧事务影响新事务。
-   - 换码前取消只恢复旧的可用会话，不恢复本次被取消的授权；仅测试模式新增 `DSH_CONNECTOR_TEST_COMMIT_GATE` 用于在最终持久化前后精确注入取消。
-2. 撤销持久化失败 fail-closed
-   - `UserSession.revoke` 不再吞掉撤销标记写入失败：抛 `revocation_failed`，保留内存阻断（closed、无 backend）。
-   - admin revoke / unbind / test-bind 在撤销未可靠完成时不再删除并重建 session。
-   - `ConnectorState.assertWritable` 启动时探测私有卷可写性，不可写则拒绝启动，避免重启后信任旧的 `revoked:false` 记录。
-   - logout 失败仍保留已落盘的 `revocationPending`，可显式重试清除。
-3. 非 443 代理 Host
-   - `deploy/nginx-oauth.conf.example` 改为 `proxy_set_header Host $http_host`，保留浏览器请求的 `host:port`；Connector 仍对 `publicOrigin` 做精确比较。
-   - 部署模板回归断言该 header，旧模板（`$host`）被禁止。
-
-## 第二轮补修（审查反馈）
-
-1. 取消时间窗口：`auth exchange` 子进程已把凭据写入磁盘、但尚未返回结果时取消，之前会被当成“未发生”并恢复旧会话。现在只要 exchange 已启动，取消就执行隔离清理（logout + `revoked`；清理失败或结果未知保留 `revocationPending`），不再依赖“已成功返回”的标志，也不会在重启后恢复授权。
-2. 撤销失败后的重启：新增每个 caller 私有目录可写性探测，以及根目录 `pending-revocations/<callerId>.json` 回退标记。当 caller 目录不可写导致撤销无法落盘时，重启后依据回退标记保持阻断（`revocation_failed`），只有显式重试成功后才清除标记并恢复 `unlinked`。
-
-## 第三轮补修（复审反馈）
-
-1. 标记或旧授权记录读取失败时保持阻断：`hasRevocationPending` 读取失败不再当作“无标记”；`BindingStore.read` 读取失败不再当作已撤销记录。无法确认状态时设置 `storageBlocked` 并保留标记，绝不删除读不到的标记。
-2. 残留标记不再误阻断重新授权：exchange 提交成功后清除该 caller 的 `pending-revocations` 回退标记，用户重新授权成功后，后续重启不会被旧标记错误阻断。
-3. 回归覆盖（上一版 head `38e4f8b` 上失败、本提交通过）：
-   - `an unreadable revocation marker keeps the caller blocked and is preserved`
-   - `an unreadable old binding keeps the revocation marker and stays blocked`
-   - `a successful re-authorization clears a leftover revocation marker`
+   - `UserSession.exchange` 使用会话内串行化与授权代次；换码、校验、status、持久化前后都检查取消/关闭/新事务。
+   - 换码开始后取消执行隔离清理（logout + `revoked`；失败保留 `revocationPending`）；提交后最终返回前取消由 `rollbackExchange` 撤销。
+2. 撤销与授权并发
+   - `exchange/disconnect/revoke` 通过会话级 `mutate` 串行；撤销先关闭会话并中止在途 exchange，旧流程无法在撤销后清除新标记。
+   - 撤销不需要 caller 目录可写即可登记 root 回退标记；标记写失败明确返回 `revocation_failed`，不返回假成功。
+3. 标记与存储故障
+   - 标记读取失败、旧记录读取失败都按“不确定”阻断，绝不删除读不到的标记。
+   - 授权成功但清理遗留标记失败时，不报告 connected，改为持久阻断并返回错误。
+   - 撤销时删除遗留标记失败返回 `revocation_failed`；存储恢复后 admin revoke 重试或重启可恢复。
+4. 非 443 代理 Host
+   - `deploy/nginx-oauth.conf.example` 使用 `proxy_set_header Host $http_host` 保留 `host:port`；Connector 继续精确匹配 `publicOrigin`，错误 Host/端口 403。
 
 ## fail-first 回归
 
-| 测试集                           | 基线 `608e21a`          | `5c1b413`                        | `38e4f8b`                        | 本提交                           |
-| -------------------------------- | ----------------------- | -------------------------------- | -------------------------------- | -------------------------------- |
-| `connector/tests/unit.test.mjs`  | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail |
-| `connector/tests/linux.test.mjs` | 20 项：14 pass / 6 fail | 22 项：20 pass / 2 fail          | 25 项：22 pass / 3 fail          | 25 项：25 pass / 0 fail          |
+| 测试集                           | 基线 `608e21a`          | `5c1b413`                        | `38e4f8b`               | `ff01827`               | 本提交                  |
+| -------------------------------- | ----------------------- | -------------------------------- | ----------------------- | ----------------------- | ----------------------- |
+| `connector/tests/unit.test.mjs`  | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail | 同左                    | 同左                    | 同左                    |
+| `connector/tests/linux.test.mjs` | 20 项：14 pass / 6 fail | 22 项：20 pass / 2 fail          | 25 项：22 pass / 3 fail | 29 项：26 pass / 3 fail | 29 项：29 pass / 0 fail |
 
-基线失败项（第一轮）：
+本轮新增用例（上一版 head `ff01827` 上先失败）：
 
-- configuration fails closed for transport, paths, OAuth origins and test seams
-- ConnectorServer refuses to start when the private state volume is not writable
-- cancelling while the exchange status is pending never persists a usable authorization
-- cancelling at the persistence barrier wins over the commit
-- a cancelled exchange whose credential cleanup fails stays blocked across restart
-- a revocation that cannot persist fails closed without reviving the caller or affecting others
+- `cancelling after the exchange commit but before the flow completes rolls back the authorization`
+- `an authorization is not reported connected when a stale revocation marker cannot be deleted`
+- `revocation reports failure and stays blocked when a stale marker cannot be deleted`
+
+并发撤销用例 `a concurrent admin revoke wins over an in-flight authorization` 作为时序回归保留（上一版 head 偶发通过，不单独作为 fail-first 证据）。
 
 ## 全量检查
 
@@ -56,7 +56,7 @@
 | `pnpm run ci`（secrets/lint/typecheck/test/test:web/test:pack） | PASS：425 项 418 pass / 7 skip / 0 fail；75 项 68 pass / 7 skip / 0 fail；tarball 400 files |
 | 类型与格式                                                      | `pnpm run typecheck`、`pnpm run lint`                                                       | PASS |
 | Connector 单元/CLI/部署                                         | 14 项：11 pass / 3 skip / 0 fail                                                            |
-| Connector Linux 容器                                            | 25/25 PASS（真实固定 DWS 1.0.66 制品）                                                      |
+| Connector Linux 容器                                            | 29/29 PASS（真实固定 DWS 1.0.66 制品）                                                      |
 
 ## 真实 Nginx + Compose/TLS（非 443）
 
@@ -64,8 +64,8 @@
 - 修复模板结果：`Host: localhost:8443` → 400（Host 通过，ticket 无效）；`Host: localhost` / `localhost:8444` / `evil.example:8443` → 403；`/dsh-dingtalk/callback` 无 state → 400；health `ok:true`；日志未出现测试 ticket 字符串。
 - 对照：同一请求在旧的 `Host $host` 模板下 → 403（端口被丢弃，复现 #32 第 3 项）；恢复新模板后 → 400。
 
-## 未覆盖 / BLOCKED
+## 验证性质
 
-- 真实企业 OAuth（真实 corpId、scope/IT 权限）、真实双用户、真实网络代理与机器人收发仍按 #30 补验。
-- 生产证书、真实域名与 39/43 部署未执行；Nginx 复测使用自签证书与 synthetic 客户端标识。
-- 官方 Windows CLI fixture 覆盖仍需在干净 Windows 环境补验（见 #31）。
+- 真实环境验证：真实 nginx + Compose/TLS（自签证书）、真实固定 DWS 1.0.66 制品的 ELF/SHA256/`--version` 与容器内运行；本地 Docker/文件系统权限故障注入。
+- 模拟验证：钉钉 OAuth 换码、身份/业务调用、logout 使用 fake DWS 与 synthetic 端点；并发与取消时序使用测试屏障。
+- 未覆盖 / BLOCKED：真实企业 OAuth（真实 corpId、scope/IT 权限）、真实双用户、真实网络代理与机器人收发；生产证书、真实域名与 39/43 部署未执行；Windows 官方 CLI fixture 覆盖仍需干净 Windows 环境（见 #31）。

@@ -115,7 +115,11 @@ export class ConnectorServer {
     if (this.config.oauth) {
       this.oauth = new ServerOAuth(
         this.config.oauth,
-        { exchange: (callerId, code, signal) => this.session(callerId).exchange(code, signal) },
+        {
+          exchange: (callerId, code, signal, transactionId) =>
+            this.session(callerId).exchange(code, signal, transactionId),
+          rollback: (callerId, transactionId) => this.session(callerId).rollbackExchange(transactionId),
+        },
         Date.now,
         this.config.testProvider ?? 'https://login.dingtalk.com/oauth2/auth',
       )
