@@ -393,7 +393,8 @@ export class ConnectorServer {
         await session?.revoke().catch(() => {})
         await this.closeListener(callerId)
         await this.state.removeBinding(callerId)
-        this.tokens.delete(callerId)
+        await this.state.removeCapabilityToken(callerId)
+        for (const [token, id] of this.tokens) if (id === callerId) this.tokens.delete(token)
         ok(res, { callerId, bound: false })
         return
       }

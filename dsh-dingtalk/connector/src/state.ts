@@ -115,6 +115,12 @@ export class ConnectorState {
     await this.writeBindings(value)
     return true
   }
+  /** Unbind must invalidate the loopback capability token; a later re-bind issues a new one. */
+  async removeCapabilityToken(callerId: string): Promise<void> {
+    if (!CALLER.test(callerId)) throw new Error('invalid caller id')
+    const paths = await this.userPaths(callerId)
+    await unlink(paths.capabilityToken).catch(() => {})
+  }
   async userPaths(callerId: string): Promise<UserPaths> {
     if (!CALLER.test(callerId)) throw new Error('invalid caller id')
     const root = join(this.callersDirectory, callerId)

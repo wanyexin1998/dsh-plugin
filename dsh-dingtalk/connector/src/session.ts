@@ -241,6 +241,7 @@ export class UserSession {
   beginAuthorization(origin: unknown, returnPath: unknown) {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
     if (this.mismatch) throw new ConnectionServiceError('identity_mismatch')
+    if (this.record.revocationPending) throw new ConnectionServiceError('revocation_failed')
     if (this.authorizing) throw new ConnectionServiceError('authorization_busy')
     const bridge = this.auth()
     if (!bridge) throw new ConnectionServiceError('oauth_not_configured')
@@ -344,6 +345,14 @@ export class UserSession {
               false,
             )
           } catch {
+            // A failed or unknown logout must stay a visible revocation block: keep the pending
+            // marker in memory (not only on disk) so status never reports a fresh `unlinked`
+            // state and a later authorization cannot silently overwrite the block.
+            this.record = {
+              version: 1,
+              revoked: true,
+              ...(target ? { profile: target, revocationPending: true } : {}),
+            }
             this.authorizing = false
             this.abortInflight()
             this.auth()?.invalidate(this.callerId)
