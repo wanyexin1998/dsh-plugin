@@ -4,7 +4,7 @@ import { createServer, request as httpRequest } from 'node:http'
 import { mkdtemp, readFile, rm, readdir, stat, writeFile, mkdir, chmod } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ConnectorState } from '../lib/connector.mjs'
+import { ConnectorServer, ConnectorState } from '../lib/connector.mjs'
 import { ServerOAuth } from '../lib/connector.mjs'
 import { parseConnectorConfig } from '../lib/connector.mjs'
 
@@ -60,6 +60,24 @@ test('configuration fails closed for transport, paths, OAuth origins and test se
     assert.throws(
       () => parseConnectorConfig({ ...env, DSH_CONNECTOR_TEST_DWS_ENV: JSON.stringify({ DWS_CLIENT_SECRET: 'x' }) }),
       /TEST_DWS_ENV/,
+    )
+    assert.equal(
+      parseConnectorConfig({ ...env, DSH_CONNECTOR_TEST_COMMIT_GATE: join(isolated.state, 'gate') }).testCommitGate,
+      join(isolated.state, 'gate'),
+    )
+    assert.throws(
+      () => parseConnectorConfig({ ...env, DSH_CONNECTOR_TEST_COMMIT_GATE: 'gate' }),
+      /TEST_COMMIT_GATE must be absolute/,
+    )
+    assert.throws(
+      () =>
+        parseConnectorConfig({
+          ...env,
+          DSH_CONNECTOR_TRANSPORT: 'unix',
+          DSH_CONNECTOR_ALLOW_TEST_TRANSPORT: undefined,
+          DSH_CONNECTOR_TEST_COMMIT_GATE: join(isolated.state, 'gate'),
+        }),
+      /TEST_COMMIT_GATE requires an explicit test mode/,
     )
   } finally {
     await isolated.dispose()
@@ -231,3 +249,74 @@ test('server OAuth requires HTTPS proxy headers, exact origin, one-time state an
     await oauth.dispose()
   }
 })
+test('server OAuth compares the exact public host:port and preserves a non-443 public port', async () => {
+  const port = await new Promise((done) => {
+    const server = createServer()
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address()
+      server.close(() => done(port))
+    })
+  })
+  const oauth = new ServerOAuth(
+    {
+      publicOrigin: 'https://callback.test:8443',
+      trustedOrigins: ['https://dsh.test'],
+      clientId: 'synthetic-app',
+      scopes: 'openid corpid',
+      listenPort: port,
+    },
+    { exchange: async () => ({ state: 'connected' }) },
+  )
+  const call = (path, headers) =>
+    new Promise((done, reject) => {
+      const req = httpRequest({ host: '127.0.0.1', port, path, headers }, (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => done({ status: res.statusCode, headers: res.headers }))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+  try {
+    await oauth.listen()
+    const start = oauth.begin('caller-a', 'https://dsh.test', '/')
+    const ticket = new URL(start.authorizeUrl).searchParams.get('t')
+    const withPort = await call(`/dsh-dingtalk/start?t=${ticket}`, {
+      host: 'callback.test:8443',
+      'x-forwarded-proto': 'https',
+    })
+    assert.equal(withPort.status, 302)
+    assert.equal(
+      new URL(withPort.headers.location).searchParams.get('redirect_uri'),
+      'https://callback.test:8443/dsh-dingtalk/callback',
+    )
+    const withoutPort = await call(`/dsh-dingtalk/start?t=${ticket}`, {
+      host: 'callback.test',
+      'x-forwarded-proto': 'https',
+    })
+    assert.equal(withoutPort.status, 403, 'a dropped public port must be rejected, not repaired')
+    const wrongPort = await call(`/dsh-dingtalk/start?t=${ticket}`, {
+      host: 'callback.test:8444',
+      'x-forwarded-proto': 'https',
+    })
+    assert.equal(wrongPort.status, 403)
+  } finally {
+    await oauth.dispose()
+  }
+})
+test(
+  'ConnectorServer refuses to start when the private state volume is not writable',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const isolated = await temporary()
+    await mkdir(isolated.state, { recursive: true })
+    try {
+      await chmod(isolated.state, 0o500)
+      const server = new ConnectorServer(parseConnectorConfig(baseEnv(isolated.state)))
+      await assert.rejects(server.start(), (error) => error?.reasonCode === 'service_unavailable')
+    } finally {
+      await chmod(isolated.state, 0o700).catch(() => {})
+      await isolated.dispose()
+    }
+  },
+)

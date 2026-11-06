@@ -95,6 +95,8 @@ test('nginx OAuth proxy replaces raw error logs with allowlisted diagnostics', (
   assert.match(active, /proxy_set_header X-Request-ID \$request_id;/)
   assert.match(active, /proxy_hide_header X-Request-ID;/)
   assert.match(active, /proxy_set_header X-Forwarded-Proto https;/)
+  assert.match(active, /proxy_set_header Host \$http_host;/)
+  assert.ok(!/proxy_set_header Host \$host;/.test(active), 'the proxy must not drop a non-443 public port')
   assert.match(active, /proxy_set_header Cookie \$http_cookie;/)
 })
 test('production Dockerfile builds the Connector from source without a pre-existing lib', () => {

@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { chmod, lstat, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { ConnectionServiceError } from '../../enhancements/src/shared/models.js'
 import { provisionPrivateRuntime } from '../../enhancements/src/host/privacy.js'
 import { parseProfile } from '../../enhancements/src/shared/connector.js'
 
@@ -142,6 +143,87 @@ export class ConnectorState {
       if (process.platform !== 'win32') await chmod(directory, 0o700)
     }
     return paths
+  }
+  /**
+   * Fail closed when the private volume cannot be written. Revocation and binding state must be
+   * durable; a Connector that cannot persist it must not serve a stale `revoked:false` binding.
+   */
+  async assertWritable(): Promise<void> {
+    await mkdir(this.root, { recursive: true, mode: 0o700 })
+    const probe = join(this.root, `.writable-${randomUUID()}`)
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(probe, 'wx', 0o600)
+      await handle.writeFile('ok')
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+      await unlink(probe)
+    } catch (error) {
+      await handle?.close().catch(() => {})
+      await unlink(probe).catch(() => {})
+      throw error instanceof ConnectionServiceError ? error : new ConnectionServiceError('service_unavailable')
+    }
+  }
+  private get pendingDirectory(): string {
+    return join(this.root, 'pending-revocations')
+  }
+  /**
+   * Fallback revocation marker in the Connector root, for a caller directory that cannot be
+   * written. A restart must never restore a binding whose revocation could not be recorded.
+   */
+  async markRevocationPending(callerId: string, profile?: string): Promise<void> {
+    if (!CALLER.test(callerId)) throw new Error('invalid caller id')
+    await mkdir(this.pendingDirectory, { recursive: true, mode: 0o700 })
+    const target = join(this.pendingDirectory, callerId + '.json')
+    const temporary = join(this.pendingDirectory, '.' + callerId + '-' + randomUUID() + '.tmp')
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(temporary, 'wx', 0o600)
+      await handle.writeFile(JSON.stringify({ version: 1, callerId, ...(profile ? { profile } : {}) }))
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+      await rename(temporary, target)
+    } catch {
+      await handle?.close().catch(() => {})
+      await unlink(temporary).catch(() => {})
+      throw new ConnectionServiceError('service_unavailable')
+    }
+  }
+  async clearRevocationPending(callerId: string): Promise<void> {
+    if (!CALLER.test(callerId)) return
+    await unlink(join(this.pendingDirectory, callerId + '.json')).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })
+  }
+  async hasRevocationPending(callerId: string): Promise<boolean> {
+    if (!CALLER.test(callerId)) return false
+    try {
+      const info = await lstat(join(this.pendingDirectory, callerId + '.json'))
+      return info.isFile() && !info.isSymbolicLink() && info.size <= 4096
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+      throw error
+    }
+  }
+  /** The caller-private directory must stay writable for refresh/revocation state. */
+  async assertCallerWritable(callerId: string): Promise<void> {
+    if (!CALLER.test(callerId)) throw new ConnectionServiceError('invalid_request')
+    const directory = (await this.userPaths(callerId)).root
+    const probe = join(directory, '.writable-' + randomUUID())
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(probe, 'wx', 0o600)
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+      await unlink(probe)
+    } catch {
+      await handle?.close().catch(() => {})
+      await unlink(probe).catch(() => {})
+      throw new ConnectionServiceError('service_unavailable')
+    }
   }
   async adminToken(): Promise<string> {
     try {
