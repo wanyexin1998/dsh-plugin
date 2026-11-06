@@ -54,6 +54,7 @@ interface QuestionAnswer {
 interface Route {
   conversationId: string
   conversationType: InboundMessage['conversationType']
+  senderCorpId?: string
   senderStaffId: string
   replyContext: InboundMessage
 }
@@ -84,6 +85,10 @@ export interface QuestionManagerOptions {
   timeoutMs: number
   approvalTimeoutMs?: number
   approvalUserId?: () => string | undefined
+  /** Channel authority, rechecked before requesting and granting approval. */
+  authorize?(agent: HostAgent): boolean
+  /** Lifetime of this exact channel/session generation, including pre-dispatch approval. */
+  authorizationSignal?(agent: HostAgent): AbortSignal
   interactionCards?: InteractionCardSender
   log(line: string): void
 }
@@ -91,8 +96,12 @@ export interface QuestionManagerOptions {
 const SKIP_ANSWERS = new Set(['0', '跳过', '/skip', 'skip'])
 const CANCEL_ANSWERS = new Set(['取消', '/cancel', '/stop'])
 
-function routeKey(route: Pick<Route, 'conversationId' | 'senderStaffId'>): string {
-  return `${route.conversationId}\u0000${route.senderStaffId}`
+function routeKey(
+  route: Pick<Route, 'conversationId' | 'conversationType' | 'senderCorpId' | 'senderStaffId'>,
+): string {
+  // Legacy events without an enterprise may only answer another legacy route.
+  // Never match an explicit foreign enterprise or a different chat surface.
+  return JSON.stringify([route.senderCorpId ?? null, route.conversationType, route.conversationId, route.senderStaffId])
 }
 
 function abortError(message: string): Error {
@@ -234,6 +243,7 @@ export class QuestionManager {
     this.routes.set(sessionId, {
       conversationId: msg.conversationId,
       conversationType: msg.conversationType,
+      senderCorpId: msg.senderCorpId,
       senderStaffId: msg.senderStaffId,
       replyContext: msg,
     })
@@ -255,10 +265,21 @@ export class QuestionManager {
       disposers.push(
         agentCtx.on(
           'approval/request',
-          (request, next) => {
-            if (request.agent !== agent) return next()
-            if (!this.routes.has(agent.id)) return next()
-            return this.askApproval(agent, request)
+          async (request) => {
+            // Once a request reaches this IM scope, missing/foreign context
+            // cannot borrow a Web approval handler or another Agent's route.
+            if (request.agent !== agent || !this.routes.has(agent.id) || !this.authorized(agent)) return 'unavailable'
+            let signal = request.signal
+            try {
+              const authority = this.opts.authorizationSignal?.(agent)
+              if (authority) signal = AbortSignal.any(signal ? [signal, authority] : [authority])
+            } catch {
+              return 'unavailable'
+            }
+            const outcome = await this.askApproval(agent, { ...request, signal })
+            // A binding may be revoked/replaced while the human is deciding.
+            // Preserve explicit refusal/cancellation, but never grant stale authority.
+            return outcome === 'allowed-once' && !this.authorized(agent) ? 'unavailable' : outcome
           },
           { prepend: true },
         ),
@@ -275,6 +296,14 @@ export class QuestionManager {
   /** Ensure an Agent loaded by another host surface also receives the shadow. */
   installFor(agent: HostAgent): void {
     this.install(agent.ctx, agent)
+  }
+
+  private authorized(agent: HostAgent): boolean {
+    try {
+      return this.opts.authorize === undefined || this.opts.authorize(agent) === true
+    } catch {
+      return false
+    }
   }
 
   /** Consume a matching human answer before commands and the serial task queue. */

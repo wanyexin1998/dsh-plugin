@@ -218,7 +218,20 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
       assert.throws(() => first.ctx.agent, /cannot get property "agent" without inject/)
       assert.equal(firstScope.listeners.get('approval/request').length, digital ? 2 : 1)
       assert.equal(firstScope.listeners.get('user-questions/request').length, digital ? 2 : 1)
-      if (!digital) assert.ok(firstScope.names.has('ask_user_question'))
+      const checkRobotBoundary = (agent) => {
+        if (digital) return
+        const scope = scopes.find((entry) => entry.ctx === agent.ctx)
+        assert.ok(scope.names.has('ask_user_question'))
+        assert.equal(scope.guards.length, 1)
+        const guard = scope.guards[0]
+        assert.equal(guard({ name: 'dingtalk_call', agent }), undefined)
+        for (const name of ['fixture-preset-tool', 'bash'])
+          assert.match(guard({ name, agent }), /im_workspace_policy_unavailable/)
+        assert.match(guard({ name: 'subagent', agent }), /im_subagent_inheritance_unavailable/)
+        assert.match(guard({ name: 'send_file', agent }), /im_file_transfer_unavailable/)
+        assert.equal(guard({ name: 'dingtalk_call', agent: { ...agent } }), 'im_agent_mismatch')
+      }
+      checkRobotBoundary(first)
       await send(key)
       assert.equal(firstScope.listeners.get('approval/request').length, digital ? 2 : 1)
       await firstScope.dispose()
@@ -227,6 +240,7 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
       assert.equal(resumed.id, first.id)
       assert.notEqual(resumed.ctx, first.ctx)
       assert.equal(attempts.at(-1).kind, 'resume')
+      checkRobotBoundary(resumed)
       // 模拟 Web 已加载；机器人走补装，员工只借用本 Bridge 已持有的实例。
       const scope = scopes.find((item) => item.ctx === resumed.ctx)
       await scope.dispose()
@@ -247,6 +261,7 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
         assert.notEqual(recovered.id, replacement.id)
         assert.equal(live.get(replacement.id), replacement)
         assert.equal(attempts.length, beforeAttempts + 1)
+        checkRobotBoundary(recovered)
       }
       // setup 已安装后回滚；同一持久会话 ID 再恢复仍必须完成安装。
       live.delete(followups.at(-1).agent.id)
@@ -256,6 +271,7 @@ for (const preset of ['success', 'missing', 'resolve-failed']) {
       assert.equal(attempts[beforeAttempts].kind, 'resume')
       assert.notEqual(attempts[beforeAttempts].agent.ctx, attempts[beforeAttempts + 1].agent.ctx)
       assert.ok(followups.at(-1).agent)
+      checkRobotBoundary(followups.at(-1).agent)
       if (preset === 'success') {
         live.delete(followups.at(-1).agent.id)
         mountFails = true

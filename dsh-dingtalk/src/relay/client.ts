@@ -10,8 +10,22 @@ interface Saved {
   url?: string
   token?: string
   identity?: DingTalkIdentity
+  device?: string
+  confirmed?: boolean
   replaced?: boolean
 }
+export interface ChannelBinding {
+  readonly identity: DingTalkIdentity
+  readonly bindingId: string
+  readonly signal: AbortSignal
+}
+interface RelayOptions {
+  /** Personal robot pairing owns its identity independently of DWS data OAuth. */
+  channelOwned?: boolean
+  expectedCorpId?(): string | undefined
+}
+const deviceId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(value)
+
 export class RelayClient {
   private saved: Saved
   private peer?: Peer
@@ -21,6 +35,7 @@ export class RelayClient {
   private messageRoutes = new Map<string, string>()
   private diagnosing = false
   private heartbeat?: NodeJS.Timeout
+  private channelLease = new AbortController()
   private downloads = new Map<string, string>()
   private seen: Record<string, number>
   private callbacks?: Pick<StreamOptions, 'onMessage' | 'onCardCallback' | 'onStatus'>
@@ -28,7 +43,9 @@ export class RelayClient {
   constructor(
     private file: string,
     private identity: () => DingTalkIdentity | undefined,
+    private relayOptions: RelayOptions = {},
   ) {
+    this.channelLease.abort()
     this.saved = readState(file, {})
     if (this.saved.replaced) this.view = { status: 'replaced' }
     this.seen = readState(`${file}.seen`, {})
@@ -36,9 +53,50 @@ export class RelayClient {
   status() {
     return {
       ...this.view,
-      ...(this.saved.token && !sameIdentity(this.saved.identity, this.identity()) ? { status: 'auth_required' } : {}),
+      ...(this.saved.token && !this.acceptsIdentity(this.saved.identity) ? { status: 'auth_required' } : {}),
       url: this.saved.url ?? '',
     }
+  }
+  private acceptsIdentity(value: unknown): value is DingTalkIdentity {
+    const candidate = value as DingTalkIdentity | undefined
+    const valid = messageIdentity({ senderCorpId: candidate?.corpId, senderStaffId: candidate?.userId })
+    return (
+      !!valid &&
+      (this.relayOptions.channelOwned
+        ? valid.corpId === this.relayOptions.expectedCorpId?.()
+        : sameIdentity(valid, this.identity()))
+    )
+  }
+  /** A saved identity is migration/configuration context, never live execution authority. */
+  protected confirmedChannelIdentity(): DingTalkIdentity | undefined {
+    if (!this.relayOptions.channelOwned || !this.saved.confirmed || !deviceId(this.saved.device)) return undefined
+    return messageIdentity({ senderCorpId: this.saved.identity?.corpId, senderStaffId: this.saved.identity?.userId })
+  }
+  protected channelBinding(): ChannelBinding | undefined {
+    if (
+      !this.relayOptions.channelOwned ||
+      this.stopped ||
+      this.view.status !== 'connected' ||
+      this.peer?.socket.readyState !== WebSocket.OPEN ||
+      this.channelLease.signal.aborted ||
+      !this.saved.token ||
+      !this.saved.confirmed ||
+      !deviceId(this.saved.device) ||
+      !this.acceptsIdentity(this.saved.identity)
+    )
+      return undefined
+    return Object.freeze({
+      identity: messageIdentity({
+        senderCorpId: this.saved.identity.corpId,
+        senderStaffId: this.saved.identity.userId,
+      })!,
+      bindingId: this.saved.device,
+      signal: this.channelLease.signal,
+    })
+  }
+  private connected() {
+    this.view = { status: 'connected' }
+    if (this.channelLease.signal.aborted) this.channelLease = new AbortController()
   }
   async connect(url: string) {
     const parsed = new URL(url)
@@ -52,7 +110,8 @@ export class RelayClient {
       parsed.pathname !== '/relay'
     )
       throw new Error('invalid_gateway_url')
-    if (!this.identity()) throw new Error('auth_required')
+    if (this.relayOptions.channelOwned ? !this.relayOptions.expectedCorpId?.() : !this.identity())
+      throw new Error('auth_required')
     this.stop()
     this.peer = undefined
     this.stopped = false
@@ -63,6 +122,7 @@ export class RelayClient {
     return this.status()
   }
   async disconnect() {
+    this.channelLease.abort()
     this.stopped = true
     clearTimeout(this.reconnect)
     if (this.saved.token) await this.peer?.call('unbind', {}).catch(() => undefined)
@@ -81,6 +141,7 @@ export class RelayClient {
     if (this.saved.url && this.saved.token) await this.open().catch(() => undefined)
   }
   stop() {
+    this.channelLease.abort()
     this.stopped = true
     clearInterval(this.heartbeat)
     this.publishRuntime()
@@ -89,31 +150,55 @@ export class RelayClient {
   }
   private async open() {
     if (!this.saved.url || this.stopped) return
+    this.channelLease.abort()
     this.view = { status: 'connecting' }
     this.callbacks?.onStatus?.('connecting')
     const socket = new WebSocket(this.saved.url, { maxPayload: 30 * 1024 * 1024, handshakeTimeout: 10_000 })
+    const pairing = !this.saved.token
     const peer = new Peer(socket, async (method, data) => {
-      if (method === 'verify') return sameIdentity(this.identity(), data)
+      if (this.peer !== peer || this.stopped) throw new Error('stale_connection')
+      if (method === 'verify') return pairing && this.acceptsIdentity(data)
       if (method === 'prepare') {
-        if (!sameIdentity(this.identity(), data?.identity) || typeof data.token !== 'string')
+        if (
+          !pairing ||
+          !this.acceptsIdentity(data?.identity) ||
+          typeof data.token !== 'string' ||
+          !deviceId(data.device)
+        )
           throw new Error('identity_mismatch')
-        this.saved = { url: this.saved.url, token: data.token, identity: data.identity }
+        this.saved = {
+          url: this.saved.url,
+          token: data.token,
+          identity: data.identity,
+          device: data.device,
+          confirmed: false,
+        }
         saveState(this.file, this.saved)
         return true
       }
       if (method === 'paired') {
-        if (!sameIdentity(this.saved.identity, data?.identity)) throw new Error('identity_mismatch')
-        this.view = { status: 'connected' }
+        if (
+          !pairing ||
+          !sameIdentity(this.saved.identity, data?.identity) ||
+          data.device !== this.saved.device ||
+          !this.acceptsIdentity(data.identity)
+        )
+          throw new Error('identity_mismatch')
+        this.saved.confirmed = true
+        saveState(this.file, this.saved)
+        this.connected()
         return true
       }
       if (method === 'auth-failed') {
+        this.channelLease.abort()
         this.stopped = true
         this.saved = { url: this.saved.url }
         saveState(this.file, this.saved)
         this.view = { status: ['cancelled', 'expired'].includes(data?.reason) ? data.reason : 'failed' }
         return true
       }
-      if (!sameIdentity(this.saved.identity, this.identity())) return { authRequired: true }
+      if (!this.acceptsIdentity(this.saved.identity) || (this.relayOptions.channelOwned && !this.channelBinding()))
+        return { authRequired: true }
       if (method === 'message') {
         const msg = data?.message as InboundMessage
         if (!sameIdentity(messageIdentity(msg), this.saved.identity) || msg.sessionWebhook !== data.requestId)
@@ -147,6 +232,7 @@ export class RelayClient {
     this.peer = peer
     socket.on('close', (code) => {
       if (this.peer !== peer || this.stopped) return
+      this.channelLease.abort()
       if (code === 4001) {
         this.stopped = true
         clearTimeout(this.reconnect)
@@ -175,8 +261,13 @@ export class RelayClient {
     })
     const result = await peer.call(
       'hello',
-      this.saved.token ? { token: this.saved.token } : { identity: this.identity() },
+      this.saved.token
+        ? { token: this.saved.token }
+        : this.relayOptions.channelOwned
+          ? {}
+          : { identity: this.identity() },
     )
+    if (this.peer !== peer || this.stopped || socket.readyState !== WebSocket.OPEN) throw new Error('stale_connection')
     if (result.authorizeUrl) {
       const login = new URL(result.authorizeUrl),
         gateway = new URL(this.saved.url)
@@ -186,9 +277,19 @@ export class RelayClient {
         throw new Error('invalid_login_url')
       }
       this.view = { status: 'authorizing', authorizeUrl: login.href, expires: result.expires }
-    } else if (!sameIdentity(result.identity, this.identity())) {
+    } else if (
+      !this.acceptsIdentity(result.identity) ||
+      !sameIdentity(result.identity, this.saved.identity) ||
+      !deviceId(result.device) ||
+      (this.saved.device !== undefined && result.device !== this.saved.device)
+    ) {
       this.view = { status: 'auth_required' }
-    } else this.view = { status: 'connected' }
+    } else {
+      this.saved.device = result.device
+      this.saved.confirmed = true
+      saveState(this.file, this.saved)
+      this.connected()
+    }
     this.callbacks?.onStatus?.('connected')
   }
   private publishRuntime() {

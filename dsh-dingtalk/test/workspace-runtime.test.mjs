@@ -258,6 +258,15 @@ for (const [channel, conversationType] of [
     }
     const check = (turn, expected) => {
       assert.equal(turn.cwd, expected)
+      if (channel === 'robot') {
+        // A registered directory and successful session grouping prove no
+        // principal entitlement. /cd, restore and default cwd must stay closed.
+        const agent = live.get(turn.id)
+        const scope = scopes.find((entry) => entry.ctx === agent.ctx)
+        assert.equal(scope.guards.length, 1)
+        assert.match(scope.guards[0]({ name: 'bash', agent }), /im_workspace_policy_unavailable/)
+        assert.match(scope.guards[0]({ name: 'send_image', agent }), /im_file_transfer_unavailable/)
+      }
       assert.ok(workspaces.get(expected).sessionIds.includes(turn.id), `会话 ${turn.id} 未归入 ${expected}`)
       for (const [dir, workspace] of workspaces)
         if (dir !== expected) assert.ok(!workspace.sessionIds.includes(turn.id), '会话被归入错误工作区')

@@ -19,6 +19,7 @@ function delivery(messageId, text, options = {}) {
       createAt: String(options.createAt ?? ++deliveryClock),
       conversationId: options.conversationId ?? 'direct-1',
       conversationType: options.conversationType ?? '1',
+      senderCorpId: options.senderCorpId ?? 'corp-a',
       senderStaffId: options.senderStaffId ?? 'owner-1',
       text: { content: text },
       sessionWebhook: options.sessionWebhook ?? `https://reply.test/${messageId}`,
@@ -34,7 +35,7 @@ async function waitUntil(predicate, timeoutMs = 500) {
   }
 }
 
-test('公开 apply 运行时允许管理员通过私聊或同群一次性文字码审批并在超时后拒绝', async (t) => {
+test('公开 apply 审批保留单次允许、拒绝、取消与超时，并阻断缺上下文及错误身份', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-approval-'))
   const lifecycle = new Context()
   t.after(async () => {
@@ -87,6 +88,8 @@ test('公开 apply 运行时允许管理员通过私聊或同群一次性文字�
   const { apply } = await import(`../lib/index.js?approval-runtime=${Date.now()}`)
   let sessionEvent
   let followupCount = 0
+  let fallbackCalls = 0
+  const beforeBinding = []
   const workspace = { path: root, sessionIds: [], async attachSession() {} }
   const scope = strictAgentContext()
   t.after(scope.dispose)
@@ -114,6 +117,12 @@ test('公开 apply 运行时允许管理员通过私聊或同群一次性文字�
       create: async (options) => {
         agent.id = options.sessionId
         await options.setup?.(agentContext, agent)
+        beforeBinding.push(
+          await scope.listeners.get('approval/request')[0]({ agent, toolName: 'workspace.write' }, async () => {
+            fallbackCalls++
+            return 'allowed-once'
+          }),
+        )
         return { agent }
       },
     },
@@ -168,9 +177,23 @@ test('公开 apply 运行时允许管理员通过私聊或同群一次性文字�
 
   await robotListener(delivery('start', '开始'))
   await waitUntil(() => scope.listeners.has('approval/request') && followupCount === 1)
+  assert.deepEqual(beforeBinding, ['unavailable'])
+  assert.equal(fallbackCalls, 0)
   const approve = scope.listeners.get('approval/request')[0]
   t.mock.timers.enable({ apis: ['setTimeout'] })
-  let fallbackCalls = 0
+  for (const foreign of [
+    { ...agent, id: 'foreign' },
+    { ...agent, id: 'child', parentId: agent.id },
+  ]) {
+    assert.equal(
+      await approve({ agent: foreign, toolName: 'workspace.write' }, async () => {
+        fallbackCalls++
+        return 'allowed-once'
+      }),
+      'unavailable',
+    )
+  }
+  assert.equal(fallbackCalls, 0)
   const outcome = approve(
     {
       agent,
@@ -204,8 +227,40 @@ test('公开 apply 运行时允许管理员通过私聊或同群一次性文字�
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(settled, false)
 
+  await robotListener(delivery('foreign-corp-confirm', `确认 ${code}`, { senderCorpId: 'corp-b' }))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(settled, false)
+  assert.equal(followupCount, 1)
+
   await robotListener(delivery('owner-confirm', `确认 ${code}`))
   assert.equal(await outcome, 'allowed-once')
+
+  const rejectionCount = requests.filter((request) => request.body?.markdown?.text?.includes('审批敏感操作')).length
+  const rejected = approve({ agent, toolName: 'workspace.write' }, async () => 'allowed-once')
+  await waitUntil(
+    () =>
+      requests.filter((request) => request.body?.markdown?.text?.includes('审批敏感操作')).length ===
+      rejectionCount + 1,
+  )
+  const rejectionText = requests.findLast((request) => request.body?.markdown?.text?.includes('审批敏感操作')).body
+    .markdown.text
+  const rejectCode = rejectionText.match(/`拒绝 ([A-Z0-9]{6})`/)?.[1]
+  assert.ok(rejectCode)
+  await robotListener(delivery('owner-reject', `拒绝 ${rejectCode}`))
+  assert.equal(await rejected, 'rejected')
+
+  const abortCount = requests.filter((request) => request.body?.markdown?.text?.includes('审批敏感操作')).length
+  const controller = new AbortController()
+  const cancelled = approve(
+    { agent, toolName: 'workspace.write', signal: controller.signal },
+    async () => 'allowed-once',
+  )
+  await waitUntil(
+    () =>
+      requests.filter((request) => request.body?.markdown?.text?.includes('审批敏感操作')).length === abortCount + 1,
+  )
+  controller.abort()
+  assert.equal(await cancelled, 'cancelled')
 
   const timeoutApprovalMessageCount = requests.filter((request) =>
     request.body?.markdown?.text?.includes('审批敏感操作'),

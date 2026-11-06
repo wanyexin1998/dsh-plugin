@@ -3,14 +3,16 @@ import { Renderer } from '../lib/renderer.js'
 import { createRobotOperations } from '../lib/relay/robot.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { Gateway } from '../lib/relay/gateway.js'
 import { RelayClient } from '../lib/relay/client.js'
+import WebSocket from 'ws'
+import { Peer } from '../lib/relay/protocol.js'
 
-async function fixture(t) {
+async function fixture(t, { personal = false, exchange = async (code) => ({ corpId: 'corp', userId: code }) } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-relay-'))
   const notices = [],
     operations = [],
@@ -25,10 +27,11 @@ async function fixture(t) {
     login: {
       publicOrigin: `http://127.0.0.1:${selectedPort}`,
       clientId: 'fixture-app',
-      exchange: async (code) => ({ corpId: 'corp', userId: code }),
+      exchange,
     },
     allowedCorpId: 'corp',
     allowedGroups: ['group'],
+    allowUnclaimedPersonalLogin: personal,
     notice: async (msg, text) => notices.push({ user: msg.senderStaffId, text }),
     operation: async (msg, method, data) => {
       operations.push({ user: msg.senderStaffId, method, data, destination: msg.sessionWebhook })
@@ -55,11 +58,11 @@ async function fixture(t) {
     ...extra,
   })
   async function client(user, suffix = user, onMessage) {
-    let identity = { corpId: 'corp', userId: user }
+    let identity = user === undefined ? undefined : { corpId: 'corp', userId: user }
     const received = [],
       callbacks = []
     const file = join(dir, `${suffix}.json`)
-    const c = new RelayClient(file, () => identity)
+    const c = new RelayClient(file, () => identity, { channelOwned: personal, expectedCorpId: () => 'corp' })
     clients.push(c)
     await c.start({
       onMessage: async (msg) => {
@@ -97,8 +100,143 @@ async function fixture(t) {
     assert.equal((await finish(f, user)).status, 200)
     assert.equal(f.c.status().status, 'connected')
   }
-  return { dir, opts, gateway, port, message, client, pair, finish, notices, operations }
+  async function restore(file, onMessage = async () => {}) {
+    const c = new RelayClient(file, () => undefined, { channelOwned: personal, expectedCorpId: () => 'corp' })
+    clients.push(c)
+    await c.start({ onMessage })
+    return c
+  }
+  return { dir, opts, gateway, port, message, client, pair, finish, restore, notices, operations }
 }
+
+test('personal pairing derives its owner from robot login and survives DWS logout or account change', async (t) => {
+  const f = await fixture(t, { personal: true }),
+    a = await f.client(undefined, 'personal')
+  assert.equal(a.c.channelBinding(), undefined)
+  await f.pair(a, 'a')
+  const binding = a.c.channelBinding()
+  assert.deepEqual(binding.identity, { corpId: 'corp', userId: 'a' })
+  assert.ok(Object.isFrozen(binding))
+  assert.ok(Object.isFrozen(binding.identity))
+  assert.equal(binding.signal.aborted, false)
+  assert.equal(f.gateway.authorizes(binding.identity, binding.bindingId), true)
+  assert.equal(f.gateway.authorizes({ corpId: 'corp', userId: 'b' }, binding.bindingId), false)
+  assert.equal(f.gateway.authorizes(binding.identity, 'different-device'), false)
+  assert.equal('token' in binding, false)
+  assert.equal('token' in a.c.status(), false)
+  await f.gateway.receive(f.message('a'))
+  a.change({ corpId: 'other-corp', userId: 'other-user' })
+  await f.gateway.receive(f.message('a'))
+  a.change(undefined)
+  await f.gateway.receive(f.message('a'))
+  await f.gateway.receive(f.message('b'))
+  await f.gateway.receive(f.message('a', 'query', { senderCorpId: 'foreign' }))
+  assert.equal(a.received.length, 3)
+  assert.equal(a.c.status().status, 'connected')
+  assert.equal(a.c.channelBinding().bindingId, binding.bindingId)
+  assert.equal(binding.signal.aborted, false)
+  await a.c.disconnect()
+  assert.equal(binding.signal.aborted, true)
+  assert.equal(a.c.channelBinding(), undefined)
+  assert.equal(f.gateway.authorizes(binding.identity, binding.bindingId), false)
+})
+
+test('personal replacement revokes the old lease while the new device has a distinct channel binding', async (t) => {
+  const f = await fixture(t, { personal: true }),
+    a = await f.client(undefined, 'first')
+  await f.pair(a, 'a')
+  const old = a.c.channelBinding()
+  const replacement = await f.client(undefined, 'replacement')
+  await f.pair(replacement, 'a')
+  assert.equal(old.signal.aborted, true)
+  assert.equal(a.c.channelBinding(), undefined)
+  assert.equal(f.gateway.authorizes(old.identity, old.bindingId), false)
+  const current = replacement.c.channelBinding()
+  assert.notEqual(current.bindingId, old.bindingId)
+  assert.equal(f.gateway.authorizes(current.identity, current.bindingId), true)
+  replacement.c.stop()
+  assert.equal(current.signal.aborted, true)
+  assert.equal(replacement.c.channelBinding(), undefined)
+})
+
+test('personal restart authenticates saved token, migrates legacy device metadata and keeps binding ID', async (t) => {
+  const f = await fixture(t, { personal: true }),
+    a = await f.client(undefined, 'restored')
+  await f.pair(a, 'a')
+  const original = a.c.channelBinding()
+  a.c.stop()
+  const saved = JSON.parse(await readFile(a.file, 'utf8'))
+  delete saved.device
+  delete saved.confirmed
+  await writeFile(a.file, JSON.stringify(saved))
+  const received = []
+  const restored = await f.restore(a.file, async (msg) => received.push(msg))
+  const current = restored.channelBinding()
+  assert.ok(current)
+  assert.equal(current.bindingId, original.bindingId)
+  assert.equal(original.signal.aborted, true)
+  assert.notEqual(current.signal, original.signal)
+  assert.equal(current.signal.aborted, false)
+  const migrated = JSON.parse(await readFile(a.file, 'utf8'))
+  assert.equal(migrated.device, original.bindingId)
+  assert.equal(migrated.confirmed, true)
+  assert.equal(f.gateway.status().boundUsers, 1)
+  await f.gateway.receive(f.message('a'))
+  assert.equal(received.length, 1)
+  await writeFile(f.opts.stateFile, '[]')
+  assert.equal(
+    f.gateway.authorizes(current.identity, current.bindingId),
+    false,
+    'persisted revocation denies authority',
+  )
+})
+
+test('personal OAuth must match configured enterprise and verified sender; default relay still requires DWS', async (t) => {
+  const f = await fixture(t, {
+    personal: true,
+    exchange: async (code) => ({ corpId: code === 'foreign' ? 'foreign-corp' : 'corp', userId: code }),
+  })
+  const wrong = await f.client(undefined, 'wrong-corp')
+  assert.equal((await f.finish(wrong, 'foreign')).status, 400)
+  assert.equal(wrong.c.channelBinding(), undefined)
+  assert.equal(f.gateway.status().boundUsers, 0)
+  const a = await f.client(undefined, 'valid')
+  await f.pair(a, 'a')
+  const route = f.gateway.online.get(JSON.stringify(['corp', 'a']))
+  await assert.rejects(
+    route.peer.call('message', {
+      requestId: 'forged',
+      message: f.message('b', 'forged', { sessionWebhook: 'forged' }),
+    }),
+  )
+  assert.equal(a.received.length, 0)
+  const legacy = new RelayClient(join(f.dir, 'legacy.json'), () => undefined)
+  await assert.rejects(legacy.connect(`ws://127.0.0.1:${f.port}/relay`), /auth_required/)
+})
+
+test('unclaimed personal login remains native-only and is disabled for ordinary gateways', async (t) => {
+  const personal = await fixture(t, { personal: true })
+  const browser = new WebSocket(`ws://127.0.0.1:${personal.port}/relay`, { origin: 'http://127.0.0.1' })
+  const code = await new Promise((resolve, reject) => {
+    browser.once('close', resolve)
+    browser.once('error', reject)
+  })
+  assert.equal(code, 1008)
+  assert.equal(personal.gateway.status().boundUsers, 0)
+  const ordinary = await fixture(t)
+  const socket = new WebSocket(`ws://127.0.0.1:${ordinary.port}/relay`)
+  await new Promise((resolve, reject) => {
+    socket.once('open', resolve)
+    socket.once('error', reject)
+  })
+  try {
+    const peer = new Peer(socket, async () => assert.fail('unexpected gateway challenge'))
+    await assert.rejects(peer.call('hello', {}))
+    assert.equal(ordinary.gateway.status().boundUsers, 0)
+  } finally {
+    socket.close()
+  }
+})
 
 test('two real sockets bind through verified browser login and route to their own DSH; original reply destination stays gateway-side', async (t) => {
   const f = await fixture(t),
