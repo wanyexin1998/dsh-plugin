@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "classification": "PRODUCTION_REACT_AND_STORE_WITH_SYNTHETIC_RPC",
+  "browser": "151.0.7922.173",
+  "command": "DSH_TEST_BROWSER=/usr/bin/chromium node enhancements/scripts/verify-connection-status-browser.mjs",
+  "checks": [
+    "Slow first status read shows checking in settings and compact card, aria-busy, no reconnect/OAuth action.",
+    "First ok:true unknown/backend_not_ready status and failed RPC both offer retry without reconnect or a confirmation time; recovery restores account and ToolView keeps quiet feedback.",
+    "Actual Host contract envelope shape (mocked RPC) ok:true with unknown/service_unavailable or unknown/backend_not_ready preserves the prior account DOM, connected state and confirmed time while exposing refreshError; no reconnect is offered.",
+    "Manual refresh and a simulated timeout result retain the same account DOM; stale/error notice is visible, recovery clears it and updates last-confirmed time; dark 360px layout fits.",
+    "Window focus and the 15-second scheduled refresh retain the connected account while reads are pending.",
+    "Definitive Host results replace a previously connected account immediately for expiry, identity mismatch, enterprise/application permission, unknown/revocation_failed, unknown/org_policy_denied and unlink.",
+    "DWS unlinked / robot connected and DWS connected / robot offline are rendered independently, with no implicit authorization.",
+    "Configured personal robot offers application sign-in/device pairing while DWS is unlinked, without a DWS prerequisite or implicit OAuth; first-time configuration guidance remains scoped to missing organization details.",
+    "Personal configuration fields align and fit mobile, successful configure clears secret, pending login retains continue/cancel, stop hosting and reconfigure remain available.",
+    "Enterprise connection sends no configuration fields; robot read error preserves its own last state and recovery clears the error without affecting DWS.",
+    "Keyboard activation opens unlink confirmation with safe initial focus; Escape preserves binding and restores focus; confirmed DWS disconnect leaves robot state independent.",
+    "User-started DWS authorization and cancel use the same Store while remaining independent from robot authentication.",
+    "Unmount/dispose stops status and robot polling; zero browser errors and zero external requests."
+  ],
+  "screenshots": [
+    "initial-check-light.png",
+    "stale-connected-light.png",
+    "stale-connected-dark-mobile.png",
+    "unknown-envelope-dark-mobile.png",
+    "personal-pairing-dws-unlinked.png",
+    "personal-config-dark-mobile.png",
+    "independent-connected-light.png"
+  ],
+  "limitations": [
+    "Standalone React harness, not the assembled DSH Web/Desktop shell.",
+    "RPC, account data, robot configuration and OAuth pages are synthetic; no real DingTalk, Connector, robot or server was contacted.",
+    "Unit/Host tests cover callback-origin trust, transaction/source guards and request races separately."
+  ]
+}

@@ -47,7 +47,7 @@ test('DSH platform Client registers a real settings slot; unloading leaves exist
     for (let i = 0; i < 2; i++) {
       const fiber = await ctx.plugin(client, { mode: 'local' });
       assert.deepEqual(slots.entriesOfSlot('settings.section').map(entry => entry.options.id), ['general', 'dsh-dingtalk']);
-      const html = renderToStaticMarkup(React.createElement(client.ConnectionSection, { store: { subscribe() { return () => {}; }, get() { return { status: { state: 'unlinked', reasonCode: 'not_connected' } }; } } }));
+      const html = renderToStaticMarkup(React.createElement(client.ConnectionSection, { store: { subscribe() { return () => {}; }, get() { return { checked: true, refreshing: false, pending: false, status: { state: 'unlinked', reasonCode: 'not_connected' } }; } } }));
       assert.match(html, /尚未连接钉钉/);
       assert.equal(slots.entriesOfSlot('tool.call.toolview')[0].options.key, 'dingtalk_call');
       assert.deepEqual(slots.entriesOfSlot('conversation.chat.turnTail').map(entry => entry.options.id), ['dsh-dingtalk-authorization']);

@@ -1,6 +1,6 @@
 /** Production styles for the approved standalone prototype; scoped to plugin surfaces. */
 export const connectionCss = `
-.dsh-dt,.dsh-dt-shell{--dt-line:color-mix(in srgb,currentColor 13%,transparent);--dt-soft:color-mix(in srgb,currentColor 4%,transparent);--dt-muted:color-mix(in srgb,currentColor 64%,transparent);--dt-accent:light-dark(#235fc9,#a6c4ff);--dt-accent-bg:light-dark(#edf3ff,#273956);--dt-success:light-dark(#387760,#8dceb4);color:inherit;font-family:inherit;font-size:13px;line-height:1.6;overflow-wrap:anywhere;box-sizing:border-box}
+.dsh-dt,.dsh-dt-shell{--dt-line:color-mix(in srgb,currentColor 13%,transparent);--dt-soft:color-mix(in srgb,currentColor 4%,transparent);--dt-muted:color-mix(in srgb,currentColor 64%,transparent);--dt-accent:light-dark(#235fc9,#a6c4ff);--dt-accent-bg:light-dark(#edf3ff,#273956);--dt-success:light-dark(#387760,#8dceb4);--dt-warning:light-dark(#987039,#d8b276);--dt-danger:light-dark(#ae3535,#ffaaaa);--dt-danger-bg:light-dark(#fff0f0,#4a2929);color:inherit;font-family:inherit;font-size:13px;line-height:1.6;overflow-wrap:anywhere;box-sizing:border-box}
 .dsh-dt *,.dsh-dt-shell *{box-sizing:border-box}
 .dsh-dt{width:100%;max-width:574px;margin-inline:auto;padding:24px 20px}
 .dsh-dt-shell{width:100%;max-width:440px;padding:8px 0}
@@ -10,14 +10,13 @@ export const connectionCss = `
 .dsh-dt :focus-visible,.dsh-dt-shell :focus-visible{outline:2px solid #5797ff;outline-offset:3px}
 .dsh-dt .dsh-dt-icon,.dsh-dt-shell .dsh-dt-icon{display:inline-flex;align-items:center;justify-content:center;gap:5px;width:28px;height:29px;flex:none;padding:0;border:0;border-radius:5px;background:transparent;color:var(--dt-muted);font-size:11px;line-height:1.3;vertical-align:middle}
 .dsh-dt .dsh-dt-caption,.dsh-dt-shell .dsh-dt-caption{width:auto;padding-inline:8px;white-space:nowrap}
-.dsh-dt-robot .dsh-dt-action{display:inline-flex;align-items:center;justify-content:center;min-width:64px;min-height:29px;padding:4px 12px;border:0;border-radius:5px;background:var(--dt-accent-bg);color:var(--dt-accent);font:inherit}
 .dsh-dt-icon:hover:not(:disabled){background:var(--dt-soft)}
 .dsh-dt-strip{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;min-height:70px;margin:0;padding:13px 14px;border:1px solid var(--dt-line);border-radius:9px;background:transparent}
 .dsh-dt-card{max-width:440px}
 .dsh-dt-symbol{display:grid;place-items:center;align-self:center;width:22px;height:22px;margin:0;color:var(--dt-muted)}
 .dsh-dt-symbol svg{width:18px;height:18px}
 .dsh-dt-strip[data-tone=success] .dsh-dt-symbol{color:var(--dt-success)}
-.dsh-dt-strip[data-tone=warning] .dsh-dt-symbol{color:light-dark(#987039,#d8b276)}
+.dsh-dt-strip[data-tone=warning] .dsh-dt-symbol{color:var(--dt-warning)}
 .dsh-dt-copy{min-width:0;display:flex;flex-direction:column;gap:2px}
 .dsh-dt-copy strong{font-size:13px;font-weight:550;line-height:1.5}
 .dsh-dt-copy p{font-size:11px;line-height:1.6;color:var(--dt-muted);margin:0}
@@ -31,6 +30,20 @@ export const connectionCss = `
 .dsh-dt-actions .dsh-dt-icon:not(.dsh-dt-caption),.dsh-dt-action-spacer{width:22px;flex:none}
 .dsh-dt-actions .dsh-dt-ready{background:transparent;color:var(--dt-success)}
 .dsh-dt-actions .dsh-dt-primary,.dsh-dt-dialog .dsh-dt-primary{background:var(--dt-accent-bg);color:var(--dt-accent)}
+.dsh-dt-actions .dsh-dt-danger,.dsh-dt .dsh-dt-danger,.dsh-dt-shell .dsh-dt-danger{color:var(--dt-danger);background:var(--dt-danger-bg)}
+.dsh-dt-section{border-top:1px solid var(--dt-line);margin-top:20px;padding-top:20px}
+.dsh-dt-section .dsh-dt-strip{align-items:center}
+.dsh-dt-actions.dsh-dt-relay-actions{flex-wrap:wrap;min-width:0;max-width:154px}
+.dsh-dt-form{display:grid;gap:12px;margin-top:14px;padding:14px;border:1px solid var(--dt-line);border-radius:9px;background:var(--dt-soft)}
+.dsh-dt-form label{display:grid;gap:5px;font-size:12px;color:var(--dt-muted)}
+.dsh-dt-form input{display:block;width:100%;min-width:0;min-height:34px;border:1px solid var(--dt-line);border-radius:5px;padding:7px 9px;background:Canvas;color:CanvasText;font:inherit}
+.dsh-dt-form-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.dsh-dt-form-actions .dsh-dt-primary{background:var(--dt-accent-bg);color:var(--dt-accent)}
+.dsh-dt-notice{margin:8px 0 0;font-size:11px;line-height:1.7;color:var(--dt-muted)}
+.dsh-dt [data-tone=warning].dsh-dt-notice,.dsh-dt [data-tone=warning].dsh-dt-connected,.dsh-dt-shell [data-tone=warning].dsh-dt-notice{color:var(--dt-warning)}
+.dsh-dt-status{color:var(--dt-muted);font-size:11px}
+.dsh-dt-callback{display:block;margin-top:4px;white-space:normal;overflow-wrap:anywhere;font-size:11px;color:var(--dt-muted)}
+.dsh-dt .dsh-dt-link{color:var(--dt-accent);text-decoration:underline;text-underline-offset:3px;margin-inline-start:6px}
 .dsh-dt-primary:hover{filter:brightness(.96)}
 .dsh-dt-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:24px}
 .dsh-dt h2{font-size:22px;line-height:1.4;font-weight:550;margin:0}
@@ -68,5 +81,5 @@ export const connectionCss = `
 .dsh-dt-row-fixed{flex:none;white-space:pre}
 .dsh-dt-tool-name{flex:0 1 auto;min-width:0;max-width:18em;overflow:hidden;text-overflow:ellipsis}
 .dsh-dt-tool-state{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
-@media(max-width:480px){.dsh-dt{padding:16px 4px}.dsh-dt-strip{grid-template-columns:18px minmax(0,1fr) auto;gap:9px;padding:12px 11px;min-height:74px}.dsh-dt-symbol{width:18px}.dsh-dt-copy strong{font-size:12px}.dsh-dt-copy p{font-size:10px}.dsh-dt-actions{gap:3px;min-width:91px}.dsh-dt-actions .dsh-dt-action,.dsh-dt-actions .dsh-dt-caption{width:66px;font-size:10px}.dsh-dt-account{padding:14px;gap:9px}.dsh-dt-connected{font-size:10px}.dsh-dt-account strong{font-size:13px}}
+@media(max-width:480px){.dsh-dt-actions.dsh-dt-relay-actions{max-width:70px}.dsh-dt-account{flex-wrap:wrap}.dsh-dt-account-copy{flex-basis:45%}.dsh-dt{padding:16px 4px}.dsh-dt-strip{grid-template-columns:18px minmax(0,1fr) auto;gap:9px;padding:12px 11px;min-height:74px}.dsh-dt-symbol{width:18px}.dsh-dt-copy strong{font-size:12px}.dsh-dt-copy p{font-size:10px}.dsh-dt-actions{gap:3px;min-width:91px}.dsh-dt-actions .dsh-dt-action,.dsh-dt-actions .dsh-dt-caption{width:66px;font-size:10px}.dsh-dt-account{padding:14px;gap:9px}.dsh-dt-connected{font-size:10px}.dsh-dt-account strong{font-size:13px}}
 `;
