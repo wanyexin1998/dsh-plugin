@@ -62,6 +62,7 @@ export class UserSession {
   private initialization: Promise<void> | undefined
   private mismatch = false
   private authorizationEpoch = 0
+  private storageBlocked = false
   private lastPreparation: PreparationStatus = { state: 'idle' }
   constructor(
     private readonly config: ConnectorConfig,
@@ -91,9 +92,29 @@ export class UserSession {
     }
     // A binding change must never reuse the token of a previously bound account.
     this.mismatch = !!this.record.profile && this.record.profile !== this.profile
+    const pendingMarker = await this.state.hasRevocationPending(this.callerId).catch(() => false)
+    if (pendingMarker && !this.record.revoked) {
+      // A fallback marker records a revocation that could not be written into the caller
+      // directory: never restore a usable authorization from the stale binding.
+      this.record = {
+        version: 1,
+        revoked: true,
+        ...(this.record.profile ? { profile: this.record.profile } : {}),
+        revocationPending: true,
+      }
+    } else if (pendingMarker) {
+      await this.state.clearRevocationPending(this.callerId).catch(() => {})
+    }
+    try {
+      await this.state.assertCallerWritable(this.callerId)
+    } catch {
+      // Persistence is unavailable for this caller; block instead of trusting the old record.
+      this.storageBlocked = true
+    }
     const settings = this.settings()
     this.executor = new DwsExecutor(settings, this.config.limits, this.runtime())
     if (
+      !this.storageBlocked &&
       !this.mismatch &&
       !this.record.revoked &&
       !this.record.verificationPending &&
@@ -149,6 +170,7 @@ export class UserSession {
     const target = platformTarget()
     if (!target) return { state: 'failed', reasonCode: 'cli_platform_unsupported', protocol: CONNECTOR_PROTOCOL }
     if (this.mismatch) return { state: 'failed', reasonCode: 'identity_mismatch', protocol: CONNECTOR_PROTOCOL }
+    if (this.storageBlocked) return { state: 'failed', reasonCode: 'service_unavailable', protocol: CONNECTOR_PROTOCOL }
     try {
       // A test-mode replacement CLI is a fixture, not a pinned artifact; production always verifies the hash.
       checkAborted()
@@ -180,6 +202,7 @@ export class UserSession {
       if (this.authorizing) return { state: 'authorizing', reasonCode: 'authorization_pending' }
       if (this.mismatch) return { state: 'identity_mismatch', reasonCode: 'identity_mismatch' }
       if (this.record.revocationPending) return { state: 'unknown', reasonCode: 'revocation_failed' }
+      if (this.storageBlocked) return { state: 'unknown', reasonCode: 'service_unavailable' }
       if (this.record.verificationPending) return { state: 'unknown', reasonCode: 'verification_failed_after_save' }
       if (!this.backend) return { state: 'unlinked', reasonCode: 'not_connected' }
       let value = await this.backend.status(call)
@@ -211,6 +234,7 @@ export class UserSession {
       return await this.guard(async (inner): Promise<InvokeResult> => {
         if (this.closed) return { status: 'failed', reasonCode: 'service_disposed', retryable: false }
         if (this.mismatch) return { status: 'denied', reasonCode: 'identity_mismatch', retryable: false }
+        if (this.storageBlocked) return { status: 'failed', reasonCode: 'service_unavailable', retryable: false }
         if (this.authorizing) return { status: 'auth_required', reasonCode: 'authorization_pending' }
         if (!this.backend) return { status: 'auth_required', reasonCode: 'not_connected' }
         return this.backend.invoke(input, inner)
@@ -243,6 +267,7 @@ export class UserSession {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
     if (this.mismatch) throw new ConnectionServiceError('identity_mismatch')
     if (this.record.revocationPending) throw new ConnectionServiceError('revocation_failed')
+    if (this.storageBlocked) throw new ConnectionServiceError('service_unavailable')
     if (this.authorizing) throw new ConnectionServiceError('authorization_busy')
     const bridge = this.auth()
     if (!bridge) throw new ConnectionServiceError('oauth_not_configured')
@@ -270,8 +295,13 @@ export class UserSession {
       return await this.state.withRefreshLock(this.callerId, async () => {
         await this.backend?.dispose()
         this.backend = undefined
+        let attempted = false
         let exchanged = false
         try {
+          if (this.stale(epoch, signal)) throw new ConnectionServiceError('execution_cancelled')
+          // From here on the exchange subprocess may persist credentials before it returns: a
+          // cancellation can no longer be treated as "nothing happened".
+          attempted = true
           const result = (await this.executor.execute(
             [
               'auth',
@@ -321,7 +351,7 @@ export class UserSession {
           this.backend = undefined
           const reasonCode = error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable'
           if (reasonCode === 'execution_cancelled') {
-            if (exchanged) await this.isolateCancelledExchange(this.profile)
+            if (attempted) await this.isolateCancelledExchange(this.profile)
             else if (this.recordUsable(previous)) this.backend = this.createBackend()
             throw new ConnectionServiceError('execution_cancelled')
           }
@@ -382,7 +412,11 @@ export class UserSession {
     this.backend = undefined
     const pending: BindingRecord = { version: 1, revoked: true, profile, revocationPending: true }
     this.record = pending
-    await this.store.write(pending).catch(() => {})
+    await this.store.write(pending).catch(async () => {
+      // The caller directory may be unwritable; keep a root-level fallback so a restart cannot
+      // restore the stale binding.
+      await this.state.markRevocationPending(this.callerId, profile).catch(() => {})
+    })
     try {
       await this.executor.execute(
         ['auth', 'logout', `--profile=${profile}`, '--format=json'],
@@ -392,7 +426,11 @@ export class UserSession {
       )
       const cleared: BindingRecord = { version: 1, revoked: true }
       this.record = cleared
-      await this.store.write(cleared).catch(() => {})
+      const persisted = await this.store.write(cleared).then(
+        () => true,
+        () => false,
+      )
+      if (persisted) await this.state.clearRevocationPending(this.callerId).catch(() => {})
     } catch {
       // Keep the pending marker in memory: status reports revocation_failed until cleanup succeeds.
     }
@@ -465,13 +503,18 @@ export class UserSession {
     try {
       await this.store.write(pending)
     } catch {
-      // A revocation that cannot be persisted is never reported as success: keep the in-memory
-      // fail-closed block (closed session, no backend) and surface revocation_failed.
+      // A revocation that cannot be persisted is never reported as success: record a root-level
+      // fallback marker so a restart cannot restore the stale binding, keep the in-memory block
+      // and surface revocation_failed.
+      await this.state.markRevocationPending(this.callerId, profile).catch(() => {})
       await Promise.resolve(previous?.dispose()).catch(() => {})
       throw new ConnectionServiceError('revocation_failed')
     }
     await Promise.resolve(previous?.dispose()).catch(() => {})
-    if (!profile) return
+    if (!profile) {
+      await this.state.clearRevocationPending(this.callerId).catch(() => {})
+      return
+    }
     try {
       await this.executor.execute(
         ['auth', 'logout', `--profile=${profile}`, '--format=json'],
@@ -481,7 +524,11 @@ export class UserSession {
       )
       const cleared: BindingRecord = { version: 1, revoked: true }
       this.record = cleared
-      await this.store.write(cleared)
+      const persisted = await this.store.write(cleared).then(
+        () => true,
+        () => false,
+      )
+      if (persisted) await this.state.clearRevocationPending(this.callerId).catch(() => {})
     } catch {
       // The durable pending marker and the in-memory block stay in place: status reports
       // revocation_failed and new calls are blocked. An explicit retry may clear it after a real

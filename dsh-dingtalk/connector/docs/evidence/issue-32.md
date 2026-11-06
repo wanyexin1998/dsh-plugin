@@ -1,7 +1,7 @@
 # #32 修复记录：OAuth 取消竞态、撤销持久化与非 443 代理 Host
 
 - 审查基线：`608e21a`（`main`）
-- 修复分支：`fix/oauth-cancel-revoke-host`（提交与 head 以 PR 为准）
+- 修复分支：`fix/oauth-cancel-revoke-host`（提交与 head 以 PR #33 为准）
 - 环境：WSL2 Ubuntu 24.04.5，Node `22.19.0`，pnpm `11.7.0`，Docker `29.9.3`，Docker Compose `v5.7.0`，`umask 0022`，干净 ext4 clone
 
 ## 修复摘要
@@ -19,12 +19,22 @@
    - `deploy/nginx-oauth.conf.example` 改为 `proxy_set_header Host $http_host`，保留浏览器请求的 `host:port`；Connector 仍对 `publicOrigin` 做精确比较。
    - 部署模板回归断言该 header，旧模板（`$host`）被禁止。
 
+## 第二轮补修（审查反馈）
+
+1. 取消时间窗口：`auth exchange` 子进程已把凭据写入磁盘、但尚未返回结果时取消，之前会被当成“未发生”并恢复旧会话。现在只要 exchange 已启动，取消就执行隔离清理（logout + `revoked`；清理失败或结果未知保留 `revocationPending`），不再依赖“已成功返回”的标志，也不会在重启后恢复授权。
+2. 撤销失败后的重启：新增每个 caller 私有目录可写性探测，以及根目录 `pending-revocations/<callerId>.json` 回退标记。当 caller 目录不可写导致撤销无法落盘时，重启后依据回退标记保持阻断（`revocation_failed`），只有显式重试成功后才清除标记并恢复 `unlinked`。
+
+回归测试（在上一版 head `5c1b413` 上先失败、本次修复后通过）：
+
+- `cancelling after the exchange persisted credentials but before it returns stays unlinked`
+- `revocation that cannot write the caller directory blocks the caller after restart`
+
 ## fail-first 回归（基线 `608e21a` 先失败，修复后通过）
 
-| 测试                                                | 基线                    | 修复后                           |
-| --------------------------------------------------- | ----------------------- | -------------------------------- |
-| `connector/tests/unit.test.mjs`                     | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail |
-| `connector/tests/linux.test.mjs`（含新增 4 个用例） | 20 项：14 pass / 6 fail | 20 项：20 pass / 0 fail          |
+| 测试                                                | 基线 `608e21a`          | 上一版 head `5c1b413`            | 本提交                           |
+| --------------------------------------------------- | ----------------------- | -------------------------------- | -------------------------------- |
+| `connector/tests/unit.test.mjs`                     | 5 项：3 pass / 2 fail   | 14 项：11 pass / 3 skip / 0 fail | 14 项：11 pass / 3 skip / 0 fail |
+| `connector/tests/linux.test.mjs`（含新增 6 个用例） | 20 项：14 pass / 6 fail | 22 项：20 pass / 2 fail          | 22 项：22 pass / 0 fail          |
 
 基线失败项：
 
@@ -35,7 +45,7 @@
 - a cancelled exchange whose credential cleanup fails stays blocked across restart
 - a revocation that cannot persist fails closed without reviving the caller or affecting others
 
-新增 linux 用例覆盖：status 等待中取消、持久化屏障处取消、取消后清理失败（logout 失败）并重启验证、撤销标记无法持久化时 admin 返回失败且 A/B 隔离与显式重试。
+新增 linux 用例覆盖：status 等待中取消、持久化屏障处取消、取消后清理失败（logout 失败）并重启验证、撤销标记无法持久化时 admin 返回失败且 A/B 隔离与显式重试，以及第二轮审查指出的“换码已保存但未返回”取消窗口与“caller 目录不可写时重启恢复”场景。
 
 ## 全量检查
 
@@ -44,7 +54,7 @@
 | 全仓 CI                 | `pnpm run ci`                                                              | PASS：425 项 418 pass / 7 skip / 0 fail；75 项 68 pass / 7 skip / 0 fail；tarball 400 files |
 | 类型与格式              | `pnpm run typecheck`、`pnpm run lint`                                      | PASS                                                                                        |
 | Connector 单元/CLI/部署 | `node --test tests/unit.test.mjs tests/cli.test.mjs tests/deploy.test.mjs` | 14 项：11 pass / 3 skip / 0 fail                                                            |
-| Connector Linux 容器    | `node scripts/test-linux.mjs`                                              | 20/20 PASS（真实固定 DWS 1.0.66 制品）                                                      |
+| Connector Linux 容器    | `node scripts/test-linux.mjs`                                              | 22/22 PASS（真实固定 DWS 1.0.66 制品）                                                      |
 
 ## 真实 Nginx + Compose/TLS（非 443）
 

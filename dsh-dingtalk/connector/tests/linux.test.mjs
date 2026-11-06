@@ -708,3 +708,90 @@ test(
     }
   },
 )
+
+test(
+  'cancelling after the exchange persisted credentials but before it returns stays unlinked',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+      await writeFile(join(dwsDir, 'hold_exchange_reply'), '1')
+      let start
+      const flow = connection.ui('browser', browserCtx, async () => {
+        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+        return browserFlow(env, start.authorizeUrl)
+      })
+      await waitForPath(join(dwsDir, 'held_exchange_reply'))
+      assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
+      await rm(join(dwsDir, 'hold_exchange_reply'))
+      assert.equal((await flow).callback.status, 200)
+      assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+      assert.notEqual((await connection.backend.status()).state, 'connected')
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const afterRestart = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.notEqual(afterRestart.state, 'connected')
+    } finally {
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'revocation that cannot write the caller directory blocks the caller after restart',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const callerDir = join(isolated.stateDir, 'callers', 'caller-a')
+    const marker = join(isolated.stateDir, 'pending-revocations', 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      await chmod(callerDir, 0o500)
+      const failed = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
+      assert.equal(failed.status, 500)
+      assert.equal(failed.body.error.code, 'revocation_failed')
+      await stat(marker)
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      assert.notEqual(blocked.state, 'connected')
+      await chmod(callerDir, 0o700)
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      const cleared = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(cleared.state, 'unlinked')
+      await assert.rejects(stat(marker))
+      await server.close()
+      server = await startConnector(env)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(callerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)

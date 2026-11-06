@@ -86,6 +86,9 @@ if (args[0] === 'auth' && args[1] === 'exchange') {
     clientId: flag('client-id') || 'default',
   }
   writeState(state)
+  // Credentials are on disk but the CLI has not answered yet: cancellation here must still
+  // leave the connector fail-closed.
+  await hold('exchange_reply')
   process.stdout.write(
     JSON.stringify({
       success: true,
