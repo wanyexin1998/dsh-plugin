@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { chmod, lstat, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { ConnectionServiceError } from '../../enhancements/src/shared/models.js'
 import { provisionPrivateRuntime } from '../../enhancements/src/host/privacy.js'
 import { parseProfile } from '../../enhancements/src/shared/connector.js'
 
@@ -142,6 +143,27 @@ export class ConnectorState {
       if (process.platform !== 'win32') await chmod(directory, 0o700)
     }
     return paths
+  }
+  /**
+   * Fail closed when the private volume cannot be written. Revocation and binding state must be
+   * durable; a Connector that cannot persist it must not serve a stale `revoked:false` binding.
+   */
+  async assertWritable(): Promise<void> {
+    await mkdir(this.root, { recursive: true, mode: 0o700 })
+    const probe = join(this.root, `.writable-${randomUUID()}`)
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      handle = await open(probe, 'wx', 0o600)
+      await handle.writeFile('ok')
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+      await unlink(probe)
+    } catch (error) {
+      await handle?.close().catch(() => {})
+      await unlink(probe).catch(() => {})
+      throw error instanceof ConnectionServiceError ? error : new ConnectionServiceError('service_unavailable')
+    }
   }
   async adminToken(): Promise<string> {
     try {

@@ -29,6 +29,8 @@ export interface ConnectorConfig {
   testIdentity: boolean
   testEnvironment?: Record<string, string>
   testProvider?: string
+  /** Test-only persistence barrier used to inject a cancellation right before the commit. */
+  testCommitGate?: string
   socketMode: number
   limits: ExecutionLimits
   proxy?: ProxyConfig
@@ -169,6 +171,11 @@ export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conn
     throw new Error('DSH_CONNECTOR_TEST_DWS_BINARY requires an explicit test mode')
   if (testBinaryRaw !== undefined && !absolute(testBinaryRaw))
     throw new Error('DSH_CONNECTOR_TEST_DWS_BINARY must be absolute')
+  const testCommitGate = env.DSH_CONNECTOR_TEST_COMMIT_GATE
+  if (testCommitGate !== undefined && !testMode)
+    throw new Error('DSH_CONNECTOR_TEST_COMMIT_GATE requires an explicit test mode')
+  if (testCommitGate !== undefined && (!absolute(testCommitGate) || /[\u0000-\u001f]/.test(testCommitGate)))
+    throw new Error('DSH_CONNECTOR_TEST_COMMIT_GATE must be absolute')
   return {
     stateDirectory: stateRaw.replaceAll('\\', '/'),
     dwsBinary: dwsBinary.replaceAll('\\', '/'),
@@ -181,6 +188,7 @@ export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conn
         : 0,
     testTransport,
     testIdentity,
+    ...(testCommitGate ? { testCommitGate } : {}),
     ...(testEnvironment ? { testEnvironment } : {}),
     ...(testProvider ? { testProvider } : {}),
     socketMode: Number.parseInt(socketModeRaw, 8),
