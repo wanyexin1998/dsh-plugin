@@ -9,7 +9,7 @@ import { ExecutionQueue } from '../adapters/local/queue.js';
 import { createLocalBackend } from '../adapters/local/index.js';
 import { BindingStore } from './binding-store.js';
 import type { BindingRecord } from './binding-store.js';
-import { OAuthController } from './oauth.js';
+import { OAuthController, browserContext } from './oauth.js';
 import type { BrowserContext } from './oauth.js';
 import type { PrivateSettings } from './private-settings.js';
 import { provisionPrivateRuntime, verifyPrivacyGuard } from './privacy.js';
@@ -25,13 +25,17 @@ export interface ManagedConnection {
   /** Host-only entry: principal must come from the verified transport context. */
   invokeFor(principal: { corpId: string; userId: string }, input: InvokeInput, options?: CallOptions): Promise<InvokeResult>;
   ui<T>(browser: string, context: BrowserContext, action: () => Promise<T>): Promise<T>;
-  cancel(id: string, browser: string): ConnectionStatus;
+  cancel(id: string, browser: string): ConnectionStatus | Promise<ConnectionStatus>;
   prepareStart(): PreparationStatus;
   prepareStatus(): PreparationStatus;
   prepareCancel(): Promise<PreparationStatus>;
   revision(): number;
   identity(): { corpId: string; userId: string } | undefined;
-  callbackOrigin?: string;
+  /** Backend-owned browser origin/returnPath validation. Local keeps loopback rules; remote uses its trusted origins. */
+  context?(input: unknown): BrowserContext;
+  callbackOrigin?: string | undefined;
+  /** Remote backend: resolves the trusted callback origin once the Connector answers. */
+  callbackOriginReady?: () => Promise<string | undefined>;
 }
 export async function createManagedConnection(local: LocalSettings, options: PrivateSettings, limits: ExecutionLimits,
   runtime: LocalRuntime & BootstrapRuntime = {}, providerForTest?: string): Promise<ManagedConnection> {
@@ -53,7 +57,7 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
   if (local.configDirectory && local.configDirectory !== directory) throw new ConnectionServiceError('privacy_guard_required');
   if (local.profile && expected && local.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
   const autoInstall = !local.binaryPath;
-  const settings: LocalSettings = { ...local, binaryPath: local.binaryPath || join(stateDirectory, 'bin', 'dws.exe'), configDirectory: directory };
+  const settings: LocalSettings = { ...local, binaryPath: local.binaryPath || join(stateDirectory, 'bin', process.platform === 'win32' ? 'dws.exe' : 'dws'), configDirectory: directory };
   const store = new BindingStore(stateDirectory);
   let record = await store.read();
   if (record.profile && expected && record.profile !== expected) throw new ConnectionServiceError('identity_mismatch');
@@ -222,7 +226,7 @@ export async function createManagedConnection(local: LocalSettings, options: Pri
     } } : {}) });
   }
   const preparationCaller = () => { if (closed) throw new ConnectionServiceError('service_disposed'); if (!scope.getStore()) throw new ConnectionServiceError('invalid_request'); };
-  return { backend, invokeFor, ui,
+  return { backend, invokeFor, ui, context: browserContext,
     prepareStart() {
       preparationCaller();
       if (busy || record.revocationPending) throw new ConnectionServiceError('authorization_busy');

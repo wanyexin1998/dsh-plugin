@@ -1,0 +1,34 @@
+# Existing shared-robot gateway, deployed separately from the Connector (Issue #24, stage 3).
+# This file intentionally uses a Compose profile: `docker compose up` does NOT start it, so the
+# default deployment template never opens a real DingTalk Stream connection.
+#
+# Build the image first:
+#   cd dsh-dingtalk && pnpm run build && npm pack --pack-destination artifacts
+#   docker build -f connector/deploy/gateway/Dockerfile -t dsh-dingtalk-gateway:<tag> artifacts
+#
+# Start stage 3 explicitly:
+#   docker compose -f gateway.compose.yaml --profile robot up -d
+services:
+  gateway:
+    profiles: ['robot']
+    image: ${GATEWAY_IMAGE:?build and pin the gateway image}
+    restart: 'no'
+    user: '10002:10002'
+    read_only: true
+    env_file:
+      - ./gateway.env
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    volumes:
+      # Robot bindings, stream seen-state and feedback diagnostics. Separate from Connector state.
+      - gateway-state:/var/lib/dsh-dingtalk-gateway
+      - ./gateway.json:/etc/dsh-dingtalk/gateway.json:ro
+    # The gateway listens on a loopback port used by the callback/login flow; publish only if the
+    # deployment fronts it with TLS. No DWS token is stored here.
+
+volumes:
+  gateway-state:

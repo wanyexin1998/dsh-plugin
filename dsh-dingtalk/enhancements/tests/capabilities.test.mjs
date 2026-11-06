@@ -12,7 +12,7 @@ import { createConnectionService } from '../lib/shared/service.js';
 import { parseInvokeInput, publicInvokeResult } from '../lib/shared/validation.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { dingtalkTool } from '../lib/host/tool.js';
-import { fixture as officialFixture } from '../scripts/p0-fixture.mjs';
+import { fixture as officialFixture, officialFixtureSkip } from '../scripts/p0-fixture.mjs';
 
 const commands = catalog.products.flatMap(p => p.tools);
 const read = { operationId: 'dws.execute', args: { command: 'doc search', parameters: { query: '中文文档' } } };
@@ -165,7 +165,7 @@ test('real subprocess NDJSON supports split UTF-8, job ownership and cancellatio
   } finally { await f.dispose(); }
 });
 
-test('pinned official CLI performs generic read/write through synthetic OAuth and MCP endpoints', async () => {
+test('pinned official CLI performs generic read/write through synthetic OAuth and MCP endpoints', { skip: officialFixtureSkip }, async () => {
   const f = await officialFixture();
   try {
     assert.equal((await f.service.invoke({ operationId: 'dws.catalog', args: {} })).status, 'ok');

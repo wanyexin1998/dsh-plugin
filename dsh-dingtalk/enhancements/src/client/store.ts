@@ -141,8 +141,18 @@ export class ConnectionStore {
     try {
       const tx = await this.call('begin', { context: this.preparationContext || {} }, AbortSignal.any([this.beginController?.signal || this.controller.signal, this.controller.signal, AbortSignal.timeout(30000)])) as AuthStart;
       if (this.closed || generation !== this.generation) { popup?.close(); return; }
+      // Re-read the trusted callback origin after preparation: the local loopback port is only
+      // known once the Host has bound its listener, and the remote Connector reports its HTTPS origin.
+      try {
+        const origin = await this.call('callback-origin', {}) as { callbackOrigin?: string | null };
+        if (typeof origin?.callbackOrigin === 'string' && origin.callbackOrigin) this.callbackOrigin = origin.callbackOrigin;
+      } catch { /* older Host: fall back to the bootstrap value */ }
       const target = new URL(tx.authorizeUrl);
-      if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.username || target.password || target.pathname !== '/dsh-dingtalk/start') throw new Error();
+      // The Host is the only source of the trusted callback origin: loopback for the local
+      // backend, a configured HTTPS origin for the remote Connector backend.
+      const loopbackCompatible = !this.callbackOrigin && target.protocol === 'http:' && target.hostname === '127.0.0.1';
+      if (target.username || target.password || target.pathname !== '/dsh-dingtalk/start' || !['http:', 'https:'].includes(target.protocol)
+        || (this.callbackOrigin ? target.origin !== this.callbackOrigin : !loopbackCompatible)) throw new Error();
       this.callbackOrigin = target.origin;
       this.preparationContext = undefined;
       this.set({ pending: false, preparing: false, progress: undefined, status: { state: 'authorizing', reasonCode: 'authorization_pending' }, transaction: tx, fallback: popup && !popup.closed ? undefined : tx.authorizeUrl }); this.persist();

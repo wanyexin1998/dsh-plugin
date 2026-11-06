@@ -1,0 +1,67 @@
+# Standalone server-side DWS Connector deployment template (Issue #24).
+# Stage 1 (build/pin) and Stage 2 (start Connector) are covered here.
+# Stage 3 (robot message reception) lives in gateway.compose.yaml and is NOT started by default,
+# so no real DingTalk Stream connection is created by `docker compose up`.
+#
+# Prerequisite: a pinned image built from connector/docker/Dockerfile, referenced by digest, e.g.
+#   CONNECTOR_IMAGE=registry.example/dsh-dingtalk-connector@sha256:<digest>
+services:
+  connector:
+    image: ${CONNECTOR_IMAGE:?pin the connector image by digest}
+    restart: unless-stopped
+    read_only: true
+    user: '10001:10001'
+    env_file:
+      - ./connector.env
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - connector-state:/var/lib/dsh-dingtalk-connector
+      # Per-caller business sockets live in <state>/sockets/<callerId>/; mount that directory
+      # (not the whole private volume) into the matching caller container.
+      # - /srv/dsh-dingtalk-connector/sockets/caller-a:/run/dsh-connector:ro
+    ports:
+      # The oauth-tls proxy shares this network namespace, so the published port belongs to the
+      # namespace owner. Only the proxy TLS port is exposed; 8787/admin/sockets stay internal.
+      - '${OAUTH_PUBLIC_PORT:-443}:8443'
+    healthcheck:
+      test: ['CMD', 'node', '/app/lib/main.mjs', 'health']
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # TLS terminator sharing the Connector network namespace, so the Connector OAuth listener can
+  # stay bound to 127.0.0.1 while the browser still reaches https://<public-origin>.
+  # Supply certificates out of band (never commit them). A service that shares another service's
+  # network namespace must not declare its own ports; the mapping above applies to the namespace.
+  oauth-tls:
+    image: ${OAUTH_PROXY_IMAGE:-nginx:1.27-alpine}
+    restart: unless-stopped
+    network_mode: 'service:connector'
+    depends_on:
+      connector:
+        condition: service_healthy
+    volumes:
+      - ./nginx-oauth.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${OAUTH_TLS_DIR:?mount a directory with fullchain.pem and privkey.pem}:/etc/nginx/tls:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # The nginx master runs as root only to bind the TLS port, drop its workers to the
+      # unprivileged nginx user and own /var/cache/nginx; no other capability is needed.
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+
+volumes:
+  connector-state:
+    # Private volume: DWS tokens, per-user HOME/DWS_CONFIG_DIR/keychain and the admin token.
+    # Never mount this into the DSH agent container or the viewer.

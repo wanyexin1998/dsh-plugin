@@ -21,7 +21,8 @@ export function parseConfig(value: unknown = {}): PluginConfig {
     || Object.keys(value).some(key => key !== 'mode' && key !== 'execution')) throw new Error('dsh-dingtalk: expected config { mode, execution? }');
   const configuredMode = (value as Record<string, unknown>).mode;
   const mode = configuredMode === undefined ? 'local' : configuredMode;
-  if (mode !== 'local' && mode !== 'cellgent') throw new Error('dsh-dingtalk: mode must be local or cellgent');
-  if (mode === 'cellgent') throw new Error('dsh-dingtalk: cellgent mode is deferred; no remote adapter is available in this P0 build');
+  if (mode !== 'local' && mode !== 'connector' && mode !== 'cellgent') throw new Error('dsh-dingtalk: mode must be local, connector or cellgent');
+  // Cellgent stays rejected: this delivery ships a neutral standalone Connector, not a Cellgent adapter.
+  if (mode === 'cellgent') throw new Error('dsh-dingtalk: cellgent mode is deferred; use connector mode with the standalone Connector');
   return { mode, execution: parseLimits((value as Record<string, unknown>).execution) };
 }

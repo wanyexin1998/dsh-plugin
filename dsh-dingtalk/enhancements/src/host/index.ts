@@ -5,6 +5,7 @@ import { parseConfig } from '../shared/config.js';
 import { loadLocalSettings } from '../adapters/local/settings.js';
 import { loadPrivateSettings } from './private-settings.js';
 import { createManagedConnection } from './managed-connection.js';
+import { createRemoteConnectionFor } from '../adapters/remote/index.js';
 import { createUIRpc } from './ui-rpc.js';
 import type { HostConnection } from './ui-rpc.js';
 import { catalog } from '../catalog/index.js';
@@ -24,7 +25,11 @@ export const provide = ['dingtalkConnection', 'dingtalkImTools'];
 export async function apply(ctx: Context, config: unknown): Promise<void> {
   const parsed = parseConfig(config);
   const profile = ctx.get('profileContext') as { dir?: string } | undefined;
-  const managed = await createManagedConnection(await loadLocalSettings(), await loadPrivateSettings(profile?.dir), parsed.execution);
+  // The backend is selected by explicit config. `connector` talks to the standalone server-side
+  // Connector over its private channel; `local` keeps the existing single-user desktop behavior.
+  const managed = parsed.mode === 'connector'
+    ? await createRemoteConnectionFor(process.env, parsed.execution)
+    : await createManagedConnection(await loadLocalSettings(), await loadPrivateSettings(profile?.dir), parsed.execution);
   const owner = createConnectionService(managed.backend);
   ctx.effect(() => () => owner.dispose());
   ctx.provide('dingtalkConnection', owner.service);

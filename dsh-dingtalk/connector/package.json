@@ -1,0 +1,32 @@
+{
+  "name": "@wanyexin1998/dsh-dingtalk-connector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone server-side DWS Connector for @wanyexin1998/dsh-dingtalk (Issue #24)",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "bin": {
+    "dsh-dingtalk-connector": "lib/main.mjs"
+  },
+  "files": [
+    "lib",
+    "deploy",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:linux": "node scripts/test-linux.mjs",
+    "check:pins": "node scripts/check-pins.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "esbuild": "0.25.12",
+    "typescript": "6.0.3"
+  }
+}

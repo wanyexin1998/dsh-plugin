@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fixture } from '../scripts/p0-fixture.mjs';
+import { fixture, officialFixtureSkip } from '../scripts/p0-fixture.mjs';
 
-test('Host identity entry shares the Web authorization and never uses another enterprise or user', async () => {
+test('Host identity entry shares the Web authorization and never uses another enterprise or user', { skip: officialFixtureSkip }, async () => {
   const f = await fixture();
   const principal = { corpId: 'test-corp', userId: 'test-user' };
   const input = { operationId: 'calendar.listEvents', args: {} };
@@ -25,7 +25,7 @@ test('Host identity entry shares the Web authorization and never uses another en
   } finally { await f.dispose(); }
 });
 
-test('IM approval is native, and a pending approval cannot survive disconnect or reauthorization', async () => {
+test('IM approval is native, and a pending approval cannot survive disconnect or reauthorization', { skip: officialFixtureSkip }, async () => {
   const f = await fixture({ automatic: true, install: false });
   const principal = { corpId: 'test-corp', userId: 'test-user' };
   const input = { operationId: 'dws.execute', args: { command: 'todo task create', parameters: { title: '合成测试', executors: 'test-user' } } };

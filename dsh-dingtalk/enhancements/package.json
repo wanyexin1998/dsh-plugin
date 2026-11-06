@@ -60,7 +60,9 @@
     "docs/G0-enterprise-test-plan.md",
     "docs/INSTALL.md",
     "docs/CONTRACT.md",
-    "docs/LOCAL-BACKEND.md"
+    "docs/LOCAL-BACKEND.md",
+    "docs/SERVER-RUNTIME.md",
+    "docs/LINUX-DWS.md"
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5"

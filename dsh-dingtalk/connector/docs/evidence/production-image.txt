@@ -1,0 +1,30 @@
+Production image build (fresh context; host connector/lib and host node_modules excluded by .dockerignore)
+Command:
+  cd dsh-dingtalk
+  docker build -f connector/docker/Dockerfile \
+    --build-arg DWS_ARCHIVE_URL=https://gh-proxy.com/https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download/v1.0.66/dws-linux-amd64.tar.gz \
+    -t dsh-dingtalk-connector:0.1.0-review2 .
+
+Builder stage output:
+  verified dws 1.0.66 archive=27cd2821e1f6523d1eeaf5688c23502bddbdd858cf82e32c197853065418bef8 binary=4ee71b2e1d1d4b888dd41dbda6193d213636971196f0641d4ef1c74d12b49607
+  Built standalone Connector bundle (lib/connector.mjs, lib/main.mjs).
+  dsh-dingtalk-connector 0.1.0 (protocol 1)
+  Successfully tagged dsh-dingtalk-connector:0.1.0-review2
+
+Runtime verification:
+  $ docker run --rm dsh-dingtalk-connector:0.1.0-review2 version
+  dsh-dingtalk-connector 0.1.0 (protocol 1)
+
+  $ docker run -d ... -e DSH_CONNECTOR_TRANSPORT=loopback -e DSH_CONNECTOR_ALLOW_TEST_TRANSPORT=1 -e DSH_CONNECTOR_LOOPBACK_PORT=8792 dsh-dingtalk-connector:0.1.0-review2
+  {"event":"connector.started","version":"0.1.0","protocol":1,"transport":"loopback","oauth":false,"callers":0}
+  $ docker exec creview node /app/lib/main.mjs health
+  {"ok":true,"value":{"ok":true,"protocol":1,"version":"0.1.0","oauth":false,"callers":0}}
+  exit 0
+  $ docker exec creview id
+  uid=10001(connector) gid=10001(connector) groups=10001(connector)
+
+Image id: sha256:c59a20335ec38ea6973abff15ef7dca29d695e63271000090e0412f28cec17a5
+
+Note: the public GitHub release URL is unreachable from this sandbox (CDN stalls), so the build used a mirror
+URL override; the archive/binary SHA256 are still fixed by dws.lock.json and independently verified in the
+builder stage. Production networks should use the default URL.

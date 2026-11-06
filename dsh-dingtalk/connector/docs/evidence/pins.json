@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "connectorVersion": "0.1.0",
+  "protocolVersion": 1,
+  "dws": "1.0.66",
+  "checks": "all pins match"
+}

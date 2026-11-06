@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to gateway.json and fill in out of band. Never commit real Client Secret values. This file is only read by the existing shared-robot gateway; the Connector never reads it.",
+  "clientId": "<robot AppKey>",
+  "clientSecret": "<robot AppSecret, from a secret store>",
+  "corpId": "<corpId>",
+  "stateDirectory": "/var/lib/dsh-dingtalk-gateway",
+  "publicOrigin": "https://dsh.example.com",
+  "host": "127.0.0.1",
+  "port": 8790,
+  "allowedGroups": []
+}
