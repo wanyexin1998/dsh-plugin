@@ -47,6 +47,12 @@ test('shared network namespace publishes only the proxy TLS port on the namespac
   assert.ok(!proxyService.includes('ports:'), 'a service sharing another network namespace must not declare ports')
   assert.ok(!compose.includes('8787:'), 'the internal OAuth listener is never published')
 })
+test('nginx TLS proxy keeps only the capabilities required to start and drop worker privileges', () => {
+  const proxyService = section(compose, '  oauth-tls:', '\nvolumes:')
+  assert.match(proxyService, /cap_drop:\s*\n\s*- ALL/)
+  for (const cap of ['NET_BIND_SERVICE', 'CHOWN', 'SETUID', 'SETGID'])
+    assert.match(proxyService, new RegExp(`- ${cap}\\b`))
+})
 test('nginx OAuth proxy replaces raw error logs with allowlisted diagnostics', () => {
   const active = nginx.replace(/^\s*#.*$/gm, '')
   assert.match(active, /error_log \/dev\/null;/)
