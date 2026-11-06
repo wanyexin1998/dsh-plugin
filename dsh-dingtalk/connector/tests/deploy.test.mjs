@@ -47,6 +47,12 @@ test('shared network namespace publishes only the proxy TLS port on the namespac
   assert.ok(!proxyService.includes('ports:'), 'a service sharing another network namespace must not declare ports')
   assert.ok(!compose.includes('8787:'), 'the internal OAuth listener is never published')
 })
+test('nginx TLS proxy keeps only the capabilities required to start and drop worker privileges', () => {
+  const proxyService = section(compose, '  oauth-tls:', '\nvolumes:')
+  assert.match(proxyService, /cap_drop:\s*\n\s*- ALL/)
+  for (const cap of ['NET_BIND_SERVICE', 'CHOWN', 'SETUID', 'SETGID'])
+    assert.match(proxyService, new RegExp(`- ${cap}\\b`))
+})
 test('nginx OAuth proxy replaces raw error logs with allowlisted diagnostics', () => {
   const active = nginx.replace(/^\s*#.*$/gm, '')
   assert.match(active, /error_log \/dev\/null;/)
@@ -89,6 +95,8 @@ test('nginx OAuth proxy replaces raw error logs with allowlisted diagnostics', (
   assert.match(active, /proxy_set_header X-Request-ID \$request_id;/)
   assert.match(active, /proxy_hide_header X-Request-ID;/)
   assert.match(active, /proxy_set_header X-Forwarded-Proto https;/)
+  assert.match(active, /proxy_set_header Host \$http_host;/)
+  assert.ok(!/proxy_set_header Host \$host;/.test(active), 'the proxy must not drop a non-443 public port')
   assert.match(active, /proxy_set_header Cookie \$http_cookie;/)
 })
 test('production Dockerfile builds the Connector from source without a pre-existing lib', () => {

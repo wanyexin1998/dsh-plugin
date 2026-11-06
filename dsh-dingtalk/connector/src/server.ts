@@ -104,6 +104,9 @@ export class ConnectorServer {
     this.testIdentity = config.testIdentity
   }
   async start(): Promise<void> {
+    // Fail closed: a Connector that cannot durably persist revocation/binding state must not
+    // start and then trust a stale `revoked:false` record after a restart.
+    await this.state.assertWritable()
     await this.state.init()
     this.adminToken = await this.state.adminToken()
     if (this.config.dwsLock) process.env.DSH_DINGTALK_DWS_LOCK = this.config.dwsLock
@@ -112,7 +115,11 @@ export class ConnectorServer {
     if (this.config.oauth) {
       this.oauth = new ServerOAuth(
         this.config.oauth,
-        { exchange: (callerId, code, signal) => this.session(callerId).exchange(code, signal) },
+        {
+          exchange: (callerId, code, signal, transactionId) =>
+            this.session(callerId).exchange(code, signal, transactionId),
+          rollback: (callerId, transactionId) => this.session(callerId).rollbackExchange(transactionId),
+        },
         Date.now,
         this.config.testProvider ?? 'https://login.dingtalk.com/oauth2/auth',
       )
@@ -388,12 +395,15 @@ export class ConnectorServer {
         exact(body, ['callerId'])
         const callerId = parseCallerId(body.callerId)
         const session = this.sessions.get(callerId)
+        // Only remove the binding after revocation is durable; a failed revocation keeps the
+        // caller bound and blocked instead of dropping the in-memory fail-closed block.
+        if (session) await session.revoke()
         this.sessions.delete(callerId)
         this.bindings.delete(callerId)
-        await session?.revoke().catch(() => {})
         await this.closeListener(callerId)
         await this.state.removeBinding(callerId)
-        this.tokens.delete(callerId)
+        await this.state.removeCapabilityToken(callerId)
+        for (const [token, id] of this.tokens) if (id === callerId) this.tokens.delete(token)
         ok(res, { callerId, bound: false })
         return
       }
@@ -426,7 +436,8 @@ export class ConnectorServer {
     }
     const previous = this.sessions.get(callerId)
     if (previous) {
-      await previous.revoke().catch(() => {})
+      // A binding change must not proceed when the old caller cannot be revoked durably.
+      await previous.revoke()
       this.sessions.delete(callerId)
     }
     await this.state.setBinding(callerId, profile)

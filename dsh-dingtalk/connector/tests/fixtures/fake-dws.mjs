@@ -31,6 +31,15 @@ const delay = (() => {
   }
 })()
 const wrongIdentity = () => existsSync(join(configDir, 'wrong_identity'))
+// Test-only pause seam: a hold_<phase> control file blocks that phase until removed, and a
+// held_<phase> marker lets the suite prove the phase was reached before cancelling.
+const hold = async (phase) => {
+  const control = join(configDir, `hold_${phase}`)
+  if (!existsSync(control)) return
+  writeFileSync(join(configDir, `held_${phase}`), String(Date.now()))
+  const deadline = Date.now() + 60000
+  while (existsSync(control) && Date.now() < deadline) await new Promise((done) => setTimeout(done, 25))
+}
 const profile = flag('profile')
 const part = profile ? profile.split(':') : []
 
@@ -40,6 +49,7 @@ if (args.includes('--version')) {
 }
 if (process.env.FAKE_DWS_FAIL === '1') fail('synthetic failure')
 if (args[0] === 'auth' && args[1] === 'status') {
+  await hold('status')
   const state = readState()
   const record = state.profiles[profile]
   if (!record) process.stdout.write(JSON.stringify({ success: true, authenticated: false }))
@@ -64,6 +74,7 @@ if (args[0] === 'auth' && args[1] === 'exchange') {
   let code = ''
   for await (const chunk of process.stdin) code += chunk
   if (code.trim() !== 'synthetic-code') fail('invalid code')
+  await hold('exchange')
   const corpId = flag('expected-corp-id') || 'test-corp'
   const userId = flag('expected-user-id') || 'test-user-a'
   const identity = process.env.FAKE_DWS_EXCHANGE_AS ? process.env.FAKE_DWS_EXCHANGE_AS.split(':') : [corpId, userId]
@@ -75,6 +86,9 @@ if (args[0] === 'auth' && args[1] === 'exchange') {
     clientId: flag('client-id') || 'default',
   }
   writeState(state)
+  // Credentials are on disk but the CLI has not answered yet: cancellation here must still
+  // leave the connector fail-closed.
+  await hold('exchange_reply')
   process.stdout.write(
     JSON.stringify({
       success: true,
@@ -97,6 +111,7 @@ if (args[0] === 'auth' && args[1] === 'logout') {
   process.exit(0)
 }
 if (args[0] === 'contact' && args[1] === 'user' && args[2] === 'get-self') {
+  await hold('identity')
   if (!part.length) fail('unauthorized')
   const state = readState()
   const record = state.profiles[profile]

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createHash } from 'node:crypto'
-import { chmod, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { chmod, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   artifactAvailable,
@@ -485,6 +486,593 @@ test(
       await ownerA.dispose()
     } finally {
       await ownerA?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+const browserCtx = { origin: 'https://dsh.example.test', returnPath: '/chat' }
+const bindingPath = (env, callerId) => join(env.DSH_CONNECTOR_STATE_DIR, 'callers', callerId, 'binding.json')
+const readBinding = async (env, callerId) => JSON.parse(await readFile(bindingPath(env, callerId), 'utf8'))
+const waitForPath = async (file, timeout = 15000) => {
+  const deadline = Date.now() + timeout
+  for (;;) {
+    try {
+      await stat(file)
+      return
+    } catch {
+      if (Date.now() > deadline) throw new Error('timeout waiting for ' + file)
+      await new Promise((done) => setTimeout(done, 25))
+    }
+  }
+}
+const waitForTrace = async (directory, needle, timeout = 15000) => {
+  const file = join(directory, 'trace.log')
+  const deadline = Date.now() + timeout
+  for (;;) {
+    try {
+      if ((await readFile(file, 'utf8')).includes(needle)) return
+    } catch {
+      /* not written yet */
+    }
+    if (Date.now() > deadline) throw new Error('timeout waiting for trace ' + needle)
+    await new Promise((done) => setTimeout(done, 25))
+  }
+}
+const waitStatus = async (service, transactionId) => {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const status = await service.getAuthorizationStatus(transactionId)
+    if (status.state !== 'authorizing') return status
+    await new Promise((done) => setTimeout(done, 25))
+  }
+  throw new Error('authorization timeout')
+}
+
+test(
+  'cancelling while the exchange status is pending never persists a usable authorization',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+      await writeFile(join(dwsDir, 'hold_status'), '1')
+      let start
+      const flow = connection.ui('browser', browserCtx, async () => {
+        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+        return browserFlow(env, start.authorizeUrl)
+      })
+      await waitForPath(join(dwsDir, 'held_status'))
+      const cancelled = await connection.cancel(start.transactionId, 'browser')
+      assert.equal(cancelled.state, 'user_cancelled')
+      await rm(join(dwsDir, 'hold_status'))
+      const page = await flow
+      assert.equal(page.callback.status, 200)
+      const status = await waitStatus(owner.service, start.transactionId)
+      assert.equal(status.state, 'user_cancelled')
+      const binding = await readBinding(env, 'caller-a')
+      assert.equal(binding.revoked, true)
+      assert.equal(binding.revocationPending, undefined)
+      const blocked = await connection.backend.status()
+      assert.notEqual(blocked.state, 'connected')
+      const denied = await owner.service.invoke({ operationId: 'calendar.listEvents', args: {} })
+      assert.notEqual(denied.status, 'ok')
+      const second = await connection.ui('browser', browserCtx, async () => {
+        const next = await owner.service.beginAuthorization({ sessionRef: 's2' })
+        const page2 = await browserFlow(env, next.authorizeUrl)
+        assert.equal(page2.callback.status, 200)
+        return waitStatus(owner.service, next.transactionId)
+      })
+      assert.equal(second.state, 'connected')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, false)
+    } finally {
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test('cancelling at the persistence barrier wins over the commit', { skip, timeout: 180000 }, async () => {
+  const gate = join(tmpdir(), 'dsh-commit-gate-' + randomUUID())
+  await writeFile(gate, '1')
+  const { synthetic, isolated, env } = await fakeEnv({ DSH_CONNECTOR_TEST_COMMIT_GATE: gate })
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+    let start
+    const flow = connection.ui('browser', browserCtx, async () => {
+      start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+      return browserFlow(env, start.authorizeUrl)
+    })
+    await waitForTrace(dwsDir, 'auth status')
+    await new Promise((done) => setTimeout(done, 150))
+    const cancelled = await connection.cancel(start.transactionId, 'browser')
+    assert.equal(cancelled.state, 'user_cancelled')
+    await rm(gate)
+    const page = await flow
+    assert.equal(page.callback.status, 200)
+    assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+    const binding = await readBinding(env, 'caller-a')
+    assert.equal(binding.revoked, true)
+    assert.notEqual((await connection.backend.status()).state, 'connected')
+  } finally {
+    await rm(gate, { force: true }).catch(() => {})
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})
+
+test(
+  'a cancelled exchange whose credential cleanup fails stays blocked across restart',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+      await writeFile(join(dwsDir, 'fail_logout'), '1')
+      await writeFile(join(dwsDir, 'hold_status'), '1')
+      let start
+      const flow = connection.ui('browser', browserCtx, async () => {
+        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+        return browserFlow(env, start.authorizeUrl)
+      })
+      await waitForPath(join(dwsDir, 'held_status'))
+      assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
+      await rm(join(dwsDir, 'hold_status'))
+      assert.equal((await flow).callback.status, 200)
+      assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+      const pending = await readBinding(env, 'caller-a')
+      assert.equal(pending.revoked, true)
+      assert.equal(pending.revocationPending, true)
+      const blocked = await owner.service.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const restarted = await remoteFor(env, 'caller-a')
+      const afterRestart = await restarted.backend.status()
+      assert.equal(afterRestart.reasonCode, 'revocation_failed')
+      await rm(join(dwsDir, 'fail_logout'))
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      const cleared = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(cleared.state, 'unlinked')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+    } finally {
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'a revocation that cannot persist fails closed without reviving the caller or affecting others',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      await bind(env, 'caller-b', 'test-corp', 'test-user-b')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      const path = bindingPath(env, 'caller-a')
+      await rm(path)
+      await mkdir(path)
+      const failed = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
+      assert.equal(failed.status, 500)
+      assert.equal(failed.body.error.code, 'revocation_failed')
+      const blocked = await owner.service.status()
+      assert.notEqual(blocked.state, 'connected')
+      const other = await remoteFor(env, 'caller-b')
+      assert.equal((await other.backend.status()).state, 'unlinked')
+      await rm(path, { recursive: true, force: true })
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+    } finally {
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'cancelling after the exchange persisted credentials but before it returns stays unlinked',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+      await writeFile(join(dwsDir, 'hold_exchange_reply'), '1')
+      let start
+      const flow = connection.ui('browser', browserCtx, async () => {
+        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+        return browserFlow(env, start.authorizeUrl)
+      })
+      await waitForPath(join(dwsDir, 'held_exchange_reply'))
+      assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
+      await rm(join(dwsDir, 'hold_exchange_reply'))
+      assert.equal((await flow).callback.status, 200)
+      assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+      assert.notEqual((await connection.backend.status()).state, 'connected')
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const afterRestart = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.notEqual(afterRestart.state, 'connected')
+    } finally {
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'revocation that cannot write the caller directory blocks the caller after restart',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const callerDir = join(isolated.stateDir, 'callers', 'caller-a')
+    const marker = join(isolated.stateDir, 'pending-revocations', 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      await chmod(callerDir, 0o500)
+      const failed = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
+      assert.equal(failed.status, 500)
+      assert.equal(failed.body.error.code, 'revocation_failed')
+      await stat(marker)
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      assert.notEqual(blocked.state, 'connected')
+      await chmod(callerDir, 0o700)
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      const cleared = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(cleared.state, 'unlinked')
+      await assert.rejects(stat(marker))
+      await server.close()
+      server = await startConnector(env)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(callerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'an unreadable revocation marker keeps the caller blocked and is preserved',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const markerDir = join(isolated.stateDir, 'pending-revocations')
+    const marker = join(markerDir, 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      await mkdir(markerDir, { recursive: true })
+      await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+      await chmod(markerDir, 0o000)
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      assert.notEqual(blocked.state, 'connected')
+      await chmod(markerDir, 0o700)
+      await stat(marker)
+      await server.close()
+      server = await startConnector(env)
+      const still = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(still.reasonCode, 'revocation_failed')
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(markerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test('an unreadable old binding keeps the revocation marker and stays blocked', { skip, timeout: 180000 }, async () => {
+  const { synthetic, isolated, env } = await fakeEnv()
+  const markerDir = join(isolated.stateDir, 'pending-revocations')
+  const marker = join(markerDir, 'caller-a.json')
+  const binding = join(isolated.stateDir, 'callers', 'caller-a', 'binding.json')
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+    await mkdir(markerDir, { recursive: true })
+    await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+    await chmod(binding, 0o000)
+    await owner.dispose()
+    await server.close()
+    server = await startConnector(env)
+    const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(blocked.reasonCode, 'revocation_failed')
+    assert.notEqual(blocked.state, 'connected')
+    await chmod(binding, 0o600)
+    await stat(marker)
+    await server.close()
+    server = await startConnector(env)
+    const still = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(still.reasonCode, 'revocation_failed')
+    assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+    assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    await assert.rejects(stat(marker))
+  } finally {
+    await chmod(binding, 0o600).catch(() => {})
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})
+
+test('a successful re-authorization clears a leftover revocation marker', { skip, timeout: 180000 }, async () => {
+  const { synthetic, isolated, env } = await fakeEnv()
+  const markerDir = join(isolated.stateDir, 'pending-revocations')
+  const marker = join(markerDir, 'caller-a.json')
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    await mkdir(markerDir, { recursive: true })
+    await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+    assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+    await assert.rejects(stat(marker))
+    await owner.dispose()
+    await server.close()
+    server = await startConnector(env)
+    const afterRestart = await (await remoteFor(env, 'caller-a')).backend.status()
+    assert.equal(afterRestart.state, 'connected')
+  } finally {
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})
+
+test(
+  'cancelling after the exchange commit but before the flow completes rolls back the authorization',
+  { skip, timeout: 180000 },
+  async () => {
+    const gate = join(tmpdir(), 'dsh-finalize-gate-' + randomUUID())
+    await writeFile(gate, '1')
+    const { synthetic, isolated, env } = await fakeEnv({ DSH_CONNECTOR_TEST_FINALIZE_GATE: gate })
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+      let start
+      const flow = connection.ui('browser', browserCtx, async () => {
+        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+        return browserFlow(env, start.authorizeUrl)
+      })
+      await waitForTrace(dwsDir, 'auth status')
+      await new Promise((done) => setTimeout(done, 250))
+      assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
+      await rm(gate)
+      assert.equal((await flow).callback.status, 200)
+      assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+      assert.notEqual((await connection.backend.status()).state, 'connected')
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      assert.notEqual((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'connected')
+    } finally {
+      await rm(gate, { force: true }).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test('a concurrent admin revoke wins over an in-flight authorization', { skip, timeout: 180000 }, async () => {
+  const { synthetic, isolated, env } = await fakeEnv()
+  let server, connection, owner
+  try {
+    server = await startConnector(env)
+    env.__adminToken = await adminToken(env)
+    await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+    connection = await remoteFor(env, 'caller-a')
+    owner = serviceModule.createConnectionService(connection.backend)
+    await prepare(connection)
+    const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
+    await writeFile(join(dwsDir, 'hold_exchange_reply'), '1')
+    let start
+    const flow = connection.ui('browser', browserCtx, async () => {
+      start = await owner.service.beginAuthorization({ sessionRef: 's1' })
+      return browserFlow(env, start.authorizeUrl)
+    })
+    await waitForPath(join(dwsDir, 'held_exchange_reply'))
+    const revoked = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
+    assert.equal(revoked.status, 200)
+    await rm(join(dwsDir, 'hold_exchange_reply'))
+    assert.equal((await flow).callback.status, 200)
+    assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
+    assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+    assert.notEqual((await connection.backend.status()).state, 'connected')
+    await owner.dispose()
+    await server.close()
+    server = await startConnector(env)
+    assert.notEqual((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'connected')
+  } finally {
+    await owner?.dispose().catch(() => {})
+    await server?.close().catch(() => {})
+    await synthetic.close()
+    await rmState(isolated.root)
+  }
+})
+
+test(
+  'an authorization is not reported connected when a stale revocation marker cannot be deleted',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const markerDir = join(isolated.stateDir, 'pending-revocations')
+    const marker = join(markerDir, 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      await mkdir(markerDir, { recursive: true })
+      await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+      await chmod(markerDir, 0o500)
+      const start = await connection.ui('browser', browserCtx, () =>
+        owner.service.beginAuthorization({ sessionRef: 's1' }),
+      )
+      const flow = await browserFlow(env, start.authorizeUrl)
+      assert.equal(flow.callback.status, 200)
+      const outcome = await waitStatus(owner.service, start.transactionId)
+      assert.notEqual(outcome.state, 'connected')
+      const pending = await readBinding(env, 'caller-a')
+      assert.equal(pending.revoked, true)
+      assert.equal(pending.revocationPending, true)
+      assert.notEqual((await connection.backend.status()).state, 'connected')
+      await owner.dispose()
+      await server.close()
+      server = await startConnector(env)
+      const blocked = await (await remoteFor(env, 'caller-a')).backend.status()
+      assert.equal(blocked.reasonCode, 'revocation_failed')
+      await chmod(markerDir, 0o700)
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+      await server.close()
+      server = await startConnector(env)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(markerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
+      await server?.close().catch(() => {})
+      await synthetic.close()
+      await rmState(isolated.root)
+    }
+  },
+)
+
+test(
+  'revocation reports failure and stays blocked when a stale marker cannot be deleted',
+  { skip, timeout: 180000 },
+  async () => {
+    const { synthetic, isolated, env } = await fakeEnv()
+    const markerDir = join(isolated.stateDir, 'pending-revocations')
+    const marker = join(markerDir, 'caller-a.json')
+    let server, connection, owner
+    try {
+      server = await startConnector(env)
+      env.__adminToken = await adminToken(env)
+      await bind(env, 'caller-a', 'test-corp', 'test-user-a')
+      connection = await remoteFor(env, 'caller-a')
+      owner = serviceModule.createConnectionService(connection.backend)
+      await prepare(connection)
+      assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
+      await mkdir(markerDir, { recursive: true })
+      await writeFile(marker, JSON.stringify({ version: 1, callerId: 'caller-a', profile: 'test-corp:test-user-a' }))
+      await chmod(markerDir, 0o500)
+      const failed = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
+      assert.equal(failed.status, 500)
+      assert.equal(failed.body.error.code, 'revocation_failed')
+      await stat(marker)
+      assert.notEqual((await connection.backend.status()).state, 'connected')
+      await chmod(markerDir, 0o700)
+      assert.equal((await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })).status, 200)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+      await assert.rejects(stat(marker))
+      await server.close()
+      server = await startConnector(env)
+      assert.equal((await (await remoteFor(env, 'caller-a')).backend.status()).state, 'unlinked')
+    } finally {
+      await chmod(markerDir, 0o700).catch(() => {})
+      await owner?.dispose().catch(() => {})
       await server?.close().catch(() => {})
       await synthetic.close()
       await rmState(isolated.root)
