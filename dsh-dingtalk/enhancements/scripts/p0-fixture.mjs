@@ -2,12 +2,21 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createManagedConnection } from '../lib/host/managed-connection.js';
 import { createConnectionService } from '../lib/shared/service.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { sandbox, verifiedBinary, run } from './g0/runtime.mjs';
+// The official-CLI fixture spawns the pinned Windows `dws.exe`, so it only applies on
+// win32 x64 with the verified fixture installed. On other platforms the affected tests
+// are skipped explicitly instead of failing with ENOENT (mirrors bootstrap.test.mjs).
+export const officialFixtureSkip = process.platform !== 'win32'
+  ? 'official Windows DWS CLI fixture requires win32 x64'
+  : existsSync(resolve('../.cache/dingtalk-g0/bin-amd64/dws.exe'))
+    ? false
+    : 'official Windows DWS CLI fixture is not installed under .cache/dingtalk-g0';
 export async function freePort() { const server = createServer(); await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.address().port; await new Promise(r => server.close(r)); return port; }
 export async function fixture({ automatic = false, install = automatic, nativeDownload = false } = {}) {
   const isolated = await sandbox();

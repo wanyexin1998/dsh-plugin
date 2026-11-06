@@ -62,6 +62,8 @@ export interface HostAgent {
   readonly status: 'idle' | 'running'
   /** Agent-scoped registration boundary, available on already-loaded agents too. */
   readonly ctx: HostAgentContext
+  /** Present on the actual Host Agent; required before inheriting local tools. */
+  readonly session?: { readonly id: SessionId; readonly header: { readonly cwd?: string } }
   /** Queue an ordinary follow-up turn and wake the driver. */
   followup(message: UserMessage): void
   /** Submit steering; a running driver consumes it at its next step boundary. */

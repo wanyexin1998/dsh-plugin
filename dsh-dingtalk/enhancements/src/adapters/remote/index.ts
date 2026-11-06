@@ -161,9 +161,20 @@ export async function createRemoteConnection(settings: RemoteSettings, limits: E
       revision++;
       return { disconnected: value.disconnected === true };
     },
-    async dispose() { closed = true; },
+    async dispose() {
+      closed = true;
+      // A detached prepare task must not write state after disposal: invalidate its generation,
+      // abort the in-flight request and wait for the task to settle.
+      preparationGeneration++;
+      const task = preparationTask;
+      preparationTask = undefined;
+      if (preparation.state === 'running') preparation = { state: 'failed', reasonCode: 'service_disposed' };
+      task?.controller.abort('execution_cancelled');
+      await task?.promise.catch(() => {});
+    },
   };
   const startPreparation = (): PreparationStatus => {
+    if (closed) return { state: 'failed', reasonCode: 'service_disposed' };
     if (!ui.getStore()) throw new ConnectionServiceError('invalid_request');
     if (preparation.state === 'running' && preparationTask) return { state: 'running' };
     const generation = ++preparationGeneration;

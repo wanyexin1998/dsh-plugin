@@ -54,7 +54,12 @@ services:
     cap_drop:
       - ALL
     cap_add:
+      # The nginx master runs as root only to bind the TLS port, drop its workers to the
+      # unprivileged nginx user and own /var/cache/nginx; no other capability is needed.
       - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
 
 volumes:
   connector-state:

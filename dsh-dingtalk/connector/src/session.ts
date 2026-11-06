@@ -61,6 +61,11 @@ export class UserSession {
   private closed = false
   private initialization: Promise<void> | undefined
   private mismatch = false
+  private authorizationEpoch = 0
+  private storageBlocked = false
+  private mutationTail: Promise<void> = Promise.resolve()
+  private authorizationController: AbortController | undefined
+  private lastExchange: { transactionId?: string; epoch: number } | undefined
   private lastPreparation: PreparationStatus = { state: 'idle' }
   constructor(
     private readonly config: ConnectorConfig,
@@ -83,16 +88,63 @@ export class UserSession {
   private async initialize(): Promise<void> {
     this.paths = await this.state.provisionUser(this.callerId)
     this.store = new BindingStore(this.paths.root)
+    let recordReadable = true
     try {
       this.record = await this.store.read()
     } catch {
+      // An unreadable binding record cannot be confirmed either way: block instead of restoring.
       this.record = { version: 1, revoked: true }
+      recordReadable = false
     }
     // A binding change must never reuse the token of a previously bound account.
     this.mismatch = !!this.record.profile && this.record.profile !== this.profile
+    let pendingMarker: boolean | undefined
+    try {
+      pendingMarker = await this.state.hasRevocationPending(this.callerId)
+    } catch {
+      // The fallback marker itself is unreadable: stay fail-closed, keep the marker untouched.
+      pendingMarker = undefined
+    }
+    const blockAsPending = (): void => {
+      this.record = {
+        version: 1,
+        revoked: true,
+        ...(this.record.profile ? { profile: this.record.profile } : {}),
+        revocationPending: true,
+      }
+    }
+    if (pendingMarker === undefined) {
+      // Unknown marker state: never restore and never delete a marker we could not read.
+      blockAsPending()
+      this.storageBlocked = true
+    } else if (pendingMarker) {
+      if (recordReadable && this.record.revoked) {
+        // The readable record explicitly confirms a completed revocation; the marker is stale.
+        try {
+          await this.state.clearRevocationPending(this.callerId)
+        } catch {
+          // A marker we cannot delete must keep blocking; never hide a storage failure.
+          this.storageBlocked = true
+        }
+      } else {
+        // Cannot confirm a safe state: keep the marker and stay blocked.
+        blockAsPending()
+        if (!recordReadable) this.storageBlocked = true
+      }
+    } else if (!recordReadable) {
+      // No marker, but the old record cannot be read: fail closed rather than guess.
+      this.storageBlocked = true
+    }
+    try {
+      await this.state.assertCallerWritable(this.callerId)
+    } catch {
+      // Persistence is unavailable for this caller; block instead of trusting the old record.
+      this.storageBlocked = true
+    }
     const settings = this.settings()
     this.executor = new DwsExecutor(settings, this.config.limits, this.runtime())
     if (
+      !this.storageBlocked &&
       !this.mismatch &&
       !this.record.revoked &&
       !this.record.verificationPending &&
@@ -148,6 +200,7 @@ export class UserSession {
     const target = platformTarget()
     if (!target) return { state: 'failed', reasonCode: 'cli_platform_unsupported', protocol: CONNECTOR_PROTOCOL }
     if (this.mismatch) return { state: 'failed', reasonCode: 'identity_mismatch', protocol: CONNECTOR_PROTOCOL }
+    if (this.storageBlocked) return { state: 'failed', reasonCode: 'service_unavailable', protocol: CONNECTOR_PROTOCOL }
     try {
       // A test-mode replacement CLI is a fixture, not a pinned artifact; production always verifies the hash.
       checkAborted()
@@ -179,6 +232,7 @@ export class UserSession {
       if (this.authorizing) return { state: 'authorizing', reasonCode: 'authorization_pending' }
       if (this.mismatch) return { state: 'identity_mismatch', reasonCode: 'identity_mismatch' }
       if (this.record.revocationPending) return { state: 'unknown', reasonCode: 'revocation_failed' }
+      if (this.storageBlocked) return { state: 'unknown', reasonCode: 'service_unavailable' }
       if (this.record.verificationPending) return { state: 'unknown', reasonCode: 'verification_failed_after_save' }
       if (!this.backend) return { state: 'unlinked', reasonCode: 'not_connected' }
       let value = await this.backend.status(call)
@@ -210,6 +264,7 @@ export class UserSession {
       return await this.guard(async (inner): Promise<InvokeResult> => {
         if (this.closed) return { status: 'failed', reasonCode: 'service_disposed', retryable: false }
         if (this.mismatch) return { status: 'denied', reasonCode: 'identity_mismatch', retryable: false }
+        if (this.storageBlocked) return { status: 'failed', reasonCode: 'service_unavailable', retryable: false }
         if (this.authorizing) return { status: 'auth_required', reasonCode: 'authorization_pending' }
         if (!this.backend) return { status: 'auth_required', reasonCode: 'not_connected' }
         return this.backend.invoke(input, inner)
@@ -241,6 +296,8 @@ export class UserSession {
   beginAuthorization(origin: unknown, returnPath: unknown) {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
     if (this.mismatch) throw new ConnectionServiceError('identity_mismatch')
+    if (this.record.revocationPending) throw new ConnectionServiceError('revocation_failed')
+    if (this.storageBlocked) throw new ConnectionServiceError('service_unavailable')
     if (this.authorizing) throw new ConnectionServiceError('authorization_busy')
     const bridge = this.auth()
     if (!bridge) throw new ConnectionServiceError('oauth_not_configured')
@@ -257,105 +314,265 @@ export class UserSession {
     return bridge.cancel(this.callerId, id)
   }
   /** Called by the OAuth callback. Exchange code via stdin, then re-verify the bound identity. */
-  async exchange(code: string, signal: AbortSignal): Promise<ConnectionStatus> {
+  async exchange(code: string, signal: AbortSignal, transactionId?: string): Promise<ConnectionStatus> {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
-    const settings = this.settings()
-    if (!this.config.oauth) throw new ConnectionServiceError('oauth_not_configured')
+    const oauth = this.config.oauth
+    if (!oauth) throw new ConnectionServiceError('oauth_not_configured')
     this.authorizing = true
+    const epoch = ++this.authorizationEpoch
+    this.lastExchange = undefined
+    // Revocation/disconnect abort this controller so a queued mutation never waits on a DWS call.
+    const controller = new AbortController()
+    this.authorizationController = controller
+    const forward = (): void => controller.abort(signal.reason)
+    if (signal.aborted) controller.abort(signal.reason)
+    else signal.addEventListener('abort', forward, { once: true })
+    const lifetime = controller.signal
+    const previous = this.record
     try {
-      return await this.state.withRefreshLock(this.callerId, async () => {
-        await this.backend?.dispose()
-        this.backend = undefined
-        const result = (await this.executor.execute(
-          [
-            'auth',
-            'exchange',
-            '--code-stdin',
-            `--client-id=${this.config.oauth!.clientId}`,
-            `--expected-corp-id=${this.binding.corpId}`,
-            `--expected-user-id=${this.binding.userId}`,
-            '--format=json',
-          ],
-          signal,
-          code,
-        )) as { success?: boolean; data?: { dwsProfile?: string; corpId?: string; userId?: string; clientId?: string } }
-        const profile = result?.data?.dwsProfile
-        if (
-          result?.success !== true ||
-          !validProfile(profile) ||
-          profile !== `${result.data?.corpId}:${result.data?.userId}` ||
-          profile !== this.profile ||
-          result.data?.clientId !== this.config.oauth!.clientId
-        )
-          throw new ConnectionServiceError('identity_mismatch')
-        this.record = { version: 1, revoked: false, profile }
-        const candidate = this.createBackend()
-        this.backend = candidate
-        const verified = await candidate.invoke({ operationId: 'identity.getSelf', args: {} }, { signal })
-        if (verified.status !== 'ok') throw new ConnectionServiceError(verified.reasonCode)
-        const status = await candidate.status()
-        if (status.state !== 'connected') throw new ConnectionServiceError('verification_failed_after_save')
-        await this.store.write({ version: 1, revoked: false, profile })
-        return { ...status, account: { organizationName: '已验证企业', displayName: '已授权账号' } }
-      })
-    } catch (error) {
-      await this.backend?.dispose()
-      this.backend = undefined
-      const previous = this.record.profile
-      if (error instanceof ConnectionServiceError && error.reasonCode === 'verification_failed_after_save') {
-        // A saved exchange that failed verification must never silently revive the old account.
-        this.record = {
-          version: 1,
-          revoked: false,
-          ...(this.profile ? { profile: this.profile } : {}),
-          verificationPending: true,
-        }
-        await this.store.write(this.record).catch(() => {})
-      } else if (previous === this.profile && !this.record.revoked && !this.record.verificationPending) {
-        this.backend = this.createBackend()
-      }
-      throw error instanceof ConnectionServiceError ? error : new ConnectionServiceError('service_unavailable')
+      return await this.mutate(() =>
+        this.state.withRefreshLock(this.callerId, async () => {
+          await this.backend?.dispose()
+          this.backend = undefined
+          let attempted = false
+          let exchanged = false
+          try {
+            if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
+            // From here on the exchange subprocess may persist credentials before it returns: a
+            // cancellation can no longer be treated as "nothing happened".
+            attempted = true
+            const result = (await this.executor.execute(
+              [
+                'auth',
+                'exchange',
+                '--code-stdin',
+                `--client-id=${oauth.clientId}`,
+                `--expected-corp-id=${this.binding.corpId}`,
+                `--expected-user-id=${this.binding.userId}`,
+                '--format=json',
+              ],
+              lifetime,
+              code,
+            )) as {
+              success?: boolean
+              data?: { dwsProfile?: string; corpId?: string; userId?: string; clientId?: string }
+            }
+            if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
+            const profile = result?.data?.dwsProfile
+            if (
+              result?.success !== true ||
+              !validProfile(profile) ||
+              profile !== `${result.data?.corpId}:${result.data?.userId}` ||
+              profile !== this.profile ||
+              result.data?.clientId !== oauth.clientId
+            )
+              throw new ConnectionServiceError('identity_mismatch')
+            // The exchange has persisted credentials for this profile. Any later cancellation or
+            // failure must isolate them instead of silently restoring a usable authorization.
+            exchanged = true
+            this.record = { version: 1, revoked: false, profile }
+            const candidate = this.createBackend()
+            this.backend = candidate
+            const verified = await candidate.invoke({ operationId: 'identity.getSelf', args: {} }, { signal: lifetime })
+            if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
+            if (verified.status !== 'ok') throw new ConnectionServiceError(verified.reasonCode)
+            const status = await candidate.status()
+            if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
+            if (status.state !== 'connected') throw new ConnectionServiceError('verification_failed_after_save')
+            // Commit barrier: a cancellation observed here must win over persistence, and the same
+            // check runs again after the write so a cancellation inside the write window also wins.
+            await this.commitBarrier(epoch, lifetime)
+            await this.store.write({ version: 1, revoked: false, profile })
+            await this.commitBarrier(epoch, lifetime)
+            try {
+              await this.state.clearRevocationPending(this.callerId)
+            } catch {
+              // A marker that cannot be deleted would block a restart later: never report a
+              // connected authorization while that state is unconfirmed.
+              this.storageBlocked = true
+              const pending: BindingRecord = { version: 1, revoked: true, profile, revocationPending: true }
+              this.record = pending
+              await this.store.write(pending).catch(() => {})
+              await Promise.resolve(this.backend?.dispose()).catch(() => {})
+              this.backend = undefined
+              throw new ConnectionServiceError('service_unavailable')
+            }
+            this.lastExchange = { ...(transactionId ? { transactionId } : {}), epoch }
+            return { ...status, account: { organizationName: '已验证企业', displayName: '已授权账号' } }
+          } catch (error) {
+            await this.backend?.dispose()
+            this.backend = undefined
+            this.lastExchange = undefined
+            const reasonCode = error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable'
+            if (reasonCode === 'execution_cancelled') {
+              if (attempted) await this.isolateCancelledExchange(this.profile)
+              else if (this.recordUsable(previous)) this.backend = this.createBackend()
+              throw new ConnectionServiceError('execution_cancelled')
+            }
+            if (this.storageBlocked && this.record.revocationPending) {
+              // The commit could not be confirmed because revocation state could not be cleaned:
+              // keep the durable pending block and fail the authorization.
+              throw new ConnectionServiceError('service_unavailable')
+            }
+            if (exchanged) {
+              // A saved exchange that cannot be verified or committed must never revive an account.
+              this.record = {
+                version: 1,
+                revoked: false,
+                profile: this.profile,
+                verificationPending: true,
+              }
+              await this.store.write(this.record).catch(() => {})
+              throw error instanceof ConnectionServiceError ? error : new ConnectionServiceError('service_unavailable')
+            }
+            if (this.recordUsable(previous)) this.backend = this.createBackend()
+            throw error instanceof ConnectionServiceError ? error : new ConnectionServiceError('service_unavailable')
+          }
+        }),
+      )
     } finally {
+      signal.removeEventListener('abort', forward)
+      if (this.authorizationController === controller) this.authorizationController = undefined
       this.authorizing = false
+    }
+  }
+  /**
+   * Roll back an exchange that committed after the caller already cancelled the transaction.
+   * Only the latest committed exchange can be rolled back; newer attempts are left untouched.
+   */
+  async rollbackExchange(transactionId: string | undefined): Promise<void> {
+    if (!transactionId) return
+    await this.mutate(async () => {
+      const committed = this.lastExchange
+      if (!committed || committed.transactionId !== transactionId || committed.epoch !== this.authorizationEpoch) return
+      this.lastExchange = undefined
+      await this.isolateCancelledExchange(this.profile)
+    })
+  }
+  /** Serialize state transitions so an older authorization flow cannot race a revocation. */
+  private async mutate<T>(action: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTail
+    let release!: () => void
+    this.mutationTail = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await previous.catch(() => {})
+    try {
+      return await action()
+    } finally {
+      release()
+    }
+  }
+  /** Cancellation wins when the caller signal fired, the session closed or a newer exchange began. */
+  private stale(epoch: number, signal: AbortSignal): boolean {
+    return signal.aborted || this.closed || epoch !== this.authorizationEpoch
+  }
+  /**
+   * Test-only barrier on the commit path. It lets the suite cancel exactly between verification and
+   * persistence; the gate is parsed only in explicit test mode and is never set in production.
+   */
+  private async commitBarrier(epoch: number, signal: AbortSignal): Promise<void> {
+    if (this.stale(epoch, signal)) throw new ConnectionServiceError('execution_cancelled')
+    const gate = this.config.testCommitGate
+    if (!gate) return
+    const deadline = Date.now() + 15_000
+    for (;;) {
+      if (this.stale(epoch, signal)) throw new ConnectionServiceError('execution_cancelled')
+      try {
+        await stat(gate)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+        throw new ConnectionServiceError('service_unavailable')
+      }
+      if (Date.now() > deadline) throw new ConnectionServiceError('execution_cancelled')
+      await new Promise((done) => setTimeout(done, 10))
+    }
+  }
+  private recordUsable(record: BindingRecord): boolean {
+    return (
+      !record.revoked && !record.verificationPending && !record.revocationPending && record.profile === this.profile
+    )
+  }
+  /**
+   * A cancelled exchange may already have persisted credentials. Remove them and persist a
+   * revocation; if cleanup is unknown or fails, keep `revocationPending` so status stays blocked.
+   */
+  private async isolateCancelledExchange(profile: string): Promise<void> {
+    this.backend = undefined
+    const pending: BindingRecord = { version: 1, revoked: true, profile, revocationPending: true }
+    this.record = pending
+    await this.store.write(pending).catch(async () => {
+      // The caller directory may be unwritable; keep a root-level fallback so a restart cannot
+      // restore the stale binding.
+      await this.state.markRevocationPending(this.callerId, profile).catch(() => {})
+    })
+    try {
+      await this.executor.execute(
+        ['auth', 'logout', `--profile=${profile}`, '--format=json'],
+        new AbortController().signal,
+        '',
+        false,
+      )
+      const cleared: BindingRecord = { version: 1, revoked: true }
+      this.record = cleared
+      const persisted = await this.store.write(cleared).then(
+        () => true,
+        () => false,
+      )
+      if (persisted) await this.state.clearRevocationPending(this.callerId).catch(() => {})
+    } catch {
+      // Keep the pending marker in memory: status reports revocation_failed until cleanup succeeds.
     }
   }
   async disconnect(call: CallOptions = {}): Promise<{ disconnected: boolean }> {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
     if (call.signal?.aborted) throw new ConnectionServiceError('execution_cancelled')
     this.authorizing = true
+    this.authorizationController?.abort('execution_cancelled')
+    this.lastExchange = undefined
     try {
-      return await this.state.withRefreshLock(this.callerId, async () => {
-        const previous = this.backend
-        this.backend = undefined
-        const target = this.record.profile === this.profile ? this.profile : undefined
-        await this.store.write({
-          version: 1,
-          revoked: true,
-          ...(target ? { profile: target } : {}),
-          ...(target ? { revocationPending: true } : {}),
-        })
-        await Promise.resolve(previous?.dispose())
-        if (target) {
-          try {
-            await this.executor.execute(
-              ['auth', 'logout', `--profile=${target}`, '--format=json'],
-              call.signal ?? new AbortController().signal,
-              '',
-              false,
-            )
-          } catch {
-            this.authorizing = false
-            this.abortInflight()
-            this.auth()?.invalidate(this.callerId)
-            throw new ConnectionServiceError('revocation_failed')
+      return await this.mutate(() =>
+        this.state.withRefreshLock(this.callerId, async () => {
+          const previous = this.backend
+          this.backend = undefined
+          const target = this.record.profile === this.profile ? this.profile : undefined
+          await this.store.write({
+            version: 1,
+            revoked: true,
+            ...(target ? { profile: target } : {}),
+            ...(target ? { revocationPending: true } : {}),
+          })
+          await Promise.resolve(previous?.dispose())
+          if (target) {
+            try {
+              await this.executor.execute(
+                ['auth', 'logout', `--profile=${target}`, '--format=json'],
+                call.signal ?? new AbortController().signal,
+                '',
+                false,
+              )
+            } catch {
+              // A failed or unknown logout must stay a visible revocation block: keep the pending
+              // marker in memory (not only on disk) so status never reports a fresh `unlinked`
+              // state and a later authorization cannot silently overwrite the block.
+              this.record = {
+                version: 1,
+                revoked: true,
+                ...(target ? { profile: target, revocationPending: true } : {}),
+              }
+              this.authorizing = false
+              this.abortInflight()
+              this.auth()?.invalidate(this.callerId)
+              throw new ConnectionServiceError('revocation_failed')
+            }
           }
-        }
-        await this.store.write({ version: 1, revoked: true })
-        this.record = { version: 1, revoked: true }
-        this.abortInflight()
-        this.auth()?.invalidate(this.callerId)
-        return { disconnected: true }
-      })
+          await this.store.write({ version: 1, revoked: true })
+          this.record = { version: 1, revoked: true }
+          this.abortInflight()
+          this.auth()?.invalidate(this.callerId)
+          return { disconnected: true }
+        }),
+      )
     } finally {
       this.authorizing = false
     }
@@ -364,43 +581,58 @@ export class UserSession {
   async revoke(): Promise<void> {
     this.closed = true
     this.abortInflight()
+    this.authorizationController?.abort('execution_cancelled')
     this.auth()?.invalidate(this.callerId)
-    const previous = this.backend
-    this.backend = undefined
-    // A never-authorized caller has no profile and no credentials: clear local state without a
-    // meaningless remote logout that could leave a false revocation_failed marker.
-    const profile = this.record.profile ?? (previous ? this.profile : undefined)
-    if (!profile) {
-      try {
-        await this.store.write({ version: 1, revoked: true })
-      } catch {
-        /* state stays closed either way */
-      }
-      await Promise.resolve(previous?.dispose()).catch(() => {})
-      return
-    }
-    try {
-      await this.store.write({
+    this.lastExchange = undefined
+    // Serialized with exchange/disconnect: an older authorization flow must never overwrite the
+    // revocation marker this transition writes (or clear it afterwards).
+    await this.mutate(async () => {
+      const previous = this.backend
+      this.backend = undefined
+      // A never-authorized caller has no profile and no credentials: clear local state without a
+      // meaningless remote logout that could leave a false revocation_failed marker.
+      const profile = this.record.profile ?? (previous ? this.profile : undefined)
+      const pending: BindingRecord = {
         version: 1,
         revoked: true,
-        profile,
-        revocationPending: true,
-      })
-    } catch {
-      /* state stays closed either way */
-    }
-    await Promise.resolve(previous?.dispose()).catch(() => {})
-    try {
-      await this.executor.execute(
-        ['auth', 'logout', `--profile=${profile}`, '--format=json'],
-        new AbortController().signal,
-        '',
-        false,
-      )
-      await this.store.write({ version: 1, revoked: true })
-    } catch {
-      /* revocationPending remains; new calls are already blocked */
-    }
+        ...(profile ? { profile, revocationPending: true } : {}),
+      }
+      this.record = pending
+      try {
+        await this.store.write(pending)
+      } catch {
+        // A revocation that cannot be persisted is never reported as success: record a root-level
+        // fallback marker so a restart cannot restore the stale binding, keep the in-memory block
+        // and surface revocation_failed.
+        await this.state.markRevocationPending(this.callerId, profile).catch(() => {})
+        await Promise.resolve(previous?.dispose()).catch(() => {})
+        throw new ConnectionServiceError('revocation_failed')
+      }
+      await Promise.resolve(previous?.dispose()).catch(() => {})
+      try {
+        // The durable binding already records the revocation intent; a leftover fallback marker
+        // must not survive into a later restart, so a failed delete is reported, not hidden.
+        await this.state.clearRevocationPending(this.callerId)
+      } catch {
+        throw new ConnectionServiceError('revocation_failed')
+      }
+      if (!profile) return
+      try {
+        await this.executor.execute(
+          ['auth', 'logout', `--profile=${profile}`, '--format=json'],
+          new AbortController().signal,
+          '',
+          false,
+        )
+        const cleared: BindingRecord = { version: 1, revoked: true }
+        this.record = cleared
+        await this.store.write(cleared)
+      } catch {
+        // The durable pending marker and the in-memory block stay in place: status reports
+        // revocation_failed and new calls are blocked. An explicit retry may clear it after a real
+        // successful logout; no uncertain write is replayed automatically.
+      }
+    })
   }
   private abortInflight(): void {
     for (const controller of this.inflight) controller.abort('execution_cancelled')

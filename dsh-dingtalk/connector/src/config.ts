@@ -11,6 +11,8 @@ export interface OAuthConfig {
   scopes: string
   tlsCert?: string
   tlsKey?: string
+  /** Test-only finalize barrier used to inject a cancellation after the exchange commit. */
+  testFinalizeGate?: string
 }
 export interface ProxyConfig {
   http: string
@@ -29,6 +31,8 @@ export interface ConnectorConfig {
   testIdentity: boolean
   testEnvironment?: Record<string, string>
   testProvider?: string
+  /** Test-only persistence barrier used to inject a cancellation right before the commit. */
+  testCommitGate?: string
   socketMode: number
   limits: ExecutionLimits
   proxy?: ProxyConfig
@@ -98,6 +102,12 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     key = env.DSH_CONNECTOR_OAUTH_TLS_KEY
   if ((cert && !key) || (!cert && key)) throw new Error('incomplete DSH_CONNECTOR_OAUTH_TLS configuration')
   if (cert && (!absolute(cert) || !absolute(key!))) throw new Error('DSH_CONNECTOR_OAUTH_TLS paths must be absolute')
+  const finalizeGate = env.DSH_CONNECTOR_TEST_FINALIZE_GATE
+  if (finalizeGate !== undefined) {
+    if (env.DSH_CONNECTOR_ALLOW_TEST_TRANSPORT !== '1' && env.DSH_CONNECTOR_TEST_IDENTITY !== '1')
+      throw new Error('DSH_CONNECTOR_TEST_FINALIZE_GATE requires an explicit test mode')
+    if (!absolute(finalizeGate)) throw new Error('DSH_CONNECTOR_TEST_FINALIZE_GATE must be absolute')
+  }
   return {
     publicOrigin,
     listenPort: integer('DSH_CONNECTOR_OAUTH_LISTEN_PORT', port, 8787, 1, 65535),
@@ -105,6 +115,7 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     clientId,
     scopes,
     ...(cert ? { tlsCert: cert, tlsKey: key! } : {}),
+    ...(finalizeGate ? { testFinalizeGate: finalizeGate } : {}),
   }
 }
 export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): ConnectorConfig {
@@ -169,6 +180,11 @@ export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conn
     throw new Error('DSH_CONNECTOR_TEST_DWS_BINARY requires an explicit test mode')
   if (testBinaryRaw !== undefined && !absolute(testBinaryRaw))
     throw new Error('DSH_CONNECTOR_TEST_DWS_BINARY must be absolute')
+  const testCommitGate = env.DSH_CONNECTOR_TEST_COMMIT_GATE
+  if (testCommitGate !== undefined && !testMode)
+    throw new Error('DSH_CONNECTOR_TEST_COMMIT_GATE requires an explicit test mode')
+  if (testCommitGate !== undefined && (!absolute(testCommitGate) || /[\u0000-\u001f]/.test(testCommitGate)))
+    throw new Error('DSH_CONNECTOR_TEST_COMMIT_GATE must be absolute')
   return {
     stateDirectory: stateRaw.replaceAll('\\', '/'),
     dwsBinary: dwsBinary.replaceAll('\\', '/'),
@@ -181,6 +197,7 @@ export function parseConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conn
         : 0,
     testTransport,
     testIdentity,
+    ...(testCommitGate ? { testCommitGate } : {}),
     ...(testEnvironment ? { testEnvironment } : {}),
     ...(testProvider ? { testProvider } : {}),
     socketMode: Number.parseInt(socketModeRaw, 8),

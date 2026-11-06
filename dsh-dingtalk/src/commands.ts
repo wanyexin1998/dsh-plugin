@@ -33,6 +33,9 @@ export interface CommandDeps {
   /** Registered host workspaces for /ws; empty when the registry is unavailable. */
   listWorkspaces?(): Promise<Array<{ path: string; title?: string }>>
   defaultWorkspace?: string
+  /** Revalidate a personal channel lease before command side effects. */
+  authorize?(msg: InboundMessage): boolean
+  beforeSessionChange?(scopeKey: string): void
   markdownTitle: string
   log(line: string): void
 }
@@ -51,9 +54,13 @@ const HELP = [
 ].join('\n')
 
 /** Commands that must win over a pending human-interaction answer. */
-export function isSessionControl(text: string): boolean {
-  const command = text.trim().split(/\s+/, 1)[0]
-  return command === '/new' || command === '/stop'
+export function isSessionControl(text: string, workspaceLifecycle = false): boolean {
+  const [command, sub] = text.trim().split(/\s+/, 2)
+  return (
+    command === '/new' ||
+    command === '/stop' ||
+    (workspaceLifecycle && (command === '/cd' || (command === '/model' && (sub === 'use' || sub === 'reset'))))
+  )
 }
 
 /** The queued message a busy notice refers to, plus the hook that drops it from the lane. */
@@ -78,6 +85,15 @@ export class Commands {
   private busyCards = new Map<string, string>()
 
   constructor(private readonly deps: CommandDeps) {}
+
+  private authorize(msg: InboundMessage): void {
+    if (this.deps.authorize && !this.deps.authorize(msg)) throw new Error('im_channel_authorization_changed')
+  }
+
+  private sessionChange(msg: InboundMessage, key: string): void {
+    this.authorize(msg)
+    this.deps.beforeSessionChange?.(key)
+  }
 
   markBusyNotice(conversationId: string, ctx: BusyContext): void {
     this.pendingBusyChoice.set(conversationId, { at: Date.now(), ctx })
@@ -106,6 +122,7 @@ export class Commands {
     this.busyCards.delete(callback.outTrackId)
     this.pendingBusyChoice.delete(conversationId)
     const msg = pending.ctx.queuedMsg
+    this.authorize(msg)
     const reply = async (t: string): Promise<void> => {
       await this.deps.outbound.sendMarkdown(msg, this.deps.markdownTitle, t)
     }
@@ -123,6 +140,7 @@ export class Commands {
 
   /** @returns true when the message was a command/choice and is fully handled. */
   async handle(msg: InboundMessage, scopeKey?: string): Promise<boolean> {
+    this.authorize(msg)
     const key = scopeKey ?? msg.conversationId
     const text = msg.text.trim()
     const reply = async (t: string): Promise<void> => {
@@ -196,6 +214,7 @@ export class Commands {
       }
 
       case '/new':
+        this.sessionChange(msg, key)
         {
           const bound = this.deps.bindings.get(key)
           const agent = bound ? this.deps.agents.get(sessionId(bound)) : undefined
@@ -228,6 +247,7 @@ export class Commands {
           return true
         }
         if (sub === 'reset') {
+          this.sessionChange(msg, key)
           this.deps.modelOverrides.delete(key)
           this.deps.bindings.delete(key)
           await reply('✅ 已恢复默认模型，会话已重开。')
@@ -241,6 +261,7 @@ export class Commands {
             return true
           }
           const override = { provider: spec.slice(0, slash), model: spec.slice(slash + 1) }
+          this.sessionChange(msg, key)
           this.deps.modelOverrides.set(key, override)
           this.deps.bindings.delete(key)
           await reply(`✅ 本会话模型已切换为 \`${override.provider}/${override.model}\`，会话已重开（新上下文生效）。`)
@@ -278,6 +299,7 @@ export class Commands {
           return true
         }
         if (target === 'reset') {
+          this.sessionChange(msg, key)
           this.deps.workspaceOverrides.delete(key)
           this.deps.bindings.delete(key)
           await reply(`✅ 已恢复默认工作区 \`${this.deps.defaultWorkspace}\`，会话已重开。`)
@@ -297,6 +319,7 @@ export class Commands {
           await reply(`目录不存在：\`${dir}\``)
           return true
         }
+        this.sessionChange(msg, key)
         this.deps.workspaceOverrides.set(key, dir)
         this.deps.bindings.delete(key)
         await reply(`✅ 本会话工作区已切换为 \`${dir}\`，会话已重开（新任务在该目录执行）。`)
@@ -316,6 +339,8 @@ export class Commands {
     reply: (t: string) => Promise<void>,
     scopeKey?: string,
   ): Promise<void> {
+    this.authorize(msg)
+    this.authorize(ctx.queuedMsg)
     if (ctx.queuedMsg.contentParts?.some((part) => part.type === 'file')) {
       await reply('📎 文件消息需要下载后处理，已保留排队；可用 `/stop` 打断当前任务，让文件尽快开始处理。')
       return
@@ -342,6 +367,7 @@ export class Commands {
     okText: string,
     scopeKey?: string,
   ): Promise<void> {
+    this.authorize(msg)
     const bound = this.deps.bindings.get(scopeKey ?? msg.conversationId)
     const agent = bound ? this.deps.agents.get(sessionId(bound)) : undefined
     if (agent && agent.status === 'running') {

@@ -21,6 +21,7 @@ export interface RobotGatewayConfig {
   port?: number
   allowedGroups?: string[]
   interactionCardTemplateId?: string
+  allowUnclaimedPersonalLogin?: boolean
 }
 export function createRobotOperations(config: RobotGatewayConfig) {
   const log = (_line: string) => undefined // SDK payloads and credentials never enter gateway logs.
@@ -114,6 +115,7 @@ export async function startRobotGateway(config: RobotGatewayConfig, deferStream 
     port: config.port,
     allowedCorpId: config.corpId,
     allowedGroups: config.allowedGroups ?? [],
+    allowUnclaimedPersonalLogin: config.allowUnclaimedPersonalLogin,
     notice: (msg, text) => outbound.sendText(msg.sessionWebhook, text),
     operation,
     diagnostics: () => diagnostics.snapshot(),
@@ -162,6 +164,8 @@ export async function startRobotGateway(config: RobotGatewayConfig, deferStream 
     enable,
     port,
     status: () => ({ stream: streamStatus, ...gateway.status() }),
+    authorizes: (identity: import('../identity.js').DingTalkIdentity, device: string) =>
+      gateway.authorizes(identity, device),
     close: async () => {
       await starting?.catch(() => undefined)
       stop?.()
