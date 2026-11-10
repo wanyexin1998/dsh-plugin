@@ -40,13 +40,13 @@ test('actual native RightbarSeat → SidebarPanel → DockLayout keeps the selec
       construct: () => ({}),
       get: (t, key) => (key === Symbol.toPrimitive ? () => '' : (key in t ? t[key] : passThrough)),
     });
-    const explicit = { C: React, u: jsx, ke: classes,
+    const explicit = { k: React, p: jsx, xe: classes,
       document: dom.window.document, window: dom.window, HTMLElement: dom.window.HTMLElement, Node: dom.window.Node,
       getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
       de: (...items) => items.filter(Boolean).join(' '),
-      $r: ({ children }) => children, console,
+      Mn: ({ children }) => children, console,
       // 上游图标组件（SVG 包装），与断言无关，渲染为 null 即可
-      Ov: () => null, Zv: () => null,
+      ry: () => null, x4: () => null,
       ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
       MutationObserver: class { observe() {} disconnect() {} takeRecords() { return [] } },
       IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } },
@@ -92,6 +92,8 @@ test('actual native RightbarSeat → SidebarPanel → DockLayout keeps the selec
     const props = { sessionId: 'A', embedded: true, canShow: true, active: true, actions, t: key => key,
       useStore: select => select(React.useSyncExternalStore(fn => { listeners.add(fn); return () => listeners.delete(fn); }, () => state)),
       useTabTypes: select => select(types), useTabNavigation: () => ({}), useShortcuts: select => select([]),
+      useContextMenu: () => ({ getTriggerProps: (_target, handlers) => handlers }),
+      useContextMenuTarget: select => select(undefined), useFlash: select => select(undefined),
       occurrence: () => ({ id: 'occurrence-A', signal, tabActions: {} }), retainTab: () => () => {},
       renderSlot: seat => seat === 'sidebar.right.pane.tab' ? React.createElement(BodyProbe) : 'Native Tab',
       syncPresentation: () => { throw new Error('embedded seat tried to write global track'); }, reportAutoFullscreen: () => { throw new Error('embedded seat tried to report viewport fullscreen'); },
@@ -101,6 +103,7 @@ test('actual native RightbarSeat → SidebarPanel → DockLayout keeps the selec
     reactRoot = createRoot(dom.window.document.getElementById('root'));
     await act(async () => { reactRoot.render(render(false)); });
     const body = dom.window.document.querySelector('[data-provider-probe]');
+    assert.ok(body, `native provider missing; undeclared bundle symbols: ${[...undeclared].sort().join(', ')}; DOM: ${dom.window.document.body.innerHTML.slice(0, 1800)}`);
     const text = body.querySelector('textarea'), frame = body.querySelector('iframe');
     const tab = dom.window.document.querySelector('[data-dockkit-content="native-tab"]');
     text.value = '未提交的中文草稿';

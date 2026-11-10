@@ -4,10 +4,12 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {sha256} from './read-asar.mjs';
 import {verifyPackageFiles} from './native-package.mjs';
+import {assertProfileDependencies} from './profile-dependencies.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const receipt=JSON.parse(fs.readFileSync(path.join(root,'installed.json'),'utf8'));
 const config=path.join(receipt.profile,'package.json');
 const requireProfile=createRequire(config);
+assertProfileDependencies(receipt.profile,receipt.operations);
 if(!JSON.parse(fs.readFileSync(config,'utf8')).dsh?.profile?.bundles?.includes('dsh-split'))throw new Error('Split bundle is not enabled');
 const resolved=receipt.operations.map(op=>{
   verifyPackageFiles({...op,target:op.link});

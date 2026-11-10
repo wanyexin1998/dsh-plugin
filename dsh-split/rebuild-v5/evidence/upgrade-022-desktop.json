@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-11-09T01:49:29.735Z",
+  "dshVersion": "0.2.2-rc.1",
+  "release": "0.5.0-rebuild.9-78191c7c51bc",
+  "tests": 103,
+  "nativeBootScenarios": 5,
+  "desktop": {
+    "origin": "dsh-app://app/",
+    "historicalConversations": 2,
+    "independentEditors": 2,
+    "splitCloseControls": 2,
+    "observedThrough": "Windows screenshot and accessibility tree",
+    "modelMessagesSent": 0
+  },
+  "lastCrash": "crash-2026-11-09T01-44-26-722Z-web-boot.log",
+  "dependencyCheck": "manifest, both lockfiles, thirteen package files and resolution matched",
+  "backupReceipt": "E:/dsh-plugin/dsh-split/rebuild-v5/backups/install-2026-11-09T01-46-45-585Z/receipt.json"
+}
