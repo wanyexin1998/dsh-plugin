@@ -1,6 +1,6 @@
 {
   "name": "dsh-split",
-  "version": "0.5.0-rebuild.8",
+  "version": "0.5.0-rebuild.9",
   "description": "Frozen v5 session split workspace, clean implementation",
   "type": "commonjs",
   "main": "lib/index.js",

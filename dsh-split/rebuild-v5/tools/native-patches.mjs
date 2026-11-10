@@ -5,25 +5,26 @@ import { fileURLToPath } from 'node:url';
 import { openAsar, sha256 } from './read-asar.mjs';
 
 export const CONTRACT = 'dsh-split/native-v5.1';
-export const ASAR_SHA256 = '47874618bf5b3011fcaac10cd4c85f69da333e70d4f99b921207c78d0999512a';
+export const DSH_VERSION = '0.2.2-rc.1';
+export const ASAR_SHA256 = '5fa8a6b21bceb8f3e99e30efa2270efd0cc773a11e42aa0488f804a64b34e637';
 export const BASELINES = Object.freeze({
-  layout: '204348a4bc0636a11d1b2bd7ca905cd86e8c4a8394082b7037593c11ec195707',
-  workspace: '4dd7f3c580f2316af8172ee4dc542b10e19b030e81f9242f4696e8139260dc17',
-  conversation: '843dbcd884e05d77e525bf84b9e6dce180fd49ac8486a3c75591c291f09c9afa',
-  'sidebar-right': '38c1aa5968bf98dea89e19c63ed7eb30f225a31788f7e8e3e27a5a9e0e6172b2',
-  attachment: '46938e0b3015e232e1ff7feecf1fd0c86c79a7ca2414fc5e28899d45b4d80f7e',
-  chat: 'a130b58fd24ea9b1e2a6a0f516009e9f9bfa9dc289cc8ebf004a735496fa52ca',
-  deliverables: 'e9d5fd7d8e88b640df5e82eb3eb34bedf7f7e915dad3ee6e5f73b2fe677abfa7',
-  plan: '6ae51a6af764f8a3d12937e645c8bfc2fb4ee4c1c59574cb7391d4386518167e',
-  reference: '3d179111c51381733c7d0ec13c60ee4d9444c1dfb474ef28a0127654b8ba28a3',
-  schedule: 'f4ab5b1a519dde4830d2e68f8435e09c4d37385c32c030be5ededa03e66851ea',
-  skill: 'c46436b9d2866a47f47c0ba37fa3d0dd4672006679bb3d49503d4846269ebc63',
-  subagent: '2248242d7dbb043fa153881bf3ce0e981ac694f990dfd3a5351859e7cf0b4886',
+  layout: '54df2f30af9575c7fee78eac407d9db6aacc4fd0cd595f8ba6b7fc6f6fffc2bf',
+  workspace: '0180cefb85c1a71a1d441a8f9533663a8933d5e3f65f8dd23187c5f6147fe12f',
+  conversation: '210640100a1431a31a307f31d8258801d0042bec60b4c4a18576b6775487d73e',
+  'sidebar-right': 'd1585437d2444518c1ba668e81fd57ee9ed99cf6b629d9a02253422bd610d0b5',
+  attachment: 'a347e19878bdc4da4d0adcf52478d6664528a21317ce08359a894dbd0d1e186b',
+  chat: '1533ace9d805604cf89d575900ea4b0a1dced9b2c7eaaba619c3909bb9f0fe58',
+  deliverables: '2ec8e1f2a60193f2b2b9d38c419472eff91fce651fb9d9ada5267106b2c45c9d',
+  plan: '7b41f9684131b8effc1f83af2b47661f4b57770fedeee6ac6bebc5ade5a6485f',
+  reference: '64f62538326e8fdb44117d312b1b352845a4b93ce9f9da053b4427fb8adb7aea',
+  schedule: '3c007e56fd452ad04ef9a68ea04dd0584adbb31b73a9f66d94b3ded53e8e7097',
+  skill: '755aef44830659d1a15434d58717365d97dc33275b48f4e8230e9ead89170ead',
+  subagent: '1d74df55b7465b1fcf0298030d8ab94d51c52858f48e47b984359feec3a2544b',
 });
 
 /** Every mutation proves the complete archive member and an exact anchor count. */
 export function transformNative(name, original) {
-  if (sha256(original) !== BASELINES[name]) throw new Error(`Unsupported original ${name}: SHA-256 does not match rc.2`);
+  if (sha256(original) !== BASELINES[name]) throw new Error(`Unsupported original ${name}: SHA-256 does not match ${DSH_VERSION}`);
   let source = String(original);
   const anchors = [];
   const replace = (label, before, after, count = 1) => {
@@ -39,7 +40,8 @@ export function transformNative(name, original) {
   };
 
   if (name === 'layout') {
-    replace('main-key', 'entryKey: usePanelInfo((info) => info.activePanelId) ?? "conversation"', 'entryKey: usePanelInfo((info) => info.activePanelId ?? info.conversationHostId ?? "conversation")');
+    replace('main-host-key', 'const panelId = usePanelInfo((info) => info.activePanelId);', 'const panelId = usePanelInfo((info) => info.activePanelId);\n            const conversationHostId = usePanelInfo((info) => info.conversationHostId);');
+    replace('main-key', 'entryKey: panelId ?? "conversation"', 'entryKey: panelId ?? conversationHostId ?? "conversation"');
     replace('host-state', 'panelInfo: { activePanelId: null }', 'panelInfo: { activePanelId: null, conversationHostId: null }');
     replace('host-action', 'selectPanel: (d, panelId) => {', 'setConversationHost: (d, key) => { d.panelInfo.conversationHostId = key; },\n\t\t\t\t\tselectPanel: (d, panelId) => {');
     replace('host-lease', 'var LayoutController = class {', `var LayoutController = class {
@@ -240,13 +242,13 @@ export function transformNative(name, original) {
     replace('surface-factory', 'yield ctx.slots.register({\n\t\t\t\t\t\tname: "rightbar.session",', `yield ctx.slots.register({ name: "rightbar.session" }, ({renderFactorySlot, width, viewportWidth, canShow, active}) => renderFactorySlot("sidebar.right.surface", {width, viewportWidth, canShow, active}));
           yield ctx.slots.registerFactory({
             name: "sidebar.right.surface", scope: "session",`);
-    replace('surface-explicit-commands', '...injected,\n\t\t\t\t\t\t\tmeasureRoom:', `...injected,
+    replace('surface-explicit-commands', '...injected,\n\t\t\t\t\t\t\thooks:', `...injected,
               retainTab: views.views.get(sessionId)?.retainTab ?? (() => () => {}),
               setEmbeddedVisible: visible => { embeddedVisible.set(sessionId, visible); },
               openTab: (kind, options) => controller.openTabIn(sessionId, kind, options),
               splitPane: paneId => controller.forSession(sessionId).split(paneId),
               toggleFullscreen: () => { const face = controller.forSession(sessionId); const target = face.commandTarget(null); if (target) face.toggleFullscreen(target); },
-              measureRoom:`);
+              hooks:`);
     replace('publish-host-after-factories', 'const disposeExpand = ctx.slots.inject("conversation.session.header.corner",', `const disposeHost = ctx.reflect.provide("sidebarRightHost", {
           contract: ${JSON.stringify(CONTRACT)},
           claim() {
@@ -268,17 +270,17 @@ export function transformNative(name, original) {
   }
 
   if (name === 'attachment') {
-    replace('drop-owner-input', 'function installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive)', 'function installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, sessionId)');
+    replace('drop-owner-input', 'function installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readFileDrag)', 'function installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readFileDrag, sessionId)');
     replace('drop-true-target', 'const fileTransfer = (event) => {\n\t\t\t\tconst dataTransfer', `const fileTransfer = (event) => {
         const owner = event.target?.closest?.('[data-conversation-session]');
         if (!owner || owner.dataset.conversationSession !== sessionId || owner.closest('[hidden], [aria-hidden="true"]') || !owner.querySelector('[contenteditable="true"]')) { reset(); return null; }
         const dataTransfer`);
-    replace('drop-single-claim', 'if (canAcceptDrop) {\n\t\t\t\t\tconst files =', `if (canAcceptDrop && !event[Symbol.for("dsh.attachment.claimed")]) {
+    replace('drop-single-claim', 'if (canAcceptDrop) {\n\t\t\t\t\tconst image =', `if (canAcceptDrop && !event[Symbol.for("dsh.attachment.claimed")]) {
           event[Symbol.for("dsh.attachment.claimed")] = sessionId;
-          const files =`);
+          const image =`);
     replace('attachment-session-prop', 'function ComposerAttachments({ attachments,', 'function ComposerAttachments({ sessionId, attachments,');
-    replace('install-session-drop', 'return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive);', 'return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, sessionId);');
-    replace('install-session-deps', '}, [canAcceptDrop, onAddFiles]);', '}, [canAcceptDrop, onAddFiles, sessionId]);');
+    replace('install-session-drop', 'return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readFileDrag);', 'return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive, readFileDrag, sessionId);');
+    replace('install-session-deps', '\t\t\t\treadFileDrag\n\t\t\t]);', '\t\t\t\treadFileDrag,\n\t\t\t\tsessionId\n\t\t\t]);');
     // Drop overlays no longer cover other Session surfaces. The native content root is already positioned.
     replace('local-drop-overlay-call', 'labels: dropOverlayLabels(t, canAcceptDrop, dropLimits)', 'labels: dropOverlayLabels(t, canAcceptDrop, dropLimits),\n\t\t\t\t\tcontainer: [...document.querySelectorAll("[data-conversation-session]")].find(el => el.dataset.conversationSession === sessionId && !el.closest("[hidden], [aria-hidden=\\"true\\"]"))');
     replace('local-drop-overlay-prop', 'function DropOverlay({ disabled, labels })', 'function DropOverlay({ disabled, labels, container })');
@@ -317,7 +319,7 @@ export function buildNativePatches(asarPath, outputDirectory) {
   if (sha256(fs.readFileSync(asarPath)) !== ASAR_SHA256) throw new Error('Unsupported ASAR identity; no outputs written');
   const archive = openAsar(asarPath);
   const version = JSON.parse(archive.text('dsh/package.json')).version;
-  if (version !== '0.2.1-rc.2') throw new Error(`Unsupported DSH version ${version}`);
+  if (version !== DSH_VERSION) throw new Error(`Unsupported DSH version ${version}`);
   const prepared = Object.keys(BASELINES).map(name => {
     const member = `dsh/node_modules/@deepseek-ai/dsh-client-ui-${name}/lib/client.js`;
     return { name, member, ...transformNative(name, archive.read(member)) };

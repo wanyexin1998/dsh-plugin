@@ -147,6 +147,43 @@ test('explicit Sidebar operations capture session and stale adoption cannot fall
   assert.equal(controller.mounted.getSnapshot(), 'B');
 });
 
+test('the shipped Quote plugin activates on the patched Conversation service and admits only writable selections', () => {
+  const text = source('conversation');
+  const registry = section(text, 'var ConversationDefinitionRegistry = class {', '\n\t\t//#endregion');
+  const interactions = section(text, 'var ConversationInteractionRegistry = class extends', '\n\t\t//#endregion');
+  const service = section(text, 'var UiConversation = class extends', '\n\t\t//#endregion');
+  class UnusedRegistry { subscribe() { return () => {}; } register() { return () => {}; } }
+  const Conversation = vm.runInNewContext(`${registry}\n${interactions}\n${service}; UiConversation`, {
+    _deepseek_ai_cordis: { Service: class {} },
+    _deepseek_ai_dsh_client_store: { notifySubscribers(listeners) { for (const listener of listeners) listener(); } },
+    ConversationEventRegistry: UnusedRegistry, ConversationViewRegistry: UnusedRegistry,
+    ConversationGroupRegistry: UnusedRegistry, UserTextRegistry: UnusedRegistry,
+    HistoricalImageCache: class {}, WeakMapWithValues: class extends Map { get values() { return super.values(); } },
+  });
+  const disposers = [];
+  let removed = false;
+  const ctx = {
+    effect(callback) { const dispose = callback(); disposers.push(dispose); return dispose; },
+    locale: { register: () => () => {} },
+    slots: { inject: (_name, callback) => callback(), register: () => () => {} },
+    sessions: { binding: () => ({ session: { getSnapshot: () => ({ removed, subagent: null }) } }) },
+  };
+  ctx.uiConversation = new Conversation(ctx, ctx.sessions);
+  let quote;
+  vm.runInNewContext(archive.text('dsh/node_modules/@deepseek-ai/dsh-message-quotes/lib/client.js'), {
+    window: { __ModuleLoader__: { load({ factory }) { quote = factory(() => ({})); } } },
+  });
+  quote.apply(ctx);
+  const gesture = { trigger: 'selection', readText: () => 'selected text', preventDefault() {} };
+  assert.equal(ctx.uiConversation.interactions.dispatch('A', gesture), 'quote');
+  assert.equal(ctx.uiConversation.interactions.dispatch('A', { ...gesture, readText: () => null }), null);
+  assert.equal(ctx.uiConversation.interactions.dispatch('A', { ...gesture, trigger: 'contextmenu' }), null);
+  removed = true;
+  assert.equal(ctx.uiConversation.interactions.dispatch('A', gesture), null);
+  for (const dispose of disposers.reverse()) dispose();
+  assert.equal(ctx.uiConversation.interactions.getSnapshot().length, 0);
+});
+
 test('document drop is accepted by exactly the editable target Session, and native directory data is preserved', () => {
   const code = section(source('attachment'), 'function droppedDirectories(', '\n\t\t//#endregion\n\t\t//#region \\0dsh-css:');
   const listeners = new Map();
@@ -155,9 +192,9 @@ test('document drop is accepted by exactly the editable target Session, and nati
   const window = { innerWidth: 1000, innerHeight: 1000, addEventListener(type, fn) { windowListeners.set(type, fn); }, removeEventListener(type) { windowListeners.delete(type); } };
   const install = vm.runInNewContext(`${code}; installDocumentDropEvents`, { document, window, Symbol });
   const received = [];
-  const releaseA = install(true, (files, directories) => received.push({ owner: 'A', files, directories }), { current: 0 }, () => {}, 'A');
-  const releaseB = install(true, (files, directories) => received.push({ owner: 'B', files, directories }), { current: 0 }, () => {}, 'B');
-  const releaseDuplicateB = install(true, () => received.push({ owner: 'duplicate B' }), { current: 0 }, () => {}, 'B');
+  const releaseA = install(true, (files, directories) => received.push({ owner: 'A', files, directories }), { current: 0 }, () => {}, () => undefined, 'A');
+  const releaseB = install(true, (files, directories) => received.push({ owner: 'B', files, directories }), { current: 0 }, () => {}, () => undefined, 'B');
+  const releaseDuplicateB = install(true, () => received.push({ owner: 'duplicate B' }), { current: 0 }, () => {}, () => undefined, 'B');
   const file = { name: 'directory' };
   let hidden = false, editable = true;
   const owner = { dataset: { conversationSession: 'B' }, closest: () => hidden ? {} : null, querySelector: () => editable ? {} : null };
