@@ -78,6 +78,28 @@ test('mode selection accepts connector and still rejects cellgent; remote settin
     ['https://dsh.test'],
   );
 });
+test('seat pairs before data consent and IM calls require the currently authorized sender', async () => {
+  const fake = await fakeConnector();
+  const token = await isolatedToken();
+  const principal = { corpId: 'test-corp', userId: 'test-user' };
+  const settings = { ...settingsFor(fake), seatIdentity: principal, endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } };
+  const connection = await createRemoteConnection(settings, DEFAULT_LIMITS);
+  const input = { operationId: 'identity.getSelf', args: {} };
+  try {
+    assert.deepEqual(connection.identity(), principal);
+    assert.equal((await connection.invokeFor({ ...principal, userId: 'other' }, input)).reasonCode, 'identity_mismatch');
+    assert.equal((await connection.invokeFor(principal, input)).status, 'ok');
+    assert.equal(fake.requests.at(-1).body.expectedProfile, 'test-corp:test-user');
+    fake.state.status = { status: { state: 'unlinked', reasonCode: 'not_connected' }, identity: null };
+    assert.equal((await connection.invokeFor(principal, input)).status, 'auth_required');
+    assert.deepEqual(connection.identity(), principal);
+    assert.equal(fake.requests.filter(r => r.path === '/v1/invoke').length, 1);
+  } finally {
+    await connection.backend.dispose();
+    await fake.close();
+    await rm(token.root, { recursive: true, force: true });
+  }
+});
 test('offline connector degrades to backend_not_ready without throwing during plugin load', async () => {
   const connection = await createRemoteConnectionFor({}, { ...DEFAULT_LIMITS, timeoutMs: 1000 });
   assert.equal((await connection.backend.status()).reasonCode, 'backend_not_ready');
@@ -86,7 +108,7 @@ test('offline connector degrades to backend_not_ready without throwing during pl
   assert.equal(connection.prepareStatus().state, 'failed');
   await connection.backend.dispose();
 });
-test('remote backend maps status/prepare/invoke and keeps catalog and unsupported operations local', async () => {
+test('remote backend maps status/prepare/invoke, keeps catalog local, and forwards DWS execution', async () => {
   const fake = await fakeConnector();
   const token = await isolatedToken();
   try {
@@ -108,11 +130,38 @@ test('remote backend maps status/prepare/invoke and keeps catalog and unsupporte
     const catalog = await owner.service.invoke({ operationId: 'dws.catalog', args: { product: 'contact', limit: 1 } });
     assert.equal(catalog.status, 'ok');
     assert.equal(fake.requests.filter(request => request.path === '/v1/invoke').length, catalogCalls, 'catalog is answered locally');
-    const denied = await owner.service.invoke({ operationId: 'dws.execute', args: { command: 'calendar event create', parameters: {} } });
-    assert.equal(denied.status, 'denied');
-    assert.equal(denied.reasonCode, 'command_unavailable');
+    const described = await owner.service.invoke({ operationId: 'dws.describe', args: { command: 'doc search' } });
+    assert.equal(described.status, 'ok');
+    assert.equal(fake.requests.filter(request => request.path === '/v1/invoke').length, catalogCalls, 'describe is answered locally');
+    const read = await owner.service.invoke({ operationId: 'dws.execute', args: { command: 'doc search', parameters: {} } });
+    assert.equal(read.status, 'ok');
+    const readRequest = fake.requests.filter(request => request.path === '/v1/invoke').at(-1);
+    assert.equal(readRequest.body.operationId, 'dws.execute');
+    assert.equal(readRequest.body.confirmed, undefined);
+    const afterRead = fake.requests.filter(request => request.path === '/v1/invoke').length;
+    const writeInput = { operationId: 'dws.execute', args: { command: 'calendar event create', parameters: { title: '合成', start: '2026-11-11T01:00:00Z', end: '2026-11-11T02:00:00Z' } } };
+    const blocked = await owner.service.invoke(writeInput);
+    assert.equal(blocked.status, 'denied');
+    assert.equal(blocked.reasonCode, 'confirmation_required');
+    assert.equal(fake.requests.filter(request => request.path === '/v1/invoke').length, afterRead, 'unconfirmed writes are not sent');
+    const write = await owner.service.invoke(writeInput, { approve: async () => true, sessionId: 'session-1' });
+    assert.equal(write.status, 'ok');
+    const writeRequest = fake.requests.filter(request => request.path === '/v1/invoke').at(-1);
+    assert.equal(writeRequest.body.operationId, 'dws.execute');
+    assert.equal(writeRequest.body.confirmed, true);
+    assert.equal(writeRequest.body.sessionId, 'session-1');
+    assert.equal(Object.keys(writeRequest.body).some(key => ['userId', 'corpId', 'profile', 'token'].includes(key)), false);
+    const jobs = await owner.service.invoke({ operationId: 'dws.jobs', args: { action: 'list' } }, { sessionId: 'session-1' });
+    assert.equal(jobs.status, 'ok');
+    assert.equal(fake.requests.filter(request => request.path === '/v1/invoke').at(-1).body.operationId, 'dws.jobs');
     const forged = await owner.service.invoke({ operationId: 'identity.getSelf', args: { profile: 'other:user' } });
     assert.equal(forged.status, 'failed');
+    assert.equal(forged.reasonCode, 'invalid_request');
+    const sent = fake.requests.filter(request => request.path === '/v1/invoke').length;
+    const forgedUser = await owner.service.invoke({ operationId: 'dws.execute', args: { command: 'doc search', parameters: {}, userId: 'other' } });
+    assert.equal(forgedUser.status, 'failed');
+    assert.equal(forgedUser.reasonCode, 'invalid_request');
+    assert.equal(fake.requests.filter(request => request.path === '/v1/invoke').length, sent, 'forged identity is not sent');
     await connection.ui('browser', { origin: 'https://dsh.test', returnPath: '/' }, () => owner.service.disconnect());
     assert.equal((await owner.service.status()).state, 'connected', 'fake connector keeps reporting connected');
     await owner.dispose();

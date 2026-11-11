@@ -163,6 +163,7 @@ export function connectorEnv({
       DINGTALK_CONTACT_MCP_URL: `${synthetic.base}/contact`,
       DINGTALK_CALENDAR_MCP_URL: `${synthetic.base}/calendar`,
       DINGTALK_DOC_MCP_URL: `${synthetic.base}/doc`,
+      FAKE_DEVICE_URL: `${synthetic.base}/authorize?user_code=ABCD-EFGH`,
     }),
     ...(oauth
       ? {
@@ -263,17 +264,10 @@ export function browserFlow(env, authorizeUrl) {
     })
   return (async () => {
     const start = await step(startPath, 'GET', { host: 'connector.test', 'x-forwarded-proto': 'https' })
-    if (start.status !== 302) throw new Error(`start failed: ${start.status}`)
+    if (start.status !== 302) throw new Error(`start failed: ${start.status} ${start.body}`)
     const provider = new URL(start.headers.location)
-    const providerResponse = await fetch(provider, { redirect: 'manual' })
-    const callbackUrl = new URL(providerResponse.headers.get('location'))
-    const cookie = start.headers['set-cookie'][0].split(';')[0]
-    const callback = await step(callbackUrl.pathname + callbackUrl.search, 'GET', {
-      host: 'connector.test',
-      'x-forwarded-proto': 'https',
-      cookie,
-    })
-    return { start, provider, callback }
+    if (!provider.href.includes('user_code=ABCD-EFGH')) throw new Error(`unexpected device url: ${provider.href}`)
+    return { start, provider, callback: { status: 200, headers: start.headers, body: start.body } }
   })()
 }
 export async function rmState(root) {

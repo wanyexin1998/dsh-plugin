@@ -27,7 +27,7 @@ DSH_DINGTALK_TRUSTED_ORIGINS=https://dsh.example.com            # 精确受信�
 
 ## 远端 Backend 行为
 
-- 复用同一 `DingtalkBackend`/`ConnectionService` 契约与公开投影：`status`、`beginAuthorization`、`getAuthorizationStatus`、`disconnect`、`invoke`。`getSelf/calendar/docs` 经 Connector；`dws.catalog/describe` 在 Host 本地完成且不产生登录态副作用；`dws.execute/jobs` 在远端模式直接 `denied/command_unavailable`，不会发往 Connector。
+- 复用同一 `DingtalkBackend`/`ConnectionService` 契约与公开投影：`status`、`beginAuthorization`、`getAuthorizationStatus`、`disconnect`、`invoke`。设置页上方的数据授权卡走这条服务：`连接` 调用 Connector 的 prepare 与 authorization/begin，DWS 令牌留在 Connector 私有卷。`dws.catalog/describe` 在 Host 本地完成且不产生登录态副作用。`dws.execute`、`dws.jobs` 和 `getSelf/calendar/docs` 经 Connector。写操作、文件和后台任务先由 Host 原生确认，再带 `confirmed: true` 发往 Connector；身份仍由 socket 绑定决定。
 - `prepareStart/Status/Cancel` 走 Connector 的 `/v1/prepare`（DWS 完整性、版本、可执行性预检），客户端准备流程与本地模式一致。
 - 浏览器授权：Host 校验浏览器上下文后请求 Connector；`authorizeUrl` 为 Connector 的 HTTPS 受信 Origin。`bootstrap` 返回 Host 提供的 `callbackOrigin`，Client 只接受该精确来源的 `/dsh-dingtalk/start` 地址（不再硬编码 loopback）。
 - 身份：Connector 只在已连接时返回调用方自己的 `corpId:userId`；Host 仅用于 IM 身份校验（`invokeFor`），不投影给 Client/模型。
@@ -42,7 +42,7 @@ DSH_DINGTALK_TRUSTED_ORIGINS=https://dsh.example.com            # 精确受信�
 
 ## 验证
 
-- 单元测试：`enhancements/tests/remote.test.mjs`（mode 选择、离线降级、状态/准备/调用映射、Catalog 本地化、未开放操作拒绝、协议不匹配、capability token 错误）、`enhancements/tests/oauth.test.mjs`、`bootstrap.test.mjs`（本地模式回归）。
+- 单元测试：`enhancements/tests/remote.test.mjs`（mode 选择、离线降级、状态/准备/调用映射、Catalog 本地化、DWS 执行转发、未确认写入拒绝、伪造身份拒绝、协议不匹配、capability token 错误）、`enhancements/tests/oauth.test.mjs`、`bootstrap.test.mjs`（本地模式回归）。
 - Linux 容器测试：`connector/tests/linux.test.mjs` 先校验真实固定 Linux DWS 制品（SHA256、ELF、权限、`--version`），再用契约型 fake CLI 驱动 Connector 完整流程，覆盖双用户隔离、错绑/改绑拒绝、撤销、重启恢复、超时/取消、socket 权限与健康接口。使用 fake CLI 的原因：Linux DWS 1.0.66 的 `auth exchange` 对合成 code 走“managed token exchange”，不会使用本地合成端点，因此无法用真实二进制验证 OAuth 全链路；真实企业授权必须另行验收。
 - 本机 Windows 环境：DWS `auth exchange --expected-corp-id/user-id` 在隔离临时目录中独立复现为文件锁 `Access denied`，与插件代码无关；无 expected 参数的自动路径可用。服务端验证因此放在 Linux 容器内完成。
 - 真实企业授权、scope、IT 权限、真实双用户不在自动化范围，保持待验收。

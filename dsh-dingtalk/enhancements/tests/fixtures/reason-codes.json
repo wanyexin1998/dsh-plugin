@@ -9,6 +9,7 @@
   "auth_timeout",
   "service_unavailable",
   "connection_unknown",
+  "token_exchange_failed",
   "backend_not_ready",
   "unsupported_mode",
   "invalid_request",

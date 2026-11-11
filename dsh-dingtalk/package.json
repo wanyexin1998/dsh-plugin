@@ -18,6 +18,10 @@
       "types": "./enhancements/lib/host/index.d.ts",
       "import": "./enhancements/lib/host/index.js"
     },
+    "./relay-ui": {
+      "types": "./enhancements/lib/host/relay-ui.d.ts",
+      "import": "./enhancements/lib/host/relay-ui.js"
+    },
     "./client": {
       "types": "./enhancements/lib/client/index.d.ts",
       "default": "./enhancements/lib/client.js"

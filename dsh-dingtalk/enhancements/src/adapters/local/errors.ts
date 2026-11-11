@@ -17,7 +17,12 @@ export function normalizeDwsError(exit: number | null, stderr: string, stdout: s
         if (value.reason === 'rate_limited' && value.server_error_code === 'RATE_LIMIT_ERROR') return 'rate_limited';
         if (['request_timeout', 'http_client_timeout', 'tls_timeout', 'connection_refused', 'dns_resolution_failed', 'io_timeout', 'backend_dependency_unavailable'].includes(value.reason)) return 'service_unavailable';
       }
-      if (exit === 2 && value.category === 'auth') return 'connection_unknown';
+      if (exit === 2 && value.category === 'auth') {
+        if (typeof value.message === 'string' && value.message.includes('managed token')) {
+          return 'token_exchange_failed';
+        }
+        return 'connection_unknown';
+      }
     } catch {}
   }
   return 'cli_failed';

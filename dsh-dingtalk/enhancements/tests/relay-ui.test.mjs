@@ -42,8 +42,16 @@ const root=createRoot(document.getElementById('app'));h.render=()=>root.render(R
       await page.evaluate(state => { window.harness.state.status = state; }, state); await refresh(); await waitStatus(label);
     }
     await page.evaluate(() => { window.harness.state.status = 'connected'; }); await refresh(); await waitStatus('已连接');
-    await page.evaluate(() => { window.harness.readMode = 'hold'; }); await refresh();
-    assert.match(await status().innerText(), /已连接/); await page.getByText('正在刷新机器人状态…', { exact: true }).waitFor();
+    const button = page.getByRole('button', { name: '刷新机器人状态', exact: true });
+    const stable = await page.locator('.dsh-dt-robot').boundingBox();
+    await page.evaluate(() => { window.harness.readMode = 'hold'; });
+    await page.waitForFunction(() => window.harness.pending.length > 0);
+    assert.equal(await button.getAttribute('aria-busy'), 'false');
+    assert.deepEqual(await page.locator('.dsh-dt-robot').boundingBox(), stable);
+    await refresh();
+    assert.equal(await button.getAttribute('aria-busy'), 'true');
+    assert.deepEqual(await page.locator('.dsh-dt-robot').boundingBox(), stable);
+    assert.match(await status().innerText(), /已连接/);
     await page.evaluate(() => { window.harness.readMode = 'fail'; window.harness.pending.shift().reject(Error('offline')); });
     await page.getByRole('alert').filter({ hasText: '机器人状态读取失败' }).waitFor();
     assert.match(await status().innerText(), /上次确认：已连接/);

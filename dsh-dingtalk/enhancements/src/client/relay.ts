@@ -19,10 +19,12 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
   const statusRequest = useRef<object | null>(null);
   const readTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const closePopup = () => { popup.current?.close(); popup.current = null; };
-  const refresh = useCallback(async () => {
-    if (!active.current || mutating.current || statusRequest.current) return;
+  const refresh = useCallback(async (manual = false) => {
+    if (!active.current || mutating.current) return;
+    if (manual) setRefreshing(true);
+    if (statusRequest.current) return;
     const revision = generation.current, request = {};
-    statusRequest.current = request; setRefreshing(true);
+    statusRequest.current = request;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('status_timeout')), 15000); readTimers.current.add(timer); });
@@ -37,7 +39,7 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
   }, [store]);
   useEffect(() => {
     active.current = true; generation.current++; mutating.current = false; recoveryRequired.current = false; statusRequest.current = null;
-    setState({ status: 'loading' }); setStatusError(false); setUncertain(false); setError(''); setBusy(false); setUrl(''); setEditing(false); setClientId(''); setSecret('');
+    setState({ status: 'loading' }); setRefreshing(false); setStatusError(false); setUncertain(false); setError(''); setBusy(false); setUrl(''); setEditing(false); setClientId(''); setSecret('');
     void refresh(); const timer = setInterval(() => { void refresh(); }, 1500);
     return () => { active.current = false; generation.current++; statusRequest.current = null; clearInterval(timer); for (const timeout of readTimers.current) clearTimeout(timeout); readTimers.current.clear(); closePopup(); };
   }, [refresh]);
@@ -83,16 +85,15 @@ export function RelaySection({ store, language = 'zh' }: { store: ConnectionStor
   const unavailable = ['enterprise_configuration_invalid', 'mode_conflict', 'local_configuration_invalid', 'device_in_use', 'authorizing', 'connected', 'connecting'].includes(state.status);
   const status = state.status === 'loading' && statusError ? '状态未知' : personal && state.status === 'auth_required' ? '请重新登录机器人' : labels[state.status] || '状态未知';
   const tone = statusError ? 'warning' : state.status === 'connected' ? 'success' : ['failed', 'offline', 'auth_required', 'expired', 'stream_failed', 'enterprise_configuration_invalid', 'local_configuration_invalid', 'gateway_unavailable', 'gateway_in_use', 'mode_conflict', 'device_in_use'].includes(state.status) ? 'warning' : undefined;
-  return localize(h('section', { className: 'dsh-dt-robot dsh-dt-section', 'aria-label': '钉钉机器人', 'aria-busy': busy || refreshing },
+  return localize(h('section', { className: 'dsh-dt-robot dsh-dt-section', 'aria-label': '钉钉机器人', 'aria-busy': busy },
     h('div', { className: 'dsh-dt-strip', 'data-tone': tone },
       h('span', { className: 'dsh-dt-symbol' }, icon(tone === 'success' ? 'check' : tone === 'warning' ? 'warning' : ['loading', 'connecting', 'authorizing'].includes(state.status) ? 'clock' : 'connect')),
       h('div', { className: 'dsh-dt-copy' }, h('strong', null, state.displayName || '钉钉机器人'), h('p', { role: 'status', 'aria-live': 'polite', className: 'dsh-dt-status' }, statusError && state.status !== 'loading' ? '上次确认：' : null, status)),
       h('div', { className: 'dsh-dt-actions dsh-dt-relay-actions' },
-        h(IconButton, { label: '刷新机器人状态', symbol: 'refresh', disabled: busy || refreshing, onClick: () => void refresh() }),
+        h(IconButton, { label: '刷新机器人状态', symbol: 'refresh', 'aria-busy': refreshing, disabled: busy || refreshing, onClick: () => void refresh(true) }),
         personal && (!state.configured || !state.hosting) && !editing ? h(IconButton, { label: '配置', caption: '配置', symbol: 'more', className: 'dsh-dt-primary', disabled: blocked, onClick: () => setEditing(true) }) : null,
         !editing && (legacy || personal && state.configured || state.mode === 'enterprise') ? h(IconButton, { label: '连接', caption: '连接', symbol: 'connect', className: 'dsh-dt-primary', disabled: blocked || (legacy && !url.trim()) || unavailable, onClick: () => void action('connect') }) : null,
         !editing && canDisconnect ? h(IconButton, { label: state.status === 'authorizing' ? '取消登录' : '断开机器人', symbol: state.status === 'authorizing' ? 'close' : 'disconnect', className: 'dsh-dt-danger', disabled: blocked, onClick: () => void action('disconnect') }) : null)),
-    refreshing && state.status !== 'loading' ? h('p', { role: 'status', className: 'dsh-dt-notice' }, '正在刷新机器人状态…') : null,
     statusError ? h('p', { role: 'alert', className: 'dsh-dt-notice', 'data-tone': 'warning' }, state.status === 'loading' ? '暂时无法读取机器人状态，请重试。' : '机器人状态读取失败；显示上次确认状态。') : null,
     personal && editing ? h('form', { className: 'dsh-dt-form', onSubmit: (event: any) => { event.preventDefault(); if (clientId.trim() && secret) void action('configure'); } },
       h('label', null, 'Client ID', h('input', { value: clientId, autoComplete: 'off', maxLength: 200, required: true, disabled: blocked, onChange: (e: any) => setClientId(e.target.value) })),

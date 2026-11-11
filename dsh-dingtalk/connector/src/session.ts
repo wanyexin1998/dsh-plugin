@@ -1,5 +1,6 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
+import { parseDevicePrompt } from './device-prompt.js'
 import { ConnectionServiceError } from '../../enhancements/src/shared/models.js'
 import type {
   CallOptions,
@@ -18,6 +19,7 @@ import type { LocalSettings } from '../../enhancements/src/adapters/local/settin
 import { platformTarget, verifyExecutable } from '../../enhancements/src/adapters/local/executable.js'
 import { BindingStore } from '../../enhancements/src/host/binding-store.js'
 import type { BindingRecord } from '../../enhancements/src/host/binding-store.js'
+import type { DeviceLoginStart } from './oauth.js'
 import type { ConnectorConfig } from './config.js'
 import type { ConnectorState, UserPaths } from './state.js'
 import { CONNECTOR_PROTOCOL } from '../../enhancements/src/shared/connector.js'
@@ -26,12 +28,14 @@ export interface SessionBinding {
   corpId: string
   userId: string
 }
+const DEVICE_PROCESS_TIMEOUT_MS = 16 * 60 * 1000
 export interface AuthorizationBridge {
   begin(
     callerId: string,
     origin: unknown,
     returnPath: unknown,
-  ): { transactionId: string; authorizeUrl: string; expiresAt: string }
+    signal?: AbortSignal,
+  ): Promise<{ transactionId: string; authorizeUrl: string; expiresAt: string }>
   status(callerId: string, transactionId: string): ConnectionStatus
   cancel(callerId: string, transactionId: string): ConnectionStatus
   invalidate(callerId: string): void
@@ -293,7 +297,7 @@ export class UserSession {
       call.signal?.removeEventListener('abort', abort)
     }
   }
-  beginAuthorization(origin: unknown, returnPath: unknown) {
+  beginAuthorization(origin: unknown, returnPath: unknown, signal?: AbortSignal) {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
     if (this.mismatch) throw new ConnectionServiceError('identity_mismatch')
     if (this.record.revocationPending) throw new ConnectionServiceError('revocation_failed')
@@ -301,7 +305,7 @@ export class UserSession {
     if (this.authorizing) throw new ConnectionServiceError('authorization_busy')
     const bridge = this.auth()
     if (!bridge) throw new ConnectionServiceError('oauth_not_configured')
-    return bridge.begin(this.callerId, origin, returnPath)
+    return bridge.begin(this.callerId, origin, returnPath, signal)
   }
   authorizationStatus(id: string): ConnectionStatus {
     const bridge = this.auth()
@@ -313,11 +317,55 @@ export class UserSession {
     if (!bridge) throw new ConnectionServiceError('oauth_not_configured')
     return bridge.cancel(this.callerId, id)
   }
-  /** Called by the OAuth callback. Exchange code via stdin, then re-verify the bound identity. */
-  async exchange(code: string, signal: AbortSignal, transactionId?: string): Promise<ConnectionStatus> {
+  /**
+   * Official CLI device login for this caller. The prompt resolves when stderr has a user code and
+   * verification URL. The completion promise resolves only after the bound identity is re-checked.
+   */
+  startDeviceLogin(signal: AbortSignal, transactionId?: string): DeviceLoginStart {
     if (this.closed) throw new ConnectionServiceError('service_disposed')
-    const oauth = this.config.oauth
-    if (!oauth) throw new ConnectionServiceError('oauth_not_configured')
+    if (!this.config.oauth) throw new ConnectionServiceError('oauth_not_configured')
+    let resolvePrompt: (value: { userCode: string; verificationUrl: string }) => void = () => {}
+    let rejectPrompt: (error: unknown) => void = () => {}
+    let prompted = false
+    const prompt = new Promise<{ userCode: string; verificationUrl: string }>((resolve, reject) => {
+      resolvePrompt = resolve
+      rejectPrompt = reject
+    })
+    let captured = ''
+    const note = (chunk: string): void => {
+      if (prompted || captured.length >= 65536) return
+      captured += chunk
+      const parsed = parseDevicePrompt(captured)
+      if (!parsed) return
+      prompted = true
+      resolvePrompt(parsed)
+    }
+    const completion = this.finishDeviceLogin(signal, transactionId, note).then(
+      (status) => {
+        if (!prompted) {
+          prompted = true
+          rejectPrompt(new ConnectionServiceError('invalid_cli_output'))
+        }
+        return status
+      },
+      (error: unknown) => {
+        if (!prompted) {
+          prompted = true
+          rejectPrompt(error)
+        }
+        throw error
+      },
+    )
+    return { prompt, completion }
+  }
+  /** Run device login, then re-verify the bound identity. Credentials may exist before the CLI returns. */
+  private async finishDeviceLogin(
+    signal: AbortSignal,
+    transactionId: string | undefined,
+    onStderr: (chunk: string) => void,
+  ): Promise<ConnectionStatus> {
+    if (this.closed) throw new ConnectionServiceError('service_disposed')
+    if (!this.config.oauth) throw new ConnectionServiceError('oauth_not_configured')
     this.authorizing = true
     const epoch = ++this.authorizationEpoch
     this.lastExchange = undefined
@@ -338,36 +386,33 @@ export class UserSession {
           let exchanged = false
           try {
             if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
-            // From here on the exchange subprocess may persist credentials before it returns: a
+            // From here on the login subprocess may persist credentials before it returns: a
             // cancellation can no longer be treated as "nothing happened".
             attempted = true
             const result = (await this.executor.execute(
-              [
-                'auth',
-                'exchange',
-                '--code-stdin',
-                `--client-id=${oauth.clientId}`,
-                `--expected-corp-id=${this.binding.corpId}`,
-                `--expected-user-id=${this.binding.userId}`,
-                '--format=json',
-              ],
+              ['auth', 'login', '--device', '--no-browser', '--yes', '--format=json'],
               lifetime,
-              code,
-            )) as {
-              success?: boolean
-              data?: { dwsProfile?: string; corpId?: string; userId?: string; clientId?: string }
-            }
+              '',
+              true,
+              { timeoutMs: DEVICE_PROCESS_TIMEOUT_MS, onStderr },
+            )) as { success?: boolean; corp_id?: string; user_id?: string }
             if (this.stale(epoch, lifetime)) throw new ConnectionServiceError('execution_cancelled')
-            const profile = result?.data?.dwsProfile
-            if (
-              result?.success !== true ||
-              !validProfile(profile) ||
-              profile !== `${result.data?.corpId}:${result.data?.userId}` ||
-              profile !== this.profile ||
-              result.data?.clientId !== oauth.clientId
-            )
+            const corpId = typeof result?.corp_id === 'string' ? result.corp_id : ''
+            const userId = typeof result?.user_id === 'string' ? result.user_id : ''
+            const profile = `${corpId}:${userId}`
+            if (result?.success !== true || !validProfile(profile) || profile !== this.profile) {
+              if (validProfile(profile) && profile !== this.profile)
+                await this.executor
+                  .execute(
+                    ['auth', 'logout', `--profile=${profile}`, '--format=json'],
+                    new AbortController().signal,
+                    '',
+                    false,
+                  )
+                  .catch(() => {})
               throw new ConnectionServiceError('identity_mismatch')
-            // The exchange has persisted credentials for this profile. Any later cancellation or
+            }
+            // The login has persisted credentials for this profile. Any later cancellation or
             // failure must isolate them instead of silently restoring a usable authorization.
             exchanged = true
             this.record = { version: 1, revoked: false, profile }
@@ -437,8 +482,8 @@ export class UserSession {
     }
   }
   /**
-   * Roll back an exchange that committed after the caller already cancelled the transaction.
-   * Only the latest committed exchange can be rolled back; newer attempts are left untouched.
+   * Roll back a login that committed after the caller already cancelled the transaction.
+   * Only the latest committed login can be rolled back; newer attempts are left untouched.
    */
   async rollbackExchange(transactionId: string | undefined): Promise<void> {
     if (!transactionId) return
@@ -507,12 +552,9 @@ export class UserSession {
       await this.state.markRevocationPending(this.callerId, profile).catch(() => {})
     })
     try {
-      await this.executor.execute(
-        ['auth', 'logout', `--profile=${profile}`, '--format=json'],
-        new AbortController().signal,
-        '',
-        false,
-      )
+      // Device login can be cancelled before a profile exists or before its identity is known.
+      // This executor's config, keychain and HOME all belong to this caller.
+      await this.executor.execute(['auth', 'logout', '--format=json'], new AbortController().signal, '', false)
       const cleared: BindingRecord = { version: 1, revoked: true }
       this.record = cleared
       const persisted = await this.store.write(cleared).then(
@@ -546,7 +588,9 @@ export class UserSession {
           if (target) {
             try {
               await this.executor.execute(
-                ['auth', 'logout', `--profile=${target}`, '--format=json'],
+                this.record.revocationPending
+                  ? ['auth', 'logout', '--format=json']
+                  : ['auth', 'logout', `--profile=${target}`, '--format=json'],
                 call.signal ?? new AbortController().signal,
                 '',
                 false,

@@ -48,7 +48,7 @@ Enterprise、旧共享 Relay、standalone 和数字员工路径没有因此获�
 
 `subagent`、`spawn_agent` 继续显式拒绝。公开 `dsh-subagent` 经 `composeFrom` 组合到 preset generation，不能保证继承父机器人 Agent 的 shadow、guard 和审批。`workflow`、`ralph`、`spawn_teammate` 及自定义编排名也可能启动 Agent，因此未经核实的工具默认拒绝，不能只靠列出几个禁用名称防护。
 
-`send_file` / `send_image` 独立拒绝；现有发送实现的当前 Agent/会话目标、真实路径、类型、20 MB 和结果未知不重试规则未修改。Connector 的 `identity.getSelf` / `calendar.listEvents` / `docs.search` operation 范围未改变。
+`send_file` / `send_image` 独立拒绝；现有发送实现的当前 Agent/会话目标、真实路径、类型、20 MB 和结果未知不重试规则未修改。Connector 接受本次交付的服务器操作（发现、执行、后台任务和三项兼容查询）；调用方身份仍由 socket 绑定决定。
 
 ## 审批
 

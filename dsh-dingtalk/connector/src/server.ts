@@ -11,7 +11,10 @@ import {
   CONNECTOR_ROUTES,
   assertNoIdentityFields,
   assertServerOperation,
+  isJsonObject,
   parseCallerId,
+  parseHostConfirmed,
+  parseOptionalSessionId,
   parseProfile,
 } from '../../enhancements/src/shared/connector.js'
 import { ServerOAuth, START_PATH, CALLBACK_PATH } from './oauth.js'
@@ -25,6 +28,14 @@ export const CONNECTOR_VERSION = '0.1.0'
 const MAX_BODY = 65536
 const digest = (value: string) => createHash('sha256').update(value).digest()
 const safeEqual = (left: string, right: string): boolean => timingSafeEqual(digest(left), digest(right))
+function productionProfile(corpId: unknown, userId: unknown): { corpId: string; userId: string } {
+  if (typeof corpId !== 'string' || typeof userId !== 'string') throw new ConnectionServiceError('invalid_request')
+  const profile = parseProfile(`${corpId}:${userId}`)
+  // Synthetic identities stay on the test adapter. Real users never go through test-identity.
+  if (/^test-/i.test(profile.corpId) || /^test-/i.test(profile.userId))
+    throw new ConnectionServiceError('invalid_request')
+  return profile
+}
 const errorCode = (error: unknown): string =>
   error instanceof ConnectionServiceError ? error.reasonCode : 'service_unavailable'
 interface Route {
@@ -116,8 +127,8 @@ export class ConnectorServer {
       this.oauth = new ServerOAuth(
         this.config.oauth,
         {
-          exchange: (callerId, code, signal, transactionId) =>
-            this.session(callerId).exchange(code, signal, transactionId),
+          startDevice: (callerId, signal, transactionId) =>
+            this.session(callerId).startDeviceLogin(signal, transactionId),
           rollback: (callerId, transactionId) => this.session(callerId).rollbackExchange(transactionId),
         },
         Date.now,
@@ -126,9 +137,9 @@ export class ConnectorServer {
       await this.oauth.listen()
     }
     this.auth = {
-      begin: (callerId, origin, returnPath) => {
+      begin: (callerId, origin, returnPath, signal) => {
         if (!this.oauth) throw new ConnectionServiceError('oauth_not_configured')
-        return this.oauth.begin(callerId, origin, returnPath)
+        return this.oauth.begin(callerId, origin, returnPath, signal)
       },
       status: (callerId, transactionId) => {
         if (!this.oauth) throw new ConnectionServiceError('oauth_not_configured')
@@ -310,7 +321,7 @@ export class ConnectorServer {
       }
       if (route.path === CONNECTOR_ROUTES.authorizationBegin) {
         exact(body, ['origin', 'returnPath'])
-        ok(res, session.beginAuthorization(body.origin, body.returnPath ?? ''))
+        ok(res, await session.beginAuthorization(body.origin, body.returnPath ?? '', signal))
         return
       }
       if (route.path === CONNECTOR_ROUTES.authorizationStatus) {
@@ -329,11 +340,28 @@ export class ConnectorServer {
         return
       }
       if (route.path === CONNECTOR_ROUTES.invoke) {
-        exact(body, ['operationId', 'args'])
+        const keys = ['operationId', 'args']
+        if (Object.hasOwn(body, 'sessionId')) keys.push('sessionId')
+        if (Object.hasOwn(body, 'confirmed')) keys.push('confirmed')
+        if (Object.hasOwn(body, 'expectedProfile')) {
+          keys.push('expectedProfile')
+          if (body.expectedProfile !== session.profile) throw new ConnectionServiceError('identity_mismatch')
+        }
+        exact(body, keys)
         assertNoIdentityFields(body)
+        if (isJsonObject(body.args)) assertNoIdentityFields(body.args)
         const operationId = assertServerOperation(body.operationId)
         const input = parseInvokeInput({ operationId, args: body.args ?? {} }) as InvokeInput
-        ok(res, { result: await session.invoke(input, { signal }) })
+        const sessionId = parseOptionalSessionId(body.sessionId)
+        const confirmed = parseHostConfirmed(body.confirmed)
+        ok(res, {
+          result: await session.invoke(input, {
+            signal,
+            ...(sessionId ? { sessionId } : {}),
+            // The private socket's Host already ran the approval UI. The model cannot set this flag.
+            ...(confirmed ? { approve: async () => true } : {}),
+          }),
+        })
         return
       }
       respond(res, 404, { ok: false, error: { code: 'invalid_request' } })
@@ -379,6 +407,14 @@ export class ConnectorServer {
         ok(res, { callers })
         return
       }
+      if (url.pathname === CONNECTOR_ROUTES.adminBindIdentity) {
+        exact(body, ['callerId', 'corpId', 'userId'])
+        const callerId = parseCallerId(body.callerId)
+        const profile = productionProfile(body.corpId, body.userId)
+        await this.bindCaller(callerId, profile)
+        ok(res, { callerId, bound: true })
+        return
+      }
       if (url.pathname === CONNECTOR_ROUTES.adminBindTestIdentity) {
         exact(body, ['callerId', 'corpId', 'userId'])
         if (!this.testIdentity) throw new ConnectionServiceError('invalid_request')
@@ -387,7 +423,7 @@ export class ConnectorServer {
         parseProfile(`${profile.corpId}:${profile.userId}`)
         if (!/^test-[a-z0-9-]{2,40}$/.test(profile.corpId) || !/^test-[a-z0-9-]{2,40}$/.test(profile.userId))
           throw new ConnectionServiceError('invalid_request')
-        await this.bindTestIdentity(callerId, profile)
+        await this.bindCaller(callerId, profile)
         ok(res, { callerId, bound: true })
         return
       }
@@ -422,7 +458,7 @@ export class ConnectorServer {
       fail(res, error)
     }
   }
-  private async bindTestIdentity(callerId: string, profile: { corpId: string; userId: string }): Promise<void> {
+  private async bindCaller(callerId: string, profile: { corpId: string; userId: string }): Promise<void> {
     const existing = this.bindings.get(callerId)
     const same = !!existing && existing.corpId === profile.corpId && existing.userId === profile.userId
     if (same) {

@@ -57,10 +57,13 @@ export function createLocalBackend(settings: LocalSettings = {}, limits: Executi
   function verifyIdentity(value: unknown): unknown {
     const data = businessResult(value);
     const entries = Array.isArray(data) ? data : object(data).result;
-    if (!Array.isArray(entries) || entries.length !== 1) throw new ConnectionServiceError('identity_mismatch');
-    const identity = object(object(entries[0]).orgEmployeeModel);
-    if (identity.corpId !== corpId || identity.userId !== userId) throw new ConnectionServiceError('identity_mismatch');
-    return data;
+    if (!Array.isArray(entries)) throw new ConnectionServiceError('identity_mismatch');
+    const matches = entries.filter(entry => object(object(entry).orgEmployeeModel).corpId === corpId);
+    if (matches.length !== 1) throw new ConnectionServiceError('identity_mismatch');
+    const identity = object(object(matches[0]).orgEmployeeModel);
+    const ids = [identity.userId, identity.userid].filter(id => id !== undefined && id !== '');
+    if (!ids.length || ids.some(id => id !== userId)) throw new ConnectionServiceError('identity_mismatch');
+    return Array.isArray(data) ? matches : { ...object(data), result: matches };
   }
   async function identityCheck(signal: AbortSignal) {
     if (!binding.profile) throw new ConnectionServiceError('not_connected');
@@ -95,9 +98,19 @@ export function createLocalBackend(settings: LocalSettings = {}, limits: Executi
         executing = true;
         const value = await executor.execute(ready.argv, signal, '', true, { ...(options.workingDirectory ? { cwd: options.workingDirectory } : {}), timeoutMs: 120000 });
         const data = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-        if (data && (data.success === false || data.isError === true || data.error !== undefined)) throw new ConnectionServiceError('cli_failed');
+        const aitable = ready.contract.cli_path.startsWith('aitable ');
+        const aitableSuccess = aitable && data?.status === 'success' && data.success === true && data.isError !== true;
+        // DWS aitable uses error: {} even on confirmed success.
+        const emptyError = aitableSuccess && data.error !== null && typeof data.error === 'object' && !Array.isArray(data.error) && Object.keys(data.error).length === 0;
+        if (data && (data.success === false || data.isError === true || (aitable && data.status === 'error') || (data.error !== undefined && !emptyError))) throw new ConnectionServiceError('cli_failed');
+        let payload = data && 'result' in data ? data.result : data && 'data' in data ? data.data : value;
+        if (ready.contract.cli_path === 'aitable base create') {
+          const receipt = object(payload);
+          if (!aitableSuccess || typeof receipt.baseId !== 'string' || !/^[A-Za-z0-9_-]{1,256}$/.test(receipt.baseId) || receipt.baseId.trim() !== receipt.baseId) throw new ConnectionServiceError('invalid_cli_output');
+          payload = { baseId: receipt.baseId, ...(typeof receipt.baseName === 'string' ? { baseName: receipt.baseName } : {}), url: 'https://alidocs.dingtalk.com/i/nodes/' + receipt.baseId };
+        }
         verified.add('dws.execute'); verifiedAt = new Date().toISOString();
-        return { status: 'ok', data: redactData(data && 'result' in data ? data.result : data && 'data' in data ? data.data : value) };
+        return { status: 'ok', data: redactData(payload) };
       }, options.signal, 120000);
     } catch (error) {
       const reasonCode = failure(error);

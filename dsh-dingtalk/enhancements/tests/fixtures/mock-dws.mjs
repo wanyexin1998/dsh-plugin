@@ -13,7 +13,9 @@ if (stage === 'version') {
     corp_id: 'test-corp', user_id: 'test-user',
   }));
 } else if (stage === 'contact user get-self') {
-  console.log(JSON.stringify({ success: true, result: [{ orgEmployeeModel: { corpId: 'test-corp', userId: control.wrongIdentity ? 'wrong-user' : 'test-user' } }] }));
+  console.log(JSON.stringify({ success: true, result: control.employees ?? [{ orgEmployeeModel: { corpId: 'test-corp', userId: control.wrongIdentity ? 'wrong-user' : 'test-user' } }] }));
+} else if (stage === 'aitable base create' && control.receipt) {
+  console.log(JSON.stringify(control.receipt));
 } else if (control.stream) {
   const bytes = Buffer.from(JSON.stringify({ success: true, text: '合成中文事件', access_token: 'test-private-access' }) + '\n');
   // Split inside a UTF-8 character, exercising streaming decoder state.

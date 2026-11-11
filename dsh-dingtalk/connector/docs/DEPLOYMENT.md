@@ -64,7 +64,7 @@ DSH_DINGTALK_TRUSTED_ORIGINS=https://dsh.example.com
 - 默认 socket 目录 `0700`、socket `0600`；调用方必须与 Connector 使用相同 UID，或设置 `DSH_CONNECTOR_SOCKET_MODE=0660` 并用同一共享组（目录自动放宽为 `0750`），同时通过部署环境的 `--group-add` 让调用方进程加入该组。
 - 只挂载 `<state>/sockets/<callerId>` 这一层的只读目录；不要挂载 `<state>/sockets`（会暴露其他调用方）、`<state>/admin`（管理面）或整个私有卷。
 
-绑定创建：本期只有显式测试身份适配器（`admin test-bind`，仅 `test-*` 合成身份）用于验证；生产身份绑定入口留给未来平台实现，见 `docs/CELLGENT-INTERFACE.md`。禁止把测试适配器用于生产。
+绑定创建：生产入口是管理面 `admin bind --caller <callerId> --corp <corpId> --user <userId>`（`POST /admin/v1/bindings`，admin token）。Cellgent 把该席位已经掌握的钉钉身份绑上，`callerId` 匹配 `^[a-z0-9][a-z0-9-]{1,62}$`。`admin test-bind` 只在 `DSH_CONNECTOR_TEST_IDENTITY=1` 时接受 `test-*` 合成身份，禁止用于真实用户。见 `docs/CELLGENT-INTERFACE.md`。
 
 停止：
 
@@ -130,7 +130,7 @@ Compose 模板未强制 CPU/内存上限，可按部署规模设置 `deploy.reso
 
 ## 7. 已知限制
 
-- 真实企业 OAuth、scope、IT 权限、真实双用户与真实机器人收发**未验证**；当前仅有合成端点的自动化 / 容器验证（Linux DWS 1.0.66 的 `auth exchange` 对合成 code 走托管换取，因此 Connector 流程测试使用契约型 fake CLI，真实制品另行校验）。
+- 真实企业设备登录、IT 权限、真实双用户与真实机器人收发**未验证**；当前 Connector 流程测试使用契约型 fake CLI 模拟 `auth login --device`，真实固定 Linux DWS 另行校验。
 - 没有在线自升级：升级必须重新构建镜像并重新固定 DWS/Connector 摘要。
 - 不允许直接用 `latest` 标签部署；`check-pins` 会拒绝 Compose 中的 `:latest`。
 - 测试 seam（`DSH_CONNECTOR_TEST_*`、`DSH_CONNECTOR_TEST_DWS_BINARY`、loopback 传输）只在显式测试模式下解析，生产部署不得设置。

@@ -49,6 +49,8 @@ for (const origin of ['http://127.0.0.1:3000', 'dsh-app://app']) test(`UI carrie
 test('error normalization uses reviewed envelope fields; 403/prose/unknown codes never imply IT denial', () => {
   const envelope = error => JSON.stringify({ error });
   for (const error of [{ category: 'api', code: 1, reason: 'http_403' }, { category: 'api', code: 1, message: 'cli_not_enabled permission denied org_cli_disabled' }, { category: 'auth', code: 2, reason: 'unknown' }, { category: 'api', code: 1, server_error_code: 'invented' }]) assert.ok(!['org_cli_disabled', 'app_permission_denied', 'authorization_expired'].includes(normalizeDwsError(error.code, envelope(error), '')));
+  assert.equal(normalizeDwsError(2, envelope({ category: 'auth', code: 2, message: 'managed token exchange failed' }), ''), 'token_exchange_failed');
+  assert.equal(normalizeDwsError(2, envelope({ category: 'auth', code: 2, reason: 'unknown' }), ''), 'connection_unknown');
   assert.equal(normalizeDwsError(1, envelope({ category: 'api', code: 1, reason: 'rate_limited', server_error_code: 'RATE_LIMIT_ERROR' }), ''), 'rate_limited');
   assert.equal(normalizeDwsError(1, envelope({ category: 'api', code: 1, reason: 'backend_dependency_unavailable' }), ''), 'service_unavailable');
   assert.equal(normalizeDwsError(1, '<raw private error>', ''), 'cli_failed');

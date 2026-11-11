@@ -30,7 +30,7 @@ export class DwsExecutor {
     return { binary, env };
   }
   async check(signal: AbortSignal): Promise<void> { await this.ready(signal); }
-  async execute(args: string[], signal: AbortSignal, input = '', json = true, options: { cwd?: string; timeoutMs?: number; onValue?: (value: unknown) => void } = {}): Promise<unknown> {
+  async execute(args: string[], signal: AbortSignal, input = '', json = true, options: { cwd?: string; timeoutMs?: number; onValue?: (value: unknown) => void; onStderr?: (chunk: string) => void } = {}): Promise<unknown> {
     const { binary, env } = await this.ready(signal);
     const result = await runProcess(binary, args, env, { ...this.limits, ...(options.timeoutMs ? { timeoutMs: options.timeoutMs, maxOutputBytes: 2097152 } : {}) }, signal, this.runtime.spawn ?? spawnDws, input, options);
     if (result.code !== 0) {

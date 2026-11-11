@@ -39,6 +39,9 @@ export const connectionCss = `
 .dsh-dt-form input{display:block;width:100%;min-width:0;min-height:34px;border:1px solid var(--dt-line);border-radius:5px;padding:7px 9px;background:Canvas;color:CanvasText;font:inherit}
 .dsh-dt-form-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .dsh-dt-form-actions .dsh-dt-primary{background:var(--dt-accent-bg);color:var(--dt-accent)}
+@keyframes dsh-dt-refresh-spin{to{transform:rotate(360deg)}}
+.dsh-dt-icon[aria-busy=true] svg{animation:dsh-dt-refresh-spin .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.dsh-dt-icon[aria-busy=true] svg{animation:none;opacity:.55}}
 .dsh-dt-notice{margin:8px 0 0;font-size:11px;line-height:1.7;color:var(--dt-muted)}
 .dsh-dt [data-tone=warning].dsh-dt-notice,.dsh-dt [data-tone=warning].dsh-dt-connected,.dsh-dt-shell [data-tone=warning].dsh-dt-notice{color:var(--dt-warning)}
 .dsh-dt-status{color:var(--dt-muted);font-size:11px}

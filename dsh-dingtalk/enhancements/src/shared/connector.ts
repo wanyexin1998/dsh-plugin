@@ -15,12 +15,25 @@ export const CONNECTOR_ROUTES = Object.freeze({
   health: '/v1/health',
   adminHealth: '/admin/v1/health',
   adminBindTestIdentity: '/admin/v1/test-identity',
+  adminBindIdentity: '/admin/v1/bindings',
   adminRemoveBinding: '/admin/v1/bindings/remove',
   adminRevoke: '/admin/v1/revoke',
   adminCallers: '/admin/v1/callers',
 });
-/** The only DWS operations a server-side caller may request in this delivery. */
-export const SERVER_OPERATIONS = Object.freeze(['identity.getSelf', 'calendar.listEvents', 'docs.search'] as const);
+/**
+ * The only server operations allowed in this delivery.
+ * `dws.execute` runs official commands, including writes, files and background tasks.
+ * `dws.jobs` lists, reads or stops those tasks. Anything else is command_unavailable.
+ */
+export const SERVER_OPERATIONS = Object.freeze([
+  'dws.catalog',
+  'dws.describe',
+  'dws.execute',
+  'dws.jobs',
+  'identity.getSelf',
+  'calendar.listEvents',
+  'docs.search',
+] as const);
 export type ServerOperation = typeof SERVER_OPERATIONS[number];
 export function isServerOperation(value: unknown): value is ServerOperation {
   return typeof value === 'string' && (SERVER_OPERATIONS as readonly string[]).includes(value);
@@ -57,5 +70,17 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
 export function assertNoIdentityFields(value: Record<string, unknown>): void {
   const forbidden = ['userId', 'corpId', 'profile', 'token', 'code', 'cookie', 'authorization', 'argv', 'path', 'url', 'home', 'keychain', 'configDirectory', 'binaryPath'];
   if (Object.keys(value).some(key => forbidden.some(item => item.toLowerCase() === key.toLowerCase()))) throw new ConnectionServiceError('invalid_request');
+}
+/** Host session that owns background jobs. Absent when the caller has no session. */
+export function parseOptionalSessionId(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !value.trim() || value.length > 200 || /[\u0000-\u001f]/.test(value)) throw new ConnectionServiceError('invalid_request');
+  return value;
+}
+/** True only after the Host approval UI. The model cannot set this inside tool args. */
+export function parseHostConfirmed(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (value !== true) throw new ConnectionServiceError('invalid_request');
+  return true;
 }
 export type ConnectorInvokeInput = Extract<InvokeInput, { operationId: ServerOperation }>;

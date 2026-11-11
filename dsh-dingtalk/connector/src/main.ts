@@ -131,7 +131,14 @@ async function main(): Promise<void> {
     const sub = args[1]
     let path: string
     let payload: Record<string, unknown>
-    if (sub === 'test-bind') {
+    if (sub === 'bind') {
+      const callerId = option('caller')
+      const corpId = option('corp')
+      const userId = option('user')
+      if (!callerId || !corpId || !userId) fail('usage: admin bind --caller <id> --corp <corpId> --user <userId>')
+      path = CONNECTOR_ROUTES.adminBindIdentity
+      payload = { callerId, corpId, userId }
+    } else if (sub === 'test-bind') {
       const callerId = option('caller')
       const corpId = option('corp')
       const userId = option('user')
@@ -152,7 +159,7 @@ async function main(): Promise<void> {
     } else if (sub === 'callers') {
       path = CONNECTOR_ROUTES.adminCallers
       payload = {}
-    } else fail('usage: admin <test-bind|unbind|revoke|callers>')
+    } else fail('usage: admin <bind|test-bind|unbind|revoke|callers>')
     const result = await admin(config, path, payload)
     console.log(JSON.stringify(result.body))
     process.exit(result.status === 200 ? 0 : 1)

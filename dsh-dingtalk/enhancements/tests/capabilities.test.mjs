@@ -87,6 +87,20 @@ test('workspace files use safe relative paths and reject escape, protected files
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('aitable base create returns the confirmed node link once and never infers it from an uncertain receipt', async () => {
+  const data = { baseName: '测试表', baseId: 'node_123', url: 'https://example.invalid/wrong' };
+  const receipt = { success: true, status: 'success', error: {}, data };
+  for (const [body, ok] of [[receipt, true], [{ ...receipt, error: { code: 'FAILED' } }, false], [{ ...receipt, status: 'error' }, false], [{ ...receipt, data: { baseName: data.baseName } }, false], [{ ...receipt, data: { baseId: '../other' } }, false]]) {
+    const f = await fixture({ receipt: body });
+    try {
+      const result = await f.service.invoke({ operationId: 'dws.execute', args: { command: 'aitable base create', parameters: { name: data.baseName } } }, { approve: async () => true });
+      if (ok) assert.deepEqual(result, { status: 'ok', data: { ...data, url: 'https://alidocs.dingtalk.com/i/nodes/node_123' } });
+      else assert.deepEqual(result, { status: 'failed', reasonCode: 'outcome_unknown', retryable: false });
+      assert.equal((await f.trace()).filter(t => t.stage === 'aitable base create').length, 1);
+    } finally { await f.dispose(); }
+  }
+});
+
 test('native approval is mandatory for writes; rejected or absent approval spawns nothing', async () => {
   const f = await fixture();
   try {

@@ -169,22 +169,44 @@ test(
       const forged = await ownerA.service.invoke({ operationId: 'identity.getSelf', args: { userId: 'test-user-b' } })
       assert.equal(forged.status, 'failed')
       assert.equal(forged.reasonCode, 'invalid_request')
-      // Operations outside the server allowlist are denied locally and by the Connector.
+      const writeInput = {
+        operationId: 'dws.execute',
+        args: {
+          command: 'calendar event create',
+          parameters: { title: '合成', start: '2026-11-11T01:00:00Z', end: '2026-11-11T02:00:00Z' },
+        },
+      }
+      const unconfirmed = await ownerA.service.invoke(writeInput)
+      assert.equal(unconfirmed.status, 'denied')
+      assert.equal(unconfirmed.reasonCode, 'confirmation_required')
+      const tracePath = join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'trace.log')
+      const beforeTrace = await readFile(tracePath, 'utf8')
+      assert.equal(beforeTrace.includes('calendar event create'), false)
+      const write = await ownerA.service.invoke(writeInput, { approve: async () => true, sessionId: 'session-a' })
+      assert.equal(write.status, 'ok', JSON.stringify(write))
+      assert.equal((await readFile(tracePath, 'utf8')).includes('calendar event create'), true)
       assert.equal(
-        (
-          await ownerA.service.invoke({
-            operationId: 'dws.execute',
-            args: { command: 'calendar event create', parameters: {} },
-          })
-        ).status,
-        'denied',
+        (await ownerA.service.invoke({ operationId: 'dws.execute', args: { command: 'doc search', parameters: {} } }))
+          .status,
+        'ok',
+      )
+      assert.equal(
+        (await ownerA.service.invoke({ operationId: 'dws.jobs', args: { action: 'list' } }, { sessionId: 'session-a' }))
+          .status,
+        'ok',
       )
       const unsupported = await businessRequest(env, 'caller-a', '/v1/invoke', 'POST', {
-        operationId: 'dws.execute',
-        args: { command: 'x', parameters: {} },
+        operationId: 'message.send',
+        args: {},
       })
       assert.equal(unsupported.status, 403)
       assert.equal(unsupported.body.error.code, 'command_unavailable')
+      const forgedExecute = await businessRequest(env, 'caller-a', '/v1/invoke', 'POST', {
+        operationId: 'dws.execute',
+        args: { command: 'doc search', parameters: {}, profile: 'other:user' },
+      })
+      assert.equal(forgedExecute.status, 400)
+      assert.equal(forgedExecute.body.error.code, 'invalid_request')
       // A caller's online DWS identity must match its binding; a mismatch is denied.
       await writeFile(join(isolated.stateDir, 'callers', 'caller-a', 'dws', 'wrong_identity'), '1')
       const wrong = await ownerA.service.invoke({ operationId: 'calendar.listEvents', args: {} })
@@ -521,6 +543,18 @@ const waitForTrace = async (directory, needle, timeout = 15000) => {
     await new Promise((done) => setTimeout(done, 25))
   }
 }
+const waitBinding = async (env, callerId, ready) => {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try {
+      const binding = await readBinding(env, callerId)
+      if (ready(binding)) return binding
+    } catch {
+      /* the record is written after the cancelled login finishes cleanup */
+    }
+    await new Promise((done) => setTimeout(done, 25))
+  }
+  throw new Error('binding did not reach the expected state')
+}
 const waitStatus = async (service, transactionId) => {
   for (let attempt = 0; attempt < 400; attempt++) {
     const status = await service.getAuthorizationStatus(transactionId)
@@ -558,7 +592,11 @@ test(
       assert.equal(page.callback.status, 200)
       const status = await waitStatus(owner.service, start.transactionId)
       assert.equal(status.state, 'user_cancelled')
-      const binding = await readBinding(env, 'caller-a')
+      const binding = await waitBinding(
+        env,
+        'caller-a',
+        (value) => value.revoked === true && value.revocationPending === undefined,
+      )
       assert.equal(binding.revoked, true)
       assert.equal(binding.revocationPending, undefined)
       const blocked = await connection.backend.status()
@@ -608,7 +646,7 @@ test('cancelling at the persistence barrier wins over the commit', { skip, timeo
     const page = await flow
     assert.equal(page.callback.status, 200)
     assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
-    const binding = await readBinding(env, 'caller-a')
+    const binding = await waitBinding(env, 'caller-a', (value) => value.revoked === true)
     assert.equal(binding.revoked, true)
     assert.notEqual((await connection.backend.status()).state, 'connected')
   } finally {
@@ -646,10 +684,18 @@ test(
       await rm(join(dwsDir, 'hold_status'))
       assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
-      const pending = await readBinding(env, 'caller-a')
+      const pending = await waitBinding(
+        env,
+        'caller-a',
+        (value) => value.revoked === true && value.revocationPending === true,
+      )
       assert.equal(pending.revoked, true)
       assert.equal(pending.revocationPending, true)
-      const blocked = await owner.service.status()
+      let blocked = await owner.service.status()
+      for (let attempt = 0; blocked.reasonCode === 'authorization_pending' && attempt < 40; attempt++) {
+        await new Promise((done) => setTimeout(done, 25))
+        blocked = await owner.service.status()
+      }
       assert.equal(blocked.reasonCode, 'revocation_failed')
       await owner.dispose()
       await server.close()
@@ -735,7 +781,7 @@ test(
       await rm(join(dwsDir, 'hold_exchange_reply'))
       assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
-      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+      assert.equal((await waitBinding(env, 'caller-a', (value) => value.revoked === true)).revoked, true)
       assert.notEqual((await connection.backend.status()).state, 'connected')
       await owner.dispose()
       await server.close()
@@ -936,7 +982,7 @@ test(
       await rm(gate)
       assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
-      assert.equal((await readBinding(env, 'caller-a')).revoked, true)
+      assert.equal((await waitBinding(env, 'caller-a', (value) => value.revoked === true)).revoked, true)
       assert.notEqual((await connection.backend.status()).state, 'connected')
       await owner.dispose()
       await server.close()

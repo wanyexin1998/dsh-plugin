@@ -128,6 +128,21 @@ test('inconclusive snapshot does not become logout or attempt business calls; ex
   } finally { await expired.dispose(); }
 });
 
+test('identity selects the target enterprise and rejects duplicate or conflicting directory IDs', async () => {
+  const target = { orgEmployeeModel: { corpId: 'test-corp', userid: 'test-user' } };
+  const other = { orgEmployeeModel: { corpId: 'other-corp', userid: 'other-user' } };
+  const conflict = { orgEmployeeModel: { ...target.orgEmployeeModel, userId: 'another-user' } };
+  for (const [employees, expected] of [[[other, target], 'ok'], [[target, target], 'denied'], [[conflict], 'denied']]) {
+    const f = await fixture({ employees });
+    try {
+      const result = await f.backend.invoke({ operationId: 'identity.getSelf', args: {} });
+      assert.equal(result.status, expected);
+      assert.ok(!JSON.stringify(result).includes('other-corp'));
+      if (expected === 'denied') assert.equal(result.reasonCode, 'identity_mismatch');
+    } finally { await f.dispose(); }
+  }
+});
+
 test('online identity mismatch blocks the requested business operation', async () => {
   const f = await fixture({ wrongIdentity: true });
   try {

@@ -19,7 +19,7 @@ export const messages: Partial<Record<ReasonCode, { title: string; detail: strin
   invalid_auth_state: { title: '授权请求已失效', detail: '请重新连接。' },
   authorization_busy: { title: '正在处理授权', detail: '请完成或取消本次授权后重试。' },
   not_connected: { title: '尚未连接钉钉', detail: '连接后即可使用钉钉功能。' },
-  authorization_pending: { title: '等待钉钉授权', detail: '请在新标签页授权。' },
+  authorization_pending: { title: '等待钉钉授权', detail: '请在打开的页面确认钉钉登录。' },
   authorization_expired: { title: '授权已失效', detail: '请重新连接。' },
   org_cli_disabled: { title: '企业尚未开通 CLI 权限', detail: '请联系 IT 开通 CLI 权限。', admin: true },
   app_permission_denied: { title: '应用权限不足', detail: '请联系管理员确认应用权限。' },
@@ -35,6 +35,7 @@ export const messages: Partial<Record<ReasonCode, { title: string; detail: strin
   revocation_failed: { title: '连接已阻断，撤销尚未完成', detail: '后续调用已停止，请重试解除连接。' },
   verification_failed_after_save: { title: '授权尚未完成业务验证', detail: '请重新授权或联系管理员。' },
   connection_unknown: { title: '暂无法确认连接', detail: '请刷新状态或稍后重试。' },
+  token_exchange_failed: { title: '钉钉换票失败', detail: '授权码没有换成访问令牌，请重新连接。' },
 };
 export function messageFor(reason: ReasonCode | undefined) {
   return (reason && messages[reason]) || { title: '连接暂不可用', detail: '请稍后重试。' };
