@@ -160,6 +160,7 @@ test('device prompt parser reads the official CLI stderr', () => {
     verificationUrl: 'https://login.dingtalk.com/device?user_code=ABCD-EFGH',
   })
   assert.equal(parseDevicePrompt('still waiting'), undefined)
+  assert.equal(parseDevicePrompt(text.slice(0, text.indexOf('/device?'))), undefined)
 })
 test('server OAuth opens the official device login and ignores the old callback', async () => {
   let now = 1_000_000
@@ -230,9 +231,20 @@ test('server OAuth opens the official device login and ignores the old callback'
     assert.equal(provider.origin, 'https://login.synthetic.test')
     assert.equal(provider.searchParams.get('user_code'), 'ABCD-EFGH')
     assert.equal(provider.searchParams.get('redirect_uri'), null)
+    const cookie = started.headers['set-cookie'][0].split(';')[0]
+    for (const replayCookie of ['', cookie + 'invalid']) {
+      const replay = await call(`/dsh-dingtalk/start?t=${ticket}`, {
+        host: 'connector.test',
+        'x-forwarded-proto': 'https',
+        cookie: replayCookie,
+      })
+      assert.equal(replay.status, 400)
+      assert.equal(replay.headers.location, undefined)
+    }
     const refreshed = await call(`/dsh-dingtalk/start?t=${ticket}`, {
       host: 'connector.test',
       'x-forwarded-proto': 'https',
+      cookie,
     })
     assert.equal(refreshed.status, 302)
     assert.equal(

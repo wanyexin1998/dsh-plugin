@@ -56,7 +56,7 @@ IM 调用可以携带 Host 生成的 `expectedProfile`。Connector 仅在本 soc
 
 ## 授权状态机
 
-`authorizeUrl` 指向 `https://<public-origin>/dsh-dingtalk/start?t=<一次性 ticket>`；浏览器经 TLS 代理访问（Connector 仅监听 loopback，代理设置 `X-Forwarded-Proto: https`）。`begin` 在该用户自己的 DWS 里启动 `auth login --device --no-browser --yes`，不传企业应用 Client ID 或 Secret。stderr 出现官方 CLI 的验证码和确认链接后，开始页校验 ticket、Host 和协议，再 302 到该确认链接。CLI 完成后核验登录身份就是绑定的 `corpId:userId`，并做一次 `identity.getSelf` 在线验证后保存绑定。失败不覆盖旧的有效授权。旧的 `/dsh-dingtalk/callback` 不再换票。
+`authorizeUrl` 指向 `https://<public-origin>/dsh-dingtalk/start?t=<一次性 ticket>`；浏览器经 TLS 代理访问（Connector 仅监听 loopback，代理设置 `X-Forwarded-Proto: https`）。`begin` 在该用户自己的 DWS 里启动 `auth login --device --no-browser --yes`，不传企业应用 Client ID 或 Secret。stderr 出现官方 CLI 的验证码和确认链接后，开始页校验 ticket、Host 和协议。首次访问把事务绑定到该浏览器的安全 Cookie，同一浏览器可在授权期间刷新；其他浏览器重放已使用的 ticket 会被拒绝。链接含授权码时跳转到钉钉，需手动输入时显示授权码与确认链接。CLI 完成后核验登录身份就是绑定的 `corpId:userId`，并做一次 `identity.getSelf` 在线验证后保存绑定。失败不覆盖旧的有效授权。旧的 `/dsh-dingtalk/callback` 不再换票。
 
 ## 限制与错误
 

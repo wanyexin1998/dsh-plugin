@@ -164,10 +164,10 @@ test('old CLI, malformed output, and private stderr are normalized without leaki
 });
 
 test('operations are serialized across status/identity/business subprocesses', async () => {
-  const f = await fixture({ delay: 60 });
+  const f = await fixture({ delay: 60 }, { queueTimeoutMs: 2 * fixtureTimeout });
   try {
     const result = await Promise.all([f.backend.invoke(input), f.backend.invoke(input), f.backend.invoke(input)]);
-    assert.ok(result.every(item => item.status === 'ok'));
+    assert.deepEqual(result.map(item => item.status === 'ok' ? 'ok' : item.reasonCode), ['ok', 'ok', 'ok']);
     assert.equal(f.maximum(), 1);
   } finally { await f.dispose(); }
 });

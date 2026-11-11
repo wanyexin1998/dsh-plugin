@@ -267,7 +267,7 @@ export function browserFlow(env, authorizeUrl) {
     if (start.status !== 302) throw new Error(`start failed: ${start.status} ${start.body}`)
     const provider = new URL(start.headers.location)
     if (!provider.href.includes('user_code=ABCD-EFGH')) throw new Error(`unexpected device url: ${provider.href}`)
-    return { start, provider, callback: { status: 200, headers: start.headers, body: start.body } }
+    return { start, provider }
   })()
 }
 export async function rmState(root) {

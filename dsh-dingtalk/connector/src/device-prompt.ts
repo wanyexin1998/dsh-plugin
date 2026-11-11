@@ -7,7 +7,9 @@ const ANSI = /\u001b\[[0-9;]*m/g
  * @returns the prompt once both fields are present
  */
 export function parseDevicePrompt(text: string): { userCode: string; verificationUrl: string } | undefined {
-  const plain = text.replace(ANSI, '')
+  // stderr chunks can end halfway through the URL, even after a valid host.
+  const end = Math.max(text.lastIndexOf('\n'), text.lastIndexOf('\r'))
+  const plain = text.slice(0, end + 1).replace(ANSI, '')
   const codeMatch = plain.match(/(?:授权码|user code|authorization code)[:：]\s*([A-Za-z0-9-]{4,64})/i)
   const userCode = codeMatch?.[1]
   if (!userCode) return undefined

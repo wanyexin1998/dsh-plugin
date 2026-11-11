@@ -19,6 +19,7 @@ interface Transaction {
   ownerOrigin: string
   returnPath: string
   ticket: string
+  browserProof?: string
   expires: number
   consumed: boolean
   manualCode?: string
@@ -312,13 +313,13 @@ export class ServerOAuth {
       return
     }
     if (url.pathname === START_PATH) {
-      this.start(url, res)
+      this.start(url, req, res)
       return
     }
     res.writeHead(404)
     res.end()
   }
-  private start(url: URL, res: ServerResponse): void {
+  private start(url: URL, req: IncomingMessage, res: ServerResponse): void {
     if ([...url.searchParams.keys()].some((key) => key !== 't') || url.searchParams.getAll('t').length !== 1) {
       res.writeHead(400)
       res.end()
@@ -329,6 +330,21 @@ export class ServerOAuth {
       res.writeHead(400)
       res.end('授权链接已失效。')
       return
+    }
+    const cookie = `__Host-dsh_dt_${tx.id.slice(0, 16)}`
+    if (tx.browserProof) {
+      if (!(req.headers.cookie ?? '').split(';').some((part) => part.trim() === `${cookie}=${tx.browserProof}`)) {
+        res.writeHead(400)
+        res.end('请在最初打开授权链接的浏览器继续。')
+        return
+      }
+    } else {
+      tx.browserProof = random()
+      const maxAge = Math.ceil((tx.expires - this.clock()) / 1000)
+      res.setHeader(
+        'Set-Cookie',
+        `${cookie}=${tx.browserProof}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`,
+      )
     }
     if (tx.manualCode) {
       const href = tx.verificationUrl.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')

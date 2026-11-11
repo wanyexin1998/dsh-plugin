@@ -8,7 +8,7 @@ Connector 已提供生产绑定入口 `POST /admin/v1/bindings`。Cellgent 仍�
 - 每个调用方一条私有 Unix Socket；调用方身份由 socket 决定，业务请求没有身份字段。
 - 服务器操作：`dws.catalog`、`dws.describe`、`dws.execute`、`dws.jobs`，以及兼容的 `identity.getSelf`、`calendar.listEvents`、`docs.search`。`dws.execute` 包含读、写、文件和后台任务。其他 operationId 显式拒绝。写操作、文件和后台任务要先经过 Host 确认。
 - 每用户独立 `HOME`/`DWS_CONFIG_DIR`/Keychain/绑定/刷新锁；凭据只在 Connector 私有卷。
-- 浏览器 HTTPS 授权（受信 Origin、一次性 state、proof cookie、过期/取消/重放保护、stdin 传 Code、核验 corpId/userId）。
+- 浏览器通过 HTTPS 打开设备登录入口，首次访问绑定该浏览器，刷新时校验其安全 Cookie。员工在钉钉确认后，Connector 核对 corpId/userId；取消或过期的入口失效。
 - 撤销、在途中止、重启恢复、健康检查、独立镜像、Compose 模板、备份恢复说明。
 - 管理面（独立 socket + admin token）：绑定/撤销/列举，以及仅测试用的合成身份适配器。
 

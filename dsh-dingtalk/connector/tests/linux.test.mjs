@@ -61,11 +61,19 @@ async function prepare(connection) {
     throw new Error('prepare timeout')
   })
 }
+async function openAuthorization(service, connection, env) {
+  return connection.ui('browser', browserCtx, async () => {
+    const start = await service.beginAuthorization({ sessionRef: 's1' })
+    const page = await browserFlow(env, start.authorizeUrl)
+    assert.equal(page.start.status, 302)
+    return start
+  })
+}
 async function authorize(service, connection, env) {
   return connection.ui('browser', { origin: 'https://dsh.example.test', returnPath: '/chat' }, async () => {
     const start = await service.beginAuthorization({ sessionRef: 's1' })
     const flow = await browserFlow(env, start.authorizeUrl)
-    assert.equal(flow.callback.status, 200)
+    assert.equal(flow.start.status, 302)
     for (let attempt = 0; attempt < 400; attempt++) {
       const status = await service.getAuthorizationStatus(start.transactionId)
       if (status.state !== 'authorizing') return status
@@ -579,17 +587,11 @@ test(
       await prepare(connection)
       const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
       await writeFile(join(dwsDir, 'hold_status'), '1')
-      let start
-      const flow = connection.ui('browser', browserCtx, async () => {
-        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-        return browserFlow(env, start.authorizeUrl)
-      })
+      const start = await openAuthorization(owner.service, connection, env)
       await waitForPath(join(dwsDir, 'held_status'))
       const cancelled = await connection.cancel(start.transactionId, 'browser')
       assert.equal(cancelled.state, 'user_cancelled')
       await rm(join(dwsDir, 'hold_status'))
-      const page = await flow
-      assert.equal(page.callback.status, 200)
       const status = await waitStatus(owner.service, start.transactionId)
       assert.equal(status.state, 'user_cancelled')
       const binding = await waitBinding(
@@ -606,7 +608,7 @@ test(
       const second = await connection.ui('browser', browserCtx, async () => {
         const next = await owner.service.beginAuthorization({ sessionRef: 's2' })
         const page2 = await browserFlow(env, next.authorizeUrl)
-        assert.equal(page2.callback.status, 200)
+        assert.equal(page2.start.status, 302)
         return waitStatus(owner.service, next.transactionId)
       })
       assert.equal(second.state, 'connected')
@@ -633,18 +635,12 @@ test('cancelling at the persistence barrier wins over the commit', { skip, timeo
     owner = serviceModule.createConnectionService(connection.backend)
     await prepare(connection)
     const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
-    let start
-    const flow = connection.ui('browser', browserCtx, async () => {
-      start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-      return browserFlow(env, start.authorizeUrl)
-    })
+    const start = await openAuthorization(owner.service, connection, env)
     await waitForTrace(dwsDir, 'auth status')
     await new Promise((done) => setTimeout(done, 150))
     const cancelled = await connection.cancel(start.transactionId, 'browser')
     assert.equal(cancelled.state, 'user_cancelled')
     await rm(gate)
-    const page = await flow
-    assert.equal(page.callback.status, 200)
     assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
     const binding = await waitBinding(env, 'caller-a', (value) => value.revoked === true)
     assert.equal(binding.revoked, true)
@@ -674,15 +670,10 @@ test(
       const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
       await writeFile(join(dwsDir, 'fail_logout'), '1')
       await writeFile(join(dwsDir, 'hold_status'), '1')
-      let start
-      const flow = connection.ui('browser', browserCtx, async () => {
-        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-        return browserFlow(env, start.authorizeUrl)
-      })
+      const start = await openAuthorization(owner.service, connection, env)
       await waitForPath(join(dwsDir, 'held_status'))
       assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
       await rm(join(dwsDir, 'hold_status'))
-      assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
       const pending = await waitBinding(
         env,
@@ -771,15 +762,10 @@ test(
       assert.equal((await authorize(owner.service, connection, env)).state, 'connected')
       const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
       await writeFile(join(dwsDir, 'hold_exchange_reply'), '1')
-      let start
-      const flow = connection.ui('browser', browserCtx, async () => {
-        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-        return browserFlow(env, start.authorizeUrl)
-      })
+      const start = await openAuthorization(owner.service, connection, env)
       await waitForPath(join(dwsDir, 'held_exchange_reply'))
       assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
       await rm(join(dwsDir, 'hold_exchange_reply'))
-      assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
       assert.equal((await waitBinding(env, 'caller-a', (value) => value.revoked === true)).revoked, true)
       assert.notEqual((await connection.backend.status()).state, 'connected')
@@ -971,16 +957,11 @@ test(
       owner = serviceModule.createConnectionService(connection.backend)
       await prepare(connection)
       const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
-      let start
-      const flow = connection.ui('browser', browserCtx, async () => {
-        start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-        return browserFlow(env, start.authorizeUrl)
-      })
+      const start = await openAuthorization(owner.service, connection, env)
       await waitForTrace(dwsDir, 'auth status')
       await new Promise((done) => setTimeout(done, 250))
       assert.equal((await connection.cancel(start.transactionId, 'browser')).state, 'user_cancelled')
       await rm(gate)
-      assert.equal((await flow).callback.status, 200)
       assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
       assert.equal((await waitBinding(env, 'caller-a', (value) => value.revoked === true)).revoked, true)
       assert.notEqual((await connection.backend.status()).state, 'connected')
@@ -1010,16 +991,11 @@ test('a concurrent admin revoke wins over an in-flight authorization', { skip, t
     await prepare(connection)
     const dwsDir = join(isolated.stateDir, 'callers', 'caller-a', 'dws')
     await writeFile(join(dwsDir, 'hold_exchange_reply'), '1')
-    let start
-    const flow = connection.ui('browser', browserCtx, async () => {
-      start = await owner.service.beginAuthorization({ sessionRef: 's1' })
-      return browserFlow(env, start.authorizeUrl)
-    })
+    const start = await openAuthorization(owner.service, connection, env)
     await waitForPath(join(dwsDir, 'held_exchange_reply'))
     const revoked = await adminRequest(env, '/admin/v1/revoke', { callerId: 'caller-a' })
     assert.equal(revoked.status, 200)
     await rm(join(dwsDir, 'hold_exchange_reply'))
-    assert.equal((await flow).callback.status, 200)
     assert.equal((await waitStatus(owner.service, start.transactionId)).state, 'user_cancelled')
     assert.equal((await readBinding(env, 'caller-a')).revoked, true)
     assert.notEqual((await connection.backend.status()).state, 'connected')
@@ -1057,7 +1033,7 @@ test(
         owner.service.beginAuthorization({ sessionRef: 's1' }),
       )
       const flow = await browserFlow(env, start.authorizeUrl)
-      assert.equal(flow.callback.status, 200)
+      assert.equal(flow.start.status, 302)
       const outcome = await waitStatus(owner.service, start.transactionId)
       assert.notEqual(outcome.state, 'connected')
       const pending = await readBinding(env, 'caller-a')
