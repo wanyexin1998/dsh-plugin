@@ -34,7 +34,7 @@ async function killTree(child: ChildProcessWithoutNullStreams): Promise<void> {
   });
 }
 export async function runProcess(binary: string, args: string[], env: NodeJS.ProcessEnv, limits: ExecutionLimits,
-  signal: AbortSignal, launch: SpawnFactory = spawnDws, input = '', options: { cwd?: string; onValue?: (value: unknown) => void } = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  signal: AbortSignal, launch: SpawnFactory = spawnDws, input = '', options: { cwd?: string; onValue?: (value: unknown) => void; onStderr?: (chunk: string) => void } = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
   if (signal.aborted) throw new ConnectionServiceError(signal.reason === 'execution_timeout' ? 'execution_timeout' : 'execution_cancelled');
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
@@ -43,6 +43,7 @@ export async function runProcess(binary: string, args: string[], env: NodeJS.Pro
     let failure: ReasonCode | undefined, size = 0, killing: Promise<void> | undefined;
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     const decoder = new TextDecoder('utf-8', { fatal: true });
+    const stderrDecoder = new TextDecoder('utf-8', { fatal: true });
     let pending = '';
     const drain = (final = false) => {
       while (pending.includes('\n')) { const at = pending.indexOf('\n'); const line = pending.slice(0, at).trim(); pending = pending.slice(at + 1); if (line) options.onValue!(JSON.parse(line)); }
@@ -55,6 +56,9 @@ export async function runProcess(binary: string, args: string[], env: NodeJS.Pro
     if (signal.aborted) abort();
     for (const [stream, output] of [[child.stdout, stdout], [child.stderr, stderr]] as const) stream.on('data', (chunk: Buffer) => {
       if (failure) return;
+      if (options.onStderr && stream === child.stderr) {
+        try { options.onStderr(stderrDecoder.decode(chunk, { stream: true })); } catch { stop('invalid_cli_output'); return; }
+      }
       if (options.onValue && stream === child.stdout) {
         try { pending += decoder.decode(chunk, { stream: true }); if (Buffer.byteLength(pending) > limits.maxOutputBytes) { stop('output_limit_exceeded'); return; } drain(); } catch { stop('invalid_cli_output'); }
         return;

@@ -36,7 +36,7 @@ docker run --rm -v dsh-dingtalk_connector-state:/data -v "$PWD":/backup \
 docker compose up -d connector
 ```
 
-3. 恢复后逐一验证：`health`、每个调用方 `status`、三项只读能力各一次。若 DWS 判定 token 过期，需要重新授权；此时 `status` 返回 `not_connected`/`token_refresh_pending`，不会静默切换到其他账号。
+3. 恢复后逐一验证：`health`、每个调用方 `status`、以及一次已允许的查询。若 DWS 判定 token 过期，需要重新授权；此时 `status` 返回 `not_connected`/`token_refresh_pending`，不会静默切换到其他账号。
 4. gateway 恢复同理，使用独立卷；恢复后由部署方决定是否启用 `--profile robot`。
 
 ## 撤销语义

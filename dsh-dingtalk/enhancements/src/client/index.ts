@@ -33,6 +33,15 @@ function permissions() {
 }
 export function ConnectionSection({ store, context = {}, compact = false, language = 'zh', dismiss, errorReason }: { store: ConnectionStore; context?: AuthorizationContext; compact?: boolean; language?: string; dismiss?: () => void; errorReason?: import('../shared/models.js').ReasonCode | undefined }): ReactNode {
   const snap = useSyncExternalStore(store.subscribe, store.get, store.get);
+  const [refreshButton, setRefreshButton] = useState<'retry' | 'footer'>();
+  const refreshProps = (button: 'retry' | 'footer') => ({
+    'aria-busy': refreshButton === button,
+    disabled: snap.pending || refreshButton !== undefined,
+    onClick: async () => {
+      setRefreshButton(button);
+      try { await store.refresh(true); } finally { setRefreshButton(undefined); }
+    },
+  });
   const [confirmation, setConfirmation] = useState<string>();
   const [copied, setCopied] = useState(false), [copyFailed, setCopyFailed] = useState(false), [menu, setMenu] = useState(false);
   const menuRoot = useRef<HTMLDivElement>(null), menuButton = useRef<HTMLButtonElement>(null);
@@ -52,14 +61,14 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
   const connected = snap.status.state === 'connected' && !activeError && !working && snap.error !== 'revocation_failed';
   const text = messageFor(reason);
   const stale = !!snap.refreshError;
-  const historical = connected && (stale || snap.refreshing || snap.pending || !!snap.error && snap.error !== 'user_cancelled');
+  const historical = connected && (stale || snap.pending || !!snap.error && snap.error !== 'user_cancelled');
   const readFailed = !working && stale && !snap.checkedAt;
   const statusTitle = checking ? '检查中' : readFailed ? '连接状态读取失败' : connected ? historical ? '上次确认已连接' : '钉钉已连接' : text.title;
-  const freshness = stale ? '读取失败 · 状态待更新，请重试。' : snap.refreshing && !checking ? '刷新中 · 保留上次确认状态。' : undefined;
+  const freshness = stale ? '读取失败 · 状态待更新，请重试。' : undefined;
   const download = snap.preparing && snap.progress?.phase === 'download' ? snap.progress : undefined;
   const progressDetail = download ? `正在下载组件 · ${(download.received / 1048576).toFixed(1)} / ${(download.total / 1048576).toFixed(1)} MB` : snap.preparing && snap.progress?.phase === 'verify' ? '正在校验组件…' : undefined;
   const downloadRetry = reason === 'cli_download_failed' || reason === 'cli_download_timeout';
-  const reconnect = !checking && !readFailed && (downloadRetry || ['not_connected', 'authorization_expired', 'auth_timeout', 'user_cancelled', 'verification_failed_after_save', 'identity_mismatch', 'scope_authorization_required', 'invalid_auth_state', 'cli_missing'].includes(reason));
+  const reconnect = !checking && !readFailed && (downloadRetry || ['not_connected', 'authorization_expired', 'auth_timeout', 'user_cancelled', 'verification_failed_after_save', 'identity_mismatch', 'token_exchange_failed', 'scope_authorization_required', 'invalid_auth_state', 'cli_missing'].includes(reason));
   const admin = text.admin || ['app_permission_denied', 'permission_denied', 'scope_authorization_required', 'cli_integrity_failed', 'oauth_not_configured', 'privacy_guard_required'].includes(reason || '');
   const copy = () => { void (async () => { try { await navigator.clipboard.writeText(translate(IT_REQUEST, language)); setCopied(true); setCopyFailed(false); } catch { setCopyFailed(true); } })(); };
   const unlink = () => { setMenu(false); menuButton.current?.focus(); void store.previewDisconnect().then(setConfirmation); };
@@ -69,13 +78,13 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
     ? h('a', { className: 'dsh-dt-primary dsh-dt-action', title: '打开授权页', 'aria-label': '浏览器拦截了弹窗，点击打开授权页', href: snap.fallback, target: '_blank', rel: 'noopener noreferrer' }, icon('external'), h('span', null, '打开'))
     : snap.preparing ? null
     : working ? h('button', { className: 'dsh-dt-action', type: 'button', disabled: true }, '等待中')
-    : connected && stale ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', disabled: snap.pending || snap.refreshing, onClick: () => { void store.refresh(true); } })
+    : connected && stale ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', ...refreshProps('retry') })
     : connected ? h('span', { className: 'dsh-dt-action dsh-dt-ready', 'aria-hidden': true })
     : reason === 'revocation_failed' ? h(IconButton, { label: '重试解除连接', caption: '重试', symbol: 'disconnect', onClick: unlink, disabled: snap.pending })
     : !reconnect && admin ? h(IconButton, { label: copied ? '已复制申请文案' : '复制给 IT 的申请文案', caption: copied ? '已复制' : '复制', symbol: 'copy', onClick: copy })
-    : !reconnect ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', onClick: () => { void store.refresh(true); }, disabled: snap.pending || snap.refreshing })
+    : !reconnect ? h(IconButton, { label: '刷新状态', caption: '重试', symbol: 'refresh', ...refreshProps('retry') })
     : h('button', { className: 'dsh-dt-action dsh-dt-primary', type: 'button', 'aria-label': '连接钉钉', disabled: snap.pending, onClick: () => { void store.begin(context); } }, downloadRetry ? '重试' : reason === 'not_connected' ? '连接' : '重连');
-  const strip = (asCard: boolean) => h('section', { className: (asCard ? 'dsh-dt-card ' : '') + 'dsh-dt-strip', 'aria-label': '钉钉工具连接', 'aria-busy': checking || snap.refreshing || snap.pending, 'data-tone': stale || admin ? 'warning' : connected ? 'success' : 'neutral' },
+  const strip = (asCard: boolean) => h('section', { className: (asCard ? 'dsh-dt-card ' : '') + 'dsh-dt-strip', 'aria-label': '钉钉工具连接', 'aria-busy': checking || snap.pending, 'data-tone': stale || admin ? 'warning' : connected ? 'success' : 'neutral' },
     h('span', { className: 'dsh-dt-symbol' }, icon(symbol)),
     h('div', { className: 'dsh-dt-copy' }, h('strong', { role: 'status', 'aria-live': 'polite' }, statusTitle), h('p', { className: download ? 'dsh-dt-download-size' : undefined }, checking ? '正在读取连接状态，请稍候。' : readFailed ? '暂无法确认授权状态，请刷新重试。' : connected ? historical ? '账户信息来自上次确认。' : '可继续刚才的查询。' : progressDetail || text.detail),
       download ? h('div', { className: 'dsh-dt-progress', role: 'progressbar', 'aria-label': '组件下载进度', 'aria-valuemin': 0, 'aria-valuemax': download.total, 'aria-valuenow': download.received, 'aria-valuetext': progressDetail }, h('span', { style: { width: `${Math.max(0, Math.min(100, download.received / download.total * 100))}%` } })) : null),
@@ -89,12 +98,12 @@ export function ConnectionSection({ store, context = {}, compact = false, langua
     h('div', { className: 'dsh-dt-heading' }, h('div', null, h('h2', null, '钉钉'), h('p', null, '在对话中使用你的工作信息。')),
       h('div', { className: 'dsh-dt-menu-anchor', ref: menuRoot }, h('button', { className: 'dsh-dt-icon', ref: menuButton, type: 'button', 'aria-label': '连接管理', title: '连接管理', 'aria-expanded': menu, onClick: () => setMenu(!menu) }, icon('more')),
         h('div', { className: 'dsh-dt-menu', hidden: !menu }, h(IconButton, { label: '重新授权', caption: '重新授权', symbol: 'refresh', disabled: checking || snap.pending || working, onClick: () => { setMenu(false); void store.begin(context); } }), h(IconButton, { label: '解除连接', caption: '解除连接', symbol: 'disconnect', className: 'dsh-dt-danger', disabled: checking || snap.pending || working, onClick: unlink })))),
-    connected ? h('div', { className: 'dsh-dt-account', 'aria-busy': snap.refreshing || snap.pending }, h('span', { className: 'dsh-dt-avatar' }, icon('user')), h('div', { className: 'dsh-dt-account-copy' }, h('strong', null, account?.displayName || '已授权账号'), h('p', null, account?.organizationName || '已验证企业')), h('span', { className: 'dsh-dt-connected', 'data-tone': stale ? 'warning' : 'success', role: 'status', 'aria-live': 'polite' }, icon(historical ? 'clock' : 'check'), statusTitle)) : strip(false), notice,
+    connected ? h('div', { className: 'dsh-dt-account', 'aria-busy': snap.pending }, h('span', { className: 'dsh-dt-avatar' }, icon('user')), h('div', { className: 'dsh-dt-account-copy' }, h('strong', null, account?.displayName || '已授权账号'), h('p', null, account?.organizationName || '已验证企业')), h('span', { className: 'dsh-dt-connected', 'data-tone': stale ? 'warning' : 'success', role: 'status', 'aria-live': 'polite' }, icon(historical ? 'clock' : 'check'), statusTitle)) : strip(false), notice,
     h(RelaySection, { store, language }),
     h('div', { className: 'dsh-dt-list-label' }, '连接后可用'), permissions(),
     h('p', { className: 'dsh-dt-privacy' }, icon('shield'), h('span', null, '按你的指令操作，写入前确认。')),
     admin && reconnect ? h(IconButton, { label: copied ? '已复制申请文案' : '复制给 IT 的申请文案', caption: copied ? '已复制' : '复制给管理员', symbol: 'copy', onClick: copy }) : null,
-    h('div', { className: 'dsh-dt-bottom' }, h('span', null, (snap.checkedAt || snap.status.checkedAt) && Number.isFinite(Date.parse((snap.checkedAt || snap.status.checkedAt)!)) ? h('time', { dateTime: snap.checkedAt || snap.status.checkedAt }, '上次确认：', new Intl.DateTimeFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date((snap.checkedAt || snap.status.checkedAt)!))) : '连接状态'), h(IconButton, { label: '刷新状态', caption: '刷新状态', symbol: 'refresh', disabled: snap.pending || snap.refreshing, onClick: () => { void store.refresh(true); } })), extras, modal), language);
+    h('div', { className: 'dsh-dt-bottom' }, h('span', null, (snap.checkedAt || snap.status.checkedAt) && Number.isFinite(Date.parse((snap.checkedAt || snap.status.checkedAt)!)) ? h('time', { dateTime: snap.checkedAt || snap.status.checkedAt }, '上次确认：', new Intl.DateTimeFormat(language.startsWith('zh') ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date((snap.checkedAt || snap.status.checkedAt)!))) : '连接状态'), h(IconButton, { label: '刷新状态', caption: '刷新状态', symbol: 'refresh', ...refreshProps('footer') })), extras, modal), language);
 }
 interface ToolProps { phase: string; sessionId?: string; callId: string; block?: { args?: ToolArgumentView; content?: readonly { type: string; text?: string }[] } }
 function AuthorizationFeedback({ store, language, sessionId = 'current', callId, reason }: { store: ConnectionStore; language: string; sessionId?: string | undefined; callId: string; reason: import('../shared/models.js').ReasonCode }) {

@@ -2,7 +2,7 @@
 // Contract-faithful fake DWS CLI for Connector tests. Enabled only via the explicit test seam
 // DSH_CONNECTOR_TEST_DWS_BINARY; never shipped in the runtime image.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 const args = process.argv.slice(2)
 const configDir = process.env.DWS_CONFIG_DIR || process.cwd()
@@ -68,6 +68,37 @@ if (args[0] === 'auth' && args[1] === 'status') {
       }),
     )
   }
+  process.exit(0)
+}
+if (args[0] === 'auth' && args[1] === 'login' && args.includes('--device')) {
+  if (args.some((arg) => arg.startsWith('--client-id') || arg.startsWith('--client-secret')))
+    fail('device login must use the official CLI client')
+  const loginAs = existsSync(join(configDir, 'login_as'))
+    ? readFileSync(join(configDir, 'login_as'), 'utf8').trim().split(':')
+    : undefined
+  let identity = loginAs
+  if (!identity) {
+    try {
+      const callerId = basename(dirname(configDir))
+      const bindings = JSON.parse(readFileSync(join(configDir, '..', '..', '..', 'bindings.json'), 'utf8'))
+      const entry = bindings.bindings?.[callerId]
+      if (entry?.corpId && entry?.userId) identity = [entry.corpId, entry.userId]
+    } catch {
+      identity = undefined
+    }
+  }
+  const corpId = identity?.[0] || 'test-corp'
+  const userId = identity?.[1] || 'test-user-a'
+  const deviceUrl = process.env.FAKE_DEVICE_URL || 'https://login.dingtalk.com/oauth2/device?user_code=ABCD-EFGH'
+  process.stderr.write(' 授权码: ABCD-EFGH\n')
+  process.stderr.write(' 授权链接（已填入授权码）：\n')
+  process.stderr.write(`${deviceUrl}\n`)
+  await hold('exchange')
+  const state = readState()
+  state.profiles[`${corpId}:${userId}`] = { corpId, userId, clientId: 'official-cli' }
+  writeState(state)
+  await hold('exchange_reply')
+  process.stdout.write(JSON.stringify({ success: true, message: '登录成功', corp_id: corpId, user_id: userId }))
   process.exit(0)
 }
 if (args[0] === 'auth' && args[1] === 'exchange') {

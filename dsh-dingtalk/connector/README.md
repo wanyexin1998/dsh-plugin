@@ -5,7 +5,7 @@
 - 版本锁定：`version.json`（Connector 0.1.0、协议 1、插件 `0.2.0-dev.12`、DWS 1.0.66 `f215043e…`）。
 - 底层复用：`enhancements/` 的 `DwsExecutor`、`ExecutionQueue`、`createLocalBackend`、`operations`、错误码与 `dws.lock.json` 版本锁。
 - 运行形态：一个 Connector 进程，多用户隔离；每个调用方一条 Unix Domain Socket（生产默认，`<state>/sockets/<callerId>/dsh.sock`）或仅测试用的 loopback + capability token。
-- 服务器首批能力：`identity.getSelf`、`calendar.listEvents`、`docs.search`。其余 DWS 操作（含写操作、文件、后台任务）在 Connector 侧显式拒绝。
+- 服务器能力：`dws.catalog`、`dws.describe`、`dws.execute`、`dws.jobs`，以及兼容的 `identity.getSelf`、`calendar.listEvents`、`docs.search`。`dws.execute` 包含读、写、文件和后台任务。其他 operationId 显式拒绝。写操作、文件和后台任务要先经过 Host 确认。
 
 > 本交付**不等于** Cellgent 已接入。真实企业 OAuth、scope、IT 权限与双用户必须在真实环境验收，见 [docs/CELLGENT-INTERFACE.md](docs/CELLGENT-INTERFACE.md) 与 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
@@ -62,7 +62,9 @@ DSH_DINGTALK_TRUSTED_ORIGINS=https://dsh.example.com
 # 健康（容器健康检查使用同一命令）
 node lib/main.mjs health
 
-# 测试身份适配器：仅当 DSH_CONNECTOR_TEST_IDENTITY=1 时可用，且只接受 test-* 合成身份
+# 生产绑定：管理面 admin token。Cellgent 把已经掌握的钉钉身份绑到席位。拒绝 test-*。
+node lib/main.mjs admin bind --caller seat-a --corp <corpId> --user <userId>
+# 测试身份适配器：仅当 DSH_CONNECTOR_TEST_IDENTITY=1 时可用，且只接受 test-* 合成身份。禁止用于真实用户。
 node lib/main.mjs admin test-bind --caller caller-a --corp test-corp --user test-user-a
 node lib/main.mjs admin callers
 node lib/main.mjs admin revoke --caller caller-a
@@ -89,8 +91,8 @@ node scripts/test-linux.mjs                                 # Linux 容器集成
 
 - 凭据（DWS profile/Token/Keychain、admin token）只存在 Connector 私有卷，不挂载到 DSH Agent、viewer 或业务调用方；业务响应、健康接口、日志不返回 Code/Token/Secret。
 - 每个用户独立 `HOME`、`DWS_CONFIG_DIR`、`DWS_KEYCHAIN_DIR`、`binding.json` 和刷新锁；同一只读 DWS 二进制共享。
-- 授权事务绑定调用方 + 精确受信 Origin + 一次性 state + HttpOnly proof cookie + 过期/取消/重放保护；Code 经 stdin 传给 `dws auth exchange`，并核验期望 `corpId/userId` 与 clientId。
+- 授权事务绑定调用方 + 精确受信 Origin + 一次性 ticket + 过期/取消保护。数据授权由该用户自己的 DWS 执行 `dws auth login --device`（官方 CLI 身份，不传企业应用 Client ID/Secret）；浏览器只打开 CLI 打印的确认链接。登录结果必须是绑定的 `corpId:userId`，并做一次 `identity.getSelf` 在线验证后保存。
 - 撤销阻断新调用并中止在途调用；失败/未知结果不自动重试；重启后从私有卷恢复有效授权。
-- 测试身份适配器只能创建 `test-*` 合成身份，且必须显式开启测试模式；生产绑定由部署方/未来平台经管理通道写入。测试专用 seam（`DSH_CONNECTOR_TEST_*`、`DSH_CONNECTOR_TEST_DWS_BINARY`）只有在显式测试模式下才会被解析，生产镜像不设置它们。
+- 测试身份适配器只能创建 `test-*` 合成身份，且必须显式开启测试模式；禁止用于真实用户。生产绑定是管理面 `POST /admin/v1/bindings`，由 Cellgent 写入它已经掌握的 `corpId:userId`。测试专用 seam（`DSH_CONNECTOR_TEST_*`、`DSH_CONNECTOR_TEST_DWS_BINARY`）只有在显式测试模式下才会被解析，生产镜像不设置它们。
 
 细节见 [docs/PROTOCOL.md](docs/PROTOCOL.md)、[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)、[docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md)。

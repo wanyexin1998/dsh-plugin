@@ -1,28 +1,30 @@
-# Cellgent 后续接线清单（本期不实现）
+# Cellgent 后续接线清单
 
-本文件列出未来 Cellgent 必须实现的接口与信任条件。**本交付没有修改 Cellgent、cellgent-auth 或 DSH 核心，也没有完成任何真实企业接入**；以下内容仅为交接，不代表已实现或已验收。
+Connector 已提供生产绑定入口 `POST /admin/v1/bindings`。Cellgent 仍须用自己已经掌握的钉钉身份调用它。**本交付没有修改 Cellgent、cellgent-auth 或 DSH 核心，也没有完成任何真实企业接入。**
 
 ## 本期已经交付、Cellgent 可以直接复用的部分
 
 - 独立 Connector 进程：`dsh-dingtalk/connector/`，协议 v1（`docs/PROTOCOL.md`）。
 - 每个调用方一条私有 Unix Socket；调用方身份由 socket 决定，业务请求没有身份字段。
-- 服务器只读能力：`identity.getSelf`、`calendar.listEvents`、`docs.search`；其余操作显式拒绝。
+- 服务器操作：`dws.catalog`、`dws.describe`、`dws.execute`、`dws.jobs`，以及兼容的 `identity.getSelf`、`calendar.listEvents`、`docs.search`。`dws.execute` 包含读、写、文件和后台任务。其他 operationId 显式拒绝。写操作、文件和后台任务要先经过 Host 确认。
 - 每用户独立 `HOME`/`DWS_CONFIG_DIR`/Keychain/绑定/刷新锁；凭据只在 Connector 私有卷。
-- 浏览器 HTTPS 授权（受信 Origin、一次性 state、proof cookie、过期/取消/重放保护、stdin 传 Code、核验 corpId/userId）。
+- 浏览器通过 HTTPS 打开设备登录入口，首次访问绑定该浏览器，刷新时校验其安全 Cookie。员工在钉钉确认后，Connector 核对 corpId/userId；取消或过期的入口失效。
 - 撤销、在途中止、重启恢复、健康检查、独立镜像、Compose 模板、备份恢复说明。
 - 管理面（独立 socket + admin token）：绑定/撤销/列举，以及仅测试用的合成身份适配器。
 
 ## Cellgent 必须实现的接口
 
-1. **可信身份入口**（替换本期测试身份适配器）
-   - 由 Cellgent 自己完成用户认证，然后在 Connector 管理面创建 `callerId → corpId:userId` 绑定。
-   - 绑定请求必须来自 Cellgent 的可信服务身份（建议 mTLS 或仅限私有网络的 admin socket + 秘密管理系统下发的 admin token）。
-   - 不得把 `corpId/userId` 选择权交给模型、前端或业务调用参数。
+1. **可信身份入口**
+   - Cellgent 自己完成用户认证，然后调用 `POST /admin/v1/bindings`，创建 `callerId → corpId:userId`。
+   - 绑定请求必须来自 Cellgent 的可信服务身份（管理面 admin socket + admin token）。
+   - 不得把 `corpId/userId` 选择权交给模型、前端或业务调用参数。不要用 `test-identity` 绑定真实用户。
 2. **授权事务发起**
    - 本期授权由调用方经自己的业务 socket 发起。平台化后建议新增（协议 v2，需 bump `CONNECTOR_PROTOCOL`）：
      `POST /admin/v1/authorization/begin { callerId, origin, returnPath }`，由 Cellgent 为指定用户创建一次性授权事务并返回 `authorizeUrl`；事务仍绑定 callerId + 受信 Origin + 过期/重放保护。
-3. **生产绑定管理**
-   - `POST /admin/v1/bindings { callerId, corpId, userId }`（本期未开放生产版本，只存在 `test-identity`）。
+3. **生产绑定管理**（Connector 已提供入口；Cellgent 调用它，不把身份放进业务请求）
+   - `POST /admin/v1/bindings { callerId, corpId, userId }`，或 `admin bind --caller <id> --corp <corpId> --user <userId>`。请求走管理面，必须带 admin token。
+   - Cellgent 把自己已经掌握的钉钉 `corpId:userId` 绑到该席位的 `callerId`。`callerId` 匹配 `^[a-z0-9][a-z0-9-]{1,62}$`。
+   - 该入口拒绝 `test-*` 身份。`POST /admin/v1/test-identity` 仍只在 `DSH_CONNECTOR_TEST_IDENTITY=1` 时接受 `test-*`，禁止用于真实用户。
    - `POST /admin/v1/revoke { callerId }`：用户注销/离职/换绑时调用，必须处理在途调用与重授权。
 4. **状态与事件**
    - 通过 `GET /v1/status`（各调用方）或管理面状态接口读取 `ConnectionStatus`，不得读取 Token/Keychain。

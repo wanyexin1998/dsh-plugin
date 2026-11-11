@@ -7,8 +7,6 @@ export interface OAuthConfig {
   publicOrigin: string
   listenPort: number
   trustedOrigins: string[]
-  clientId: string
-  scopes: string
   tlsCert?: string
   tlsKey?: string
   /** Test-only finalize barrier used to inject a cancellation after the exchange commit. */
@@ -66,22 +64,15 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     'DSH_CONNECTOR_OAUTH_PUBLIC_ORIGIN',
     'DSH_CONNECTOR_OAUTH_LISTEN_PORT',
     'DSH_CONNECTOR_OAUTH_TRUSTED_ORIGINS',
-    'DSH_CONNECTOR_CLIENT_ID',
-    'DSH_CONNECTOR_SCOPES',
     'DSH_CONNECTOR_OAUTH_TLS_CERT',
     'DSH_CONNECTOR_OAUTH_TLS_KEY',
   ] as const
   if (names.every((name) => !env[name])) return undefined
   const origin = env.DSH_CONNECTOR_OAUTH_PUBLIC_ORIGIN
-  const clientId = env.DSH_CONNECTOR_CLIENT_ID
-  const scopes = env.DSH_CONNECTOR_SCOPES
   const trusted = env.DSH_CONNECTOR_OAUTH_TRUSTED_ORIGINS
   const port = env.DSH_CONNECTOR_OAUTH_LISTEN_PORT
-  if (!origin || !clientId || !scopes || !trusted || !port)
-    throw new Error('incomplete DSH_CONNECTOR_OAUTH configuration')
+  if (!origin || !trusted || !port) throw new Error('incomplete DSH_CONNECTOR_OAUTH configuration')
   const publicOrigin = httpsOrigin(origin)
-  if (!/^[A-Za-z0-9._-]{1,200}$/.test(clientId)) throw new Error('invalid DSH_CONNECTOR_CLIENT_ID')
-  if (!/^[A-Za-z0-9._: -]{1,512}$/.test(scopes)) throw new Error('invalid DSH_CONNECTOR_SCOPES')
   const origins = trusted
     .split(',')
     .map((value) => value.trim())
@@ -112,8 +103,6 @@ function parseOAuthEnv(env: NodeJS.ProcessEnv): OAuthConfig | undefined {
     publicOrigin,
     listenPort: integer('DSH_CONNECTOR_OAUTH_LISTEN_PORT', port, 8787, 1, 65535),
     trustedOrigins: normalized,
-    clientId,
-    scopes,
     ...(cert ? { tlsCert: cert, tlsKey: key! } : {}),
     ...(finalizeGate ? { testFinalizeGate: finalizeGate } : {}),
   }

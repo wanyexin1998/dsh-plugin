@@ -1,8 +1,10 @@
 import type { DingtalkConnectionService, InvokeInput, CallOptions } from '../shared/models.js';
+import { commandFor } from '../catalog/index.js';
+import { parseInvokeInput } from '../shared/validation.js';
 export interface ToolExecution { signal: AbortSignal; callId?: string; agent?: { id: string; session: { id: string } } }
 export interface ToolHost {
   workingDirectory?: { get(session: unknown): string };
-  approval?: { request(request: { agent: unknown; toolName: string; callId?: string; reason: string; signal: AbortSignal }): Promise<string> };
+  approval?: { request(request: { agent: unknown; toolName: string; applicationWrite?: boolean; callId?: string; reason: string; signal: AbortSignal }): Promise<string> };
 }
 export function dingtalkTool(service: Pick<DingtalkConnectionService, 'invoke'>, host: () => ToolHost = () => ({})) {
   return {
@@ -21,7 +23,9 @@ export function dingtalkTool(service: Pick<DingtalkConnectionService, 'invoke'>,
       const options: CallOptions = {
         signal: execution.signal, ...(agent ? { sessionId: agent.session.id } : {}), ...(cwd ? { workingDirectory: cwd } : {}),
         ...(services.approval && agent ? { approve: async (summary: string) => {
-          const outcome = await services.approval!.request({ agent, toolName: 'dingtalk_call', ...(execution.callId ? { callId: execution.callId } : {}), reason: summary, signal: execution.signal });
+          const input = parseInvokeInput(args);
+          const effect = input.operationId === 'dws.execute' ? commandFor(input.args.command).effect : undefined;
+          const outcome = await services.approval!.request({ agent, toolName: 'dingtalk_call', applicationWrite: effect === 'write' || effect === 'destructive', ...(execution.callId ? { callId: execution.callId } : {}), reason: summary, signal: execution.signal });
           return outcome === 'allowed-once' && !execution.signal.aborted;
         } } : {}),
       };

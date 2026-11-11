@@ -128,6 +128,21 @@ test('inconclusive snapshot does not become logout or attempt business calls; ex
   } finally { await expired.dispose(); }
 });
 
+test('identity selects the target enterprise and rejects duplicate or conflicting directory IDs', async () => {
+  const target = { orgEmployeeModel: { corpId: 'test-corp', userid: 'test-user' } };
+  const other = { orgEmployeeModel: { corpId: 'other-corp', userid: 'other-user' } };
+  const conflict = { orgEmployeeModel: { ...target.orgEmployeeModel, userId: 'another-user' } };
+  for (const [employees, expected] of [[[other, target], 'ok'], [[target, target], 'denied'], [[conflict], 'denied']]) {
+    const f = await fixture({ employees });
+    try {
+      const result = await f.backend.invoke({ operationId: 'identity.getSelf', args: {} });
+      assert.equal(result.status, expected);
+      assert.ok(!JSON.stringify(result).includes('other-corp'));
+      if (expected === 'denied') assert.equal(result.reasonCode, 'identity_mismatch');
+    } finally { await f.dispose(); }
+  }
+});
+
 test('online identity mismatch blocks the requested business operation', async () => {
   const f = await fixture({ wrongIdentity: true });
   try {
@@ -149,10 +164,10 @@ test('old CLI, malformed output, and private stderr are normalized without leaki
 });
 
 test('operations are serialized across status/identity/business subprocesses', async () => {
-  const f = await fixture({ delay: 60 });
+  const f = await fixture({ delay: 60 }, { queueTimeoutMs: 2 * fixtureTimeout });
   try {
     const result = await Promise.all([f.backend.invoke(input), f.backend.invoke(input), f.backend.invoke(input)]);
-    assert.ok(result.every(item => item.status === 'ok'));
+    assert.deepEqual(result.map(item => item.status === 'ok' ? 'ok' : item.reasonCode), ['ok', 'ok', 'ok']);
     assert.equal(f.maximum(), 1);
   } finally { await f.dispose(); }
 });

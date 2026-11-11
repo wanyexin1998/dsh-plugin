@@ -8,7 +8,7 @@ export type ConnectionState = typeof CONNECTION_STATES[number];
 export const REASON_CODES = [
   'not_connected', 'authorization_pending', 'authorization_expired', 'org_cli_disabled',
   'app_permission_denied', 'identity_mismatch', 'user_cancelled', 'auth_timeout',
-  'service_unavailable', 'connection_unknown', 'backend_not_ready', 'unsupported_mode',
+  'service_unavailable', 'connection_unknown', 'token_exchange_failed', 'backend_not_ready', 'unsupported_mode',
   'invalid_request', 'service_disposed',
   'cli_missing', 'cli_integrity_failed', 'cli_version_unsupported', 'cli_platform_unsupported',
   'cli_download_failed', 'cli_download_timeout',

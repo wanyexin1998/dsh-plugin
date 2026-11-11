@@ -52,13 +52,16 @@ test('first check and first read failure never suggest reconnecting or start aut
 test('background refresh and failure retain the account and label historical evidence honestly', () => {
   const status = { state: 'connected', account: { displayName: '示例账号', organizationName: '示例企业' } };
   const checkedAt = '2026-01-01T10:00:00Z';
-  for (const extra of [{ refreshing: true }, { refreshError: 'service_unavailable' }, { refreshError: 'execution_timeout' }]) {
+  const idle = renderToStaticMarkup(React.createElement(ConnectionSection, { store: store(status, { checkedAt }) }));
+  const polling = renderToStaticMarkup(React.createElement(ConnectionSection, { store: store(status, { checkedAt, refreshing: true }) }));
+  assert.equal(polling, idle);
+  for (const extra of [{ refreshError: 'service_unavailable' }, { refreshError: 'execution_timeout' }]) {
     const html = renderToStaticMarkup(React.createElement(ConnectionSection, { store: store(status, { checkedAt, ...extra }) }));
     assert.match(html, /dsh-dt-account/);
     assert.match(html, /示例账号/); assert.match(html, /示例企业/);
     assert.match(html, /上次确认已连接/); assert.match(html, /上次确认：/);
     assert.match(html, /datetime="2026-01-01T10:00:00Z"/i);
-    assert.match(html, extra.refreshing ? /刷新中 · 保留上次确认状态。/ : /读取失败 · 状态待更新，请重试。/);
+    assert.match(html, /读取失败 · 状态待更新，请重试。/);
     assert.doesNotMatch(html, />重连<|aria-label="连接钉钉"/);
   }
   const recovered = renderToStaticMarkup(React.createElement(ConnectionSection, { store: store(status, { checkedAt }) }));

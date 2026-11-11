@@ -43,6 +43,7 @@ export function parseAuthorizationContext(value: unknown): AuthorizationContext 
 }
 export function parseInvokeInput(value: unknown): InvokeInput {
   const data = exact(value, ['operationId', 'args']);
+  // Local and Connector both accept catalog, describe, execute and jobs, including writes, files and background tasks.
   if (data.operationId === 'dws.catalog') {
     const args = exact(data.args, ['product', 'query', 'offset', 'limit']);
     const out: { product?: string; query?: string; offset?: number; limit?: number } = {};

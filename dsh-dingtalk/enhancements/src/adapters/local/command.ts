@@ -68,20 +68,31 @@ export async function prepareCommand(input: Extract<DwsInput, { operationId: 'dw
       else argv.push(`--${key}=${value.map(item => typeof item === 'string' && /[,\"\r\n]/.test(item) ? '\"' + item.replaceAll('\"', '\"\"') + '\"' : String(item)).join(',')}`);
     } else argv.push(`--${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`);
   }
-  const localEffect = /(?:download|export|render|preview|consume)/.test(contract.cli_path);
-  if ((files || localEffect) && !options.workingDirectory) return fail('file_access_denied');
+  const decision = approvalOf(contract, parameters, files, input.background);
+  if ((files || /(?:download|export|render|preview|consume)/.test(contract.cli_path)) && !options.workingDirectory) return fail('file_access_denied');
   // Event consumers remain owned by our process/job lifecycle, never detach a daemon.
   if (contract.cli_path === 'event consume') {
     if (!input.background) return fail();
     argv.push('--foreground=true');
   }
   if (process.platform === 'win32' && argv.join(' ').length > 28000) return fail();
-  const needsApproval = localEffect || contract.effect !== 'read' || contract.confirmation === 'user_required' || contract.risk === 'high' || files || !!input.background;
   // --yes is supplied only after Host confirmation (or when official contract requires none).
   argv.push(`--profile=${profile}`, '--yes');
   if (Object.hasOwn(contract.parameters, 'user-say-yes')) argv.push('--user-say-yes=true');
   // This product-local flag selects the exported attachment type, not stdout encoding.
   if (contract.cli_path !== 'aitable +export-data') argv.push(`--format=${input.background ? 'ndjson' : 'json'}`);
-  const summary = `钉钉操作：${contract.agent_summary}\n命令：dws ${contract.cli_path}\n账号：当前已连接账号\n${JSON.stringify(parameters, null, 2)}${input.background ? '\n将在后台持续运行，可用 dws.jobs 停止。' : ''}`;
-  return { contract, argv, parameters, needsApproval, summary };
+  return { contract, argv, parameters, needsApproval: decision.needsApproval, summary: decision.summary };
+}
+function approvalOf(contract: Command, parameters: Record<string, JsonValue>, files: boolean, background: boolean | undefined): { needsApproval: boolean; summary: string } {
+  const localEffect = /(?:download|export|render|preview|consume)/.test(contract.cli_path);
+  const needsApproval = localEffect || contract.effect !== 'read' || contract.confirmation === 'user_required' || contract.risk === 'high' || files || !!background;
+  const summary = `钉钉操作：${contract.agent_summary}\n命令：dws ${contract.cli_path}\n账号：当前已连接账号\n${JSON.stringify(parameters, null, 2)}${background ? '\n将在后台持续运行，可用 dws.jobs 停止。' : ''}`;
+  return { needsApproval, summary };
+}
+/** Host-side confirmation decision. File bytes are still checked by the process that runs DWS. */
+export function hostApproval(input: { command: string; parameters: Record<string, JsonValue>; background?: boolean }): { needsApproval: boolean; summary: string } {
+  const contract = commandFor(input.command);
+  const availability = integration(contract);
+  if (availability !== 'available') throw new ConnectionServiceError(availability === 'upstream_unavailable' ? 'command_unavailable' : 'host_managed_operation');
+  return approvalOf(contract, input.parameters, Object.keys(input.parameters).some(key => localFlags.has(key)), input.background);
 }
