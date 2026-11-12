@@ -2,7 +2,28 @@
 
 已支持**已配置的 personal、本机 profile owner、插件自有会话**继承已核实的普通宿主工具。权限依据是机器人渠道自身的可信配对和官方消息 sender，不要求 DWS OAuth 当前有效，不要求重新做工作区绑定，不新增工作区 ACL。
 
-Enterprise、旧共享 Relay、standalone 和数字员工路径没有因此获得新的工具权限。原生子 Agent、工作流等不具备可靠继承机制的工具仍拒绝，文件/图片发送边界不扩大。
+企业机器人可按席位配置下列只读问数工具。旧共享 Relay、standalone 和数字员工不继承这些权限。原生子 Agent、工作流和文件/图片回传仍受原限制。
+
+## 企业机器人问数
+
+在已有的 `robotConnection` 内配置 `queryTools`（完整工具名称数组，默认为空）。仅把该席位原有且允许该员工使用的 MCP 工具加入配置。工具还必须经过宿主的启用、限制和审批检查。
+
+```yaml
+queryTools:
+  - mcp__openmetadata__search_metadata
+```
+
+可配置的操作如下。每个名称使用前缀 `mcp__服务名__` 加表中的操作名；未知名称与通配符均拒绝。
+
+| 服务         | 只读操作                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| wren         | semantic_instructions、list_semantic_models、describe_semantic_model、list_semantic_cubes、describe_semantic_cube、dry_plan_only、run_semantic_sql、run_cube_query |
+| openmetadata | search_metadata、get_entity_details                                                                                                                                |
+| doris        | get_db_list、get_db_table_list、get_table_schema、exec_query                                                                                                       |
+
+启用查询前，部署方须核对连接的实际服务、数据范围及数据库只读授权；特别是 SQL 工具需要服务端限制和数据库最小权限。机器人配对不会给共享数据库凭据自动添加行列权限，不能把工具名称当作 SQL 写入防护。
+
+私聊与网关接收的群聊都使用发送人的既有企业配对。查询不需要逐群配置；群内结果发回原群，可被全群阅读。@ 同事不会切换到对方身份。工具根据当前接收端已验证的原始消息、企业、员工及在线连接执行；断开或更换连接后，旧消息不能沿用授权。查询不授予文件、命令、数据库管理、元数据写入或其他 MCP 权限。
 
 ## 两条独立授权链
 
@@ -88,3 +109,5 @@ DSH_TEST_RUNTIME=/tmp/dsh-issue27-runtime node scripts/verify-boundary.mjs
 完整结果在 PR 中记录。已知原始基线 `0c50a3b` 的 Web/DWS 环境限制：三个测试固定读取缺失的 `.cache/dingtalk-g0/bin-amd64/dws.exe`，一个进程树超时/Abort 夹具未及时达到预期状态；默认 umask 0077 还会收紧 doctor 的 0644 权限夹具，因此测试子 shell 使用 0022。没有删改/跳过失败测试使 CI 变绿。
 
 未连接真实企业或机器人，未操作 39/43、部署、发布或合并。全新个人配置的 corpId 引导、未核实工具、原生子 Agent 及非 personal 路径仍是明确限制。
+
+企业问数在 MCP 返回时再次校验派发时的员工和连接。执行期间撤权或换号的结果不会交回原会话。

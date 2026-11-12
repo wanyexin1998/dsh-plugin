@@ -9,10 +9,14 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { Gateway } from '../lib/relay/gateway.js'
 import { RelayClient } from '../lib/relay/client.js'
+import { RobotConnection } from '../lib/relay/controller.js'
 import WebSocket from 'ws'
 import { Peer } from '../lib/relay/protocol.js'
 
-async function fixture(t, { personal = false, exchange = async (code) => ({ corpId: 'corp', userId: code }) } = {}) {
+async function fixture(
+  t,
+  { personal = false, groupMentionSenders, exchange = async (code) => ({ corpId: 'corp', userId: code }) } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-relay-'))
   const notices = [],
     operations = [],
@@ -31,6 +35,7 @@ async function fixture(t, { personal = false, exchange = async (code) => ({ corp
     },
     allowedCorpId: 'corp',
     allowedGroups: ['group'],
+    groupMentionSenders,
     allowUnclaimedPersonalLogin: personal,
     notice: async (msg, text) => notices.push({ user: msg.senderStaffId, text }),
     operation: async (msg, method, data) => {
@@ -57,14 +62,17 @@ async function fixture(t, { personal = false, exchange = async (code) => ({ corp
     sessionWebhook: `https://original.invalid/${user}`,
     ...extra,
   })
-  async function client(user, suffix = user, onMessage) {
+  async function client(user, suffix = user, onMessage, enterprise) {
     let identity = user === undefined ? undefined : { corpId: 'corp', userId: user }
     const received = [],
       callbacks = []
     const file = join(dir, `${suffix}.json`)
-    const c = new RelayClient(file, () => identity, { channelOwned: personal, expectedCorpId: () => 'corp' })
+    const c = enterprise
+      ? new RobotConnection({ root: dir, home: dir, profile: join(dir, suffix), identity: () => identity, enterprise })
+      : new RelayClient(file, () => identity, { channelOwned: personal, expectedCorpId: () => 'corp' })
     clients.push(c)
-    await c.start({
+    // Exercise enterprise receipt and grants on an actual local pairing without an external WSS endpoint.
+    await RelayClient.prototype.start.call(c, {
       onMessage: async (msg) => {
         received.push(msg)
         if (onMessage) return onMessage(msg, c)
@@ -75,7 +83,7 @@ async function fixture(t, { personal = false, exchange = async (code) => ({ corp
         return { handled: true }
       },
     })
-    const pending = await c.connect(`ws://127.0.0.1:${port}/relay`)
+    const pending = await RelayClient.prototype.connect.call(c, `ws://127.0.0.1:${port}/relay`)
     return {
       c,
       received,
@@ -108,6 +116,43 @@ async function fixture(t, { personal = false, exchange = async (code) => ({ corp
   }
   return { dir, opts, gateway, port, message, client, pair, finish, restore, notices, operations }
 }
+
+test('enterprise direct and group query grants belong only to the live receiver of the actual sender', async (t) => {
+  const f = await fixture(t)
+  const query = 'mcp__doris__exec_query'
+  const config = {
+    mode: 'enterprise',
+    corpId: 'corp',
+    clientId: 'app',
+    displayName: 'Test',
+    gatewayUrl: 'wss://example.org/relay',
+    queryTools: [query],
+  }
+  const a = await f.client('a', 'enterprise-a', undefined, config)
+  const b = await f.client('b', 'enterprise-b', undefined, config)
+  await f.pair(a, 'a')
+  await f.pair(b, 'b')
+  await f.gateway.receive(f.message('a'))
+  const grant = a.c.enterpriseQueries(a.received[0])
+  assert.ok(grant(query))
+  assert.equal(grant('mcp__doris__kill_query'), undefined)
+  assert.equal(a.c.enterpriseQueries({ ...a.received[0] }), undefined)
+  assert.equal(b.c.enterpriseQueries(a.received[0]), undefined)
+  for (const user of ['a', 'b'])
+    await f.gateway.receive(
+      f.message(user, 'query', { conversationType: 'group', conversationId: 'group', atUsers: [{ userId: 'a' }] }),
+    )
+  assert.deepEqual(a.c.enterpriseQueries(a.received[1])(query).identity, { corpId: 'corp', userId: 'a' })
+  assert.deepEqual(b.c.enterpriseQueries(b.received[0])(query).identity, { corpId: 'corp', userId: 'b' })
+  a.change({ corpId: 'corp', userId: 'b' })
+  assert.equal(grant(query), undefined)
+  a.change({ corpId: 'corp', userId: 'a' })
+  const old = grant(query)
+  a.c.stop()
+  assert.equal(old.signal.aborted, true)
+  assert.equal(grant(query), undefined)
+  assert.equal(a.c.enterpriseQueries(a.received[0]), undefined)
+})
 
 test('personal pairing derives its owner from robot login and survives DWS logout or account change', async (t) => {
   const f = await fixture(t, { personal: true }),
@@ -280,6 +325,30 @@ test('group routes by sender; duplicates, foreign enterprise and unapproved grou
   assert.equal(b.received.length, 1)
 })
 
+for (const audience of [['a'], 'all']) {
+  test(`a robot mention in a new group routes the actual sender for audience ${JSON.stringify(audience)}`, async (t) => {
+    const f = await fixture(t, { groupMentionSenders: audience })
+    const a = await f.client('a')
+    const b = await f.client('b')
+    await f.pair(a, 'a')
+    await f.pair(b, 'b')
+    const group = { conversationType: 'group', conversationId: 'new-group', robotMentioned: true }
+    await Promise.all(['a', 'b'].map((user) => f.gateway.receive(f.message(user, '@colleague query', group))))
+    await f.gateway.receive(f.message('a', '@robot query', { ...group, robotMentioned: false }))
+    await f.gateway.receive(f.message('a', 'query', { ...group, senderCorpId: 'foreign' }))
+    await f.gateway.receive(f.message('a', 'query', { ...group, senderCorpId: undefined }))
+    await f.gateway.receive(f.message('unbound', 'query', group))
+    assert.deepEqual(
+      a.received.map((msg) => msg.senderStaffId),
+      ['a'],
+    )
+    assert.deepEqual(
+      b.received.map((msg) => msg.senderStaffId),
+      audience === 'all' ? ['b'] : [],
+    )
+  })
+}
+
 test('OAuth revoke/change does not borrow another identity; same owner reconnect restores without pairing', async (t) => {
   const f = await fixture(t),
     a = await f.client('a'),
@@ -392,6 +461,8 @@ test('Renderer text deltas cross real relay sockets into the real AI Card API ad
     if (!String(url).startsWith('https://api.dingtalk.com/')) return originalFetch(url, options)
     const body = JSON.parse(options.body)
     api.push({ path: new URL(url).pathname, body })
+    if (String(url).endsWith('/deliver'))
+      return Response.json({ success: true, result: [{ spaceType: 'IM_GROUP', spaceId: 'group', success: true }] })
     return new Response(
       JSON.stringify(String(url).includes('accessToken') ? { accessToken: 'test-token', expireIn: 7200 } : {}),
       { status: 200 },
@@ -423,7 +494,7 @@ test('Renderer text deltas cross real relay sockets into the real AI Card API ad
         recall: (id, conversation) => c.emotion('recall', id, conversation),
         done: (id, conversation) => c.emotion('done', id, conversation),
       },
-      createCard: (target) => c.createCard(target),
+      createCard: (target, origin, mentionSender) => c.createCard(target, origin.sessionWebhook, mentionSender),
       log() {},
       observe: (name) => events.push(name),
     })
@@ -448,11 +519,28 @@ test('Renderer text deltas cross real relay sockets into the real AI Card API ad
     await settled
   })
   await f.pair(a, 'a')
-  await f.gateway.receive(f.message('a'))
+  await f.gateway.receive(
+    f.message('a', 'query', { conversationType: 'group', conversationId: 'group', senderNick: '测试员工' }),
+  )
   assert.ok(events.includes('renderer.text-delta'))
   assert.equal(events.filter((x) => x === 'renderer.agent-stream').length, 1)
-  assert.ok(api.some((x) => x.path.endsWith('/deliver')))
-  assert.ok(api.some((x) => x.path.endsWith('/streaming') && x.body.isFinalize))
+  const deliveries = api.filter((x) => x.path.endsWith('/deliver'))
+  assert.deepEqual(
+    deliveries.map((x) => x.body.userIdType),
+    [1],
+  )
+  assert.deepEqual(
+    deliveries.map((x) => x.body.imGroupOpenDeliverModel.atUserIds),
+    [{ a: '测试员工' }],
+  )
+  assert.equal(api.find((x) => x.body.cardTemplateId).body.cardData.cardParamMap.msgContent, '@测试员工')
+  const frames = api.filter((x) => x.path.endsWith('/streaming'))
+  assert.ok(frames.every((x) => x.body.content.startsWith('@测试员工\n\n')))
+  assert.equal(frames.find((x) => x.body.isFinalize).body.content, '@测试员工\n\nfinished')
+  assert.equal(
+    api.find((x) => x.body.cardData?.cardParamMap?.flowStatus === '3').body.cardData.cardParamMap.msgContent,
+    '@测试员工\n\nfinished',
+  )
   assert.equal(api.at(-1).body.emotionName, '🥳 Done')
   assert.ok(
     api.findIndex((x) => x.body.emotionName === '🥳 Done') >

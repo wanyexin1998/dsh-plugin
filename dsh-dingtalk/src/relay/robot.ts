@@ -2,7 +2,7 @@ import { FeedbackDiagnostics } from '../feedback.js'
 import type { InboundMessage } from '../stream.js'
 import { join } from 'node:path'
 import { dingTalkLoginExchange } from './login.js'
-import { Gateway } from './gateway.js'
+import { Gateway, type GatewayOptions } from './gateway.js'
 import { startStream } from '../stream.js'
 import { Outbound } from '../outbound.js'
 import { AICard, CardCapability } from '../aicard.js'
@@ -20,6 +20,7 @@ export interface RobotGatewayConfig {
   host?: string
   port?: number
   allowedGroups?: string[]
+  groupMentionSenders?: GatewayOptions['groupMentionSenders']
   interactionCardTemplateId?: string
   allowUnclaimedPersonalLogin?: boolean
 }
@@ -34,12 +35,17 @@ export function createRobotOperations(config: RobotGatewayConfig) {
     ? new InteractionCards(() => outbound.token(), config.clientId, config.interactionCardTemplateId, log)
     : undefined
   const operation = async (msg: InboundMessage, method: string, data: any) => {
-    if (method === 'text') return outbound.sendText(msg.sessionWebhook, String(data.text).slice(0, 30000))
+    const mention =
+      data?.final === true && msg.conversationType === 'group' && msg.senderCorpId === config.corpId
+        ? msg.senderStaffId
+        : undefined
+    if (method === 'text') return outbound.sendText(msg.sessionWebhook, String(data.text).slice(0, 30000), mention)
     if (method === 'markdown')
       return outbound.sendMarkdown(
         msg.sessionWebhook,
         String(data.title).slice(0, 100),
         String(data.text).slice(0, 30000),
+        mention,
       )
     if (method === 'emotion.add') {
       emotion.add(msg.msgId, msg.conversationId)
@@ -79,6 +85,10 @@ export function createRobotOperations(config: RobotGatewayConfig) {
         token: () => outbound.token(),
         robotCode: config.clientId,
         target: cardTarget(msg),
+        mention:
+          data?.mentionSender === true && msg.conversationType === 'group' && msg.senderCorpId === config.corpId
+            ? msg
+            : undefined,
         capability,
         log,
         observe: diagnostics.observe,
@@ -102,6 +112,22 @@ export function createRobotOperations(config: RobotGatewayConfig) {
 export async function startRobotGateway(config: RobotGatewayConfig, deferStream = false) {
   if (!config.clientId || !config.clientSecret || !config.corpId || !config.stateDirectory || !config.publicOrigin)
     throw new Error('invalid_gateway_config')
+  const groups = config.allowedGroups
+  if (
+    groups !== undefined &&
+    (!Array.isArray(groups) || !groups.every((id) => typeof id === 'string' && id.trim().length > 0))
+  )
+    throw new Error('invalid_allowed_groups')
+  const audience = config.groupMentionSenders
+  if (
+    audience !== undefined &&
+    audience !== 'all' &&
+    !(
+      Array.isArray(audience) &&
+      audience.every((id) => typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id))
+    )
+  )
+    throw new Error('invalid_group_mention_senders')
   const { operation, outbound, diagnostics } = createRobotOperations(config)
   const log = (_line: string) => undefined
   const gateway = new Gateway({
@@ -115,6 +141,7 @@ export async function startRobotGateway(config: RobotGatewayConfig, deferStream 
     port: config.port,
     allowedCorpId: config.corpId,
     allowedGroups: config.allowedGroups ?? [],
+    groupMentionSenders: audience,
     allowUnclaimedPersonalLogin: config.allowUnclaimedPersonalLogin,
     notice: (msg, text) => outbound.sendText(msg.sessionWebhook, text),
     operation,

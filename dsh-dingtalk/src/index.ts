@@ -26,6 +26,7 @@ import {
 import { Config } from './config.js'
 import { Outbound } from './outbound.js'
 import { Emotion } from './emotion.js'
+import { DeliveryOutcomeUnknown } from './errors.js'
 import { AICard, CardCapability, type CardTarget, type CardHandle } from './aicard.js'
 import { Renderer } from './renderer.js'
 import { Bridge } from './bridge.js'
@@ -585,8 +586,10 @@ async function startAccount(
         token: async (): Promise<string> => {
           throw new Error('robot_credentials_gateway_only')
         },
-        sendText: (id: string, text: string) => relay.operation(id, 'text', { text }),
-        sendMarkdown: (id: string, title: string, text: string) => relay.operation(id, 'markdown', { title, text }),
+        sendText: (id: string, text: string, mention?: string) =>
+          relay.operation(id, 'text', { text, final: !!mention }),
+        sendMarkdown: (id: string, title: string, text: string, mention?: string) =>
+          relay.operation(id, 'markdown', { title, text, final: !!mention }),
         sendMedia: (async () => {
           throw new Error('im_tool_unavailable')
         }) as typeof directOutbound.sendMedia,
@@ -631,13 +634,18 @@ async function startAccount(
           relay.emotion('done', id, conversation).catch(() => feedback.observe('emotion.done', false)),
       }
     : directEmotion
-  const createCard = (target: CardTarget): Promise<CardHandle | null> =>
+  const createCard = (
+    target: CardTarget,
+    origin?: InboundMessage,
+    mentionSender = false,
+  ): Promise<CardHandle | null> =>
     relay
-      ? relay.createCard(target)
+      ? relay.createCard(target, origin?.sessionWebhook, mentionSender)
       : AICard.create({
           token: () => outbound.token(),
           robotCode: clientId,
           target,
+          mention: mentionSender ? origin : undefined,
           capability: cardCapability,
           log,
           observe: feedback.observe,
@@ -1032,7 +1040,8 @@ async function startAccount(
             try {
               await card.finish(noticeText)
               return card
-            } catch {
+            } catch (error) {
+              if (error instanceof DeliveryOutcomeUnknown) return card
               void outbound.sendMarkdown(msg.sessionWebhook, config.markdownTitle, noticeText)
               return null
             }

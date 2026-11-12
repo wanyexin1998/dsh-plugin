@@ -90,3 +90,33 @@ test('流式权限错误只尝试一次，本轮直接降级 markdown', async ()
   assert.equal(finishCalls, 0)
   assert.deepEqual(sent, ['最终答案'])
 })
+
+test('目标群明确拒收才回退；缺少目标回执或超时只更新原卡，不标 Done', async (t) => {
+  const { AICard } = await import('../lib/aicard.js')
+  const { DeliveryOutcomeUnknown } = await import('../lib/errors.js')
+  const target = { type: 'group', openConversationId: 'g' }
+  const opts = { target, token: async () => 'fixture', robotCode: 'bot', log() {} }
+  let receipt
+  let deliveries = 0
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (!url.endsWith('/deliver')) return Response.json({})
+    deliveries++
+    if (receipt instanceof Error) throw receipt
+    return Response.json(receipt)
+  })
+  for (receipt of [
+    { success: false },
+    { success: true, result: [{ spaceType: 'IM_GROUP', spaceId: 'g', success: false }] },
+  ])
+    assert.equal(await AICard.create(opts), null)
+  for (receipt of [
+    {},
+    { result: [{ spaceType: 'IM_GROUP', spaceId: 'other', success: true }] },
+    new Error('timeout'),
+  ]) {
+    const card = await AICard.create(opts)
+    assert.ok(card)
+    await assert.rejects(card.finish('reply'), DeliveryOutcomeUnknown)
+  }
+  assert.equal(deliveries, 5)
+})

@@ -5,6 +5,9 @@
  * 503/欠费/无通道 must settle visibly).
  */
 
+// A request was dispatched, but its external effect could not be established.
+export class DeliveryOutcomeUnknown extends Error {}
+
 interface Rule {
   pattern: RegExp
   label: string

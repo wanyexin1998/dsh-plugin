@@ -2,10 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ImTools } from '../lib/im-tools.js'
 
-function fixture() {
+function fixture(relay) {
   const guards = [],
-    definitions = []
+    definitions = [],
+    wrappers = []
   const ctx = {
+    on(event, fn) {
+      assert.equal(event, 'tools/execute')
+      wrappers.push(fn)
+      return () => wrappers.pop()
+    },
     tools: {
       register(tool) {
         definitions.push(tool)
@@ -17,6 +23,7 @@ function fixture() {
       },
     },
     get(name) {
+      if (name === 'dingtalkRelay') return relay
       return name
     },
   }
@@ -26,8 +33,79 @@ function fixture() {
     },
   }))
   const agent = { id: 'session', ctx }
-  return { ctx, agent, im, guards, definitions }
+  return { ctx, agent, im, guards, definitions, wrappers }
 }
+
+test('enterprise read queries use the verified sender, exact permitted audience and current lease through dispatch', async () => {
+  const query = 'mcp__doris__exec_query'
+  const owner = { corpId: 'corp', userId: 'a' }
+  const message = {
+    senderCorpId: 'corp',
+    senderStaffId: 'a',
+    conversationType: 'group',
+    conversationId: 'permitted',
+    atUsers: [{ userId: 'b' }],
+  }
+  const lease = new AbortController()
+  let current = owner
+  const relay = {
+    enterpriseQueries: (msg) =>
+      msg === message
+        ? (name) => (name === query ? { identity: current, signal: lease.signal } : undefined)
+        : undefined,
+  }
+  const f = fixture(relay)
+  const guard = (name = query, agent = f.agent) => f.guards[0]({ name, agent })
+  f.im.install(f.ctx, f.agent)
+  assert.match(guard(), /im_enterprise_query_unavailable/)
+  f.im.bind(f.ctx, message, f.agent)
+  assert.equal(guard(), undefined)
+  for (const name of [
+    'mcp__openmetadata__patch_entity',
+    'mcp__doris__kill_query',
+    'mcp__doris__exec_query_more',
+    'bash',
+    'read',
+  ])
+    assert.match(guard(name), /im_workspace_policy_unavailable/)
+  assert.match(guard('mcp__wren__run_semantic_sql'), /im_enterprise_query_unavailable/)
+  assert.match(guard(query, { ...f.agent }), /im_agent_mismatch/)
+  assert.throws(() => f.im.bind(f.ctx, { ...message, conversationType: 'direct' }, f.agent), /im_conversation_changed/)
+  const exec = { name: query, agent: f.agent, signal: new AbortController().signal }
+  for (current of [undefined, { ...owner, corpId: 'other' }, { ...owner, userId: 'b' }]) {
+    assert.match(guard(), /im_enterprise_query_unavailable/)
+    await assert.rejects(
+      f.wrappers[0](exec, () => assert.fail('must not dispatch')),
+      /im_enterprise_query_unavailable/,
+    )
+  }
+  current = owner
+  const original = exec.signal
+  assert.equal(f.guards[0](exec), undefined)
+  await assert.rejects(
+    f.wrappers[0](exec, async () => {
+      current = undefined
+      return 'sensitive-result'
+    }),
+    /im_enterprise_query_unavailable/,
+  )
+  current = owner
+  assert.equal(f.guards[0](exec), undefined)
+  await assert.rejects(
+    f.wrappers[0](exec, async () => {
+      assert.equal(exec.signal.aborted, false)
+      lease.abort()
+      assert.equal(exec.signal.aborted, true)
+    }),
+    /im_enterprise_query_unavailable/,
+  )
+  assert.equal(exec.signal, original)
+  assert.match(guard(), /im_enterprise_query_unavailable/)
+  // A similar object from a different receiver carries no real delivery receipt.
+  const other = fixture(relay)
+  other.im.bind(other.ctx, { ...message }, other.agent)
+  assert.match(other.guards[0]({ name: query, agent: other.agent }), /im_enterprise_query_unavailable/)
+})
 
 test('IM shadows the Web tool, installs once, and permits only scoped DingTalk and interaction tools', () => {
   const f = fixture()

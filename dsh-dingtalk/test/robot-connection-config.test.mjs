@@ -17,6 +17,10 @@ test('enterprise configuration is explicit and never falls back for malformed co
     {},
     { ...config, clientId: '' },
     { ...config, secret: 'not-allowed' },
+    { ...config, queryTools: 'mcp__doris__exec_query' },
+    { ...config, queryTools: ['mcp__doris__*'] },
+    { ...config, queryTools: ['mcp__openmetadata__patch_entity'] },
+    { ...config, queryTools: ['mcp__openmetadata__get_asset_context'] },
     { ...config, gatewayUrl: 'ws://127.0.0.1/relay' },
     { ...config, gatewayUrl: 'wss://user:pass@example.com/relay' },
   ])

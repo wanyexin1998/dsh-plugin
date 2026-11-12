@@ -31,6 +31,8 @@ export interface GatewayOptions {
   port?: number
   allowedCorpId: string
   allowedGroups: readonly string[]
+  /** Which senders may @mention this robot in groups outside the explicit group list. */
+  groupMentionSenders?: 'all' | readonly string[]
   /** Local personal onboarding can derive the user from robot OAuth itself. */
   allowUnclaimedPersonalLogin?: boolean
   notice(message: InboundMessage, text: string): Promise<unknown>
@@ -265,8 +267,11 @@ export class Gateway {
       return
     }
     if (message.conversationType === 'group' && !this.options.allowedGroups.includes(message.conversationId)) {
-      await this.options.notice(message, '此群尚未开启机器人。')
-      return
+      const audience = this.options.groupMentionSenders
+      if (message.robotMentioned !== true || (audience !== 'all' && !audience?.includes(identity.userId))) {
+        if (!audience || message.robotMentioned) await this.options.notice(message, '此群尚未开启机器人。')
+        return
+      }
     }
     const route = this.online.get(key(identity))
     if (!route) {

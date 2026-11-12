@@ -79,7 +79,7 @@ test('公开 apply 审批保留单次允许、拒绝、取消与超时，并阻�
       return { ok: true, json: async () => ({ accessToken: 'redacted', expireIn: 7200 }) }
     }
     requests.push({ url, body: JSON.parse(init.body) })
-    return { ok: true }
+    return { ok: true, json: async () => ({ errcode: 0 }) }
   }
   t.after(() => {
     globalThis.fetch = originalFetch

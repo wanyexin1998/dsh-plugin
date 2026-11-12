@@ -168,6 +168,36 @@ test('enterprise configuration never exposes URL or starts local hosting and rej
   assert.equal(started, before)
   await assert.rejects(c.configure({ clientId: 'robot', clientSecret: 'fixture-secret' }), /enterprise_managed/)
 })
+test('enabling query tools preserves an existing enterprise device until the robot target changes', async (t) => {
+  const { RelayClient } = await import('../lib/relay/client.js')
+  t.mock.method(RelayClient.prototype, 'start', async () => {})
+  const f = await fixture(t)
+  const initial = f.create({ enterprise })
+  await initial.start({})
+  const file = join(initial.directory, 'relay-device.json')
+  const binding = { url: enterprise.gatewayUrl, token: 'fixture-device-token' }
+  await writeFile(file, JSON.stringify(binding))
+  await initial.close()
+
+  const { createHash } = await import('node:crypto')
+  const legacy = createHash('sha256').update(JSON.stringify(enterprise)).digest('hex').slice(0, 24)
+  await writeFile(join(initial.directory, 'target.json'), JSON.stringify({ target: legacy }))
+  const migrated = f.create({ enterprise: Object.fromEntries(Object.entries(enterprise).reverse()) })
+  await migrated.start({})
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), binding)
+  await migrated.close()
+  const reordered = Object.fromEntries(Object.entries(enterprise).reverse())
+  const updated = f.create({
+    enterprise: { ...reordered, displayName: 'renamed', queryTools: ['mcp__doris__get_db_list'] },
+  })
+  await updated.start({})
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), binding)
+  await updated.close()
+
+  const replacement = f.create({ enterprise: { ...enterprise, clientId: 'another-robot' } })
+  await replacement.start({})
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), {})
+})
 test('invalid enterprise configuration and mismatched identity cannot fall back to personal', async (t) => {
   const f = await fixture(t),
     c = f.create({ enterprise: {} })

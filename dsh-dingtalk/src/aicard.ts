@@ -1,3 +1,4 @@
+import { DeliveryOutcomeUnknown } from './errors.js'
 import { feedbackCode, type ObserveFeedback, type FeedbackEvent } from './feedback.js'
 /**
  * DingTalk AI Card lifecycle: create + deliver, streaming frames, finish/fail.
@@ -93,6 +94,7 @@ export type CardHandle = Pick<AICard, 'outTrackId' | 'stream' | 'finish' | 'fail
 
 export class AICard {
   #inputingStarted = false
+  #deliveryConfirmed = false
 
   private constructor(
     readonly outTrackId: string,
@@ -100,9 +102,15 @@ export class AICard {
     private readonly capability: CardCapability,
     private readonly log: (line: string) => void,
     private readonly observe?: ObserveFeedback,
+    private readonly mentionLine = '',
   ) {}
 
-  private async call(method: 'POST' | 'PUT', path: string, body: unknown): Promise<void> {
+  private displayContent(content: string): string {
+    const body = normalize(content)
+    return this.mentionLine ? (body ? `${this.mentionLine}\n\n${body}` : this.mentionLine) : body
+  }
+
+  private async call(method: 'POST' | 'PUT', path: string, body: unknown, target?: CardTarget): Promise<void> {
     this.capability.assertAvailable()
     const event: FeedbackEvent = path.endsWith('/deliver')
       ? 'card.deliver'
@@ -118,11 +126,29 @@ export class AICard {
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(15000),
       })
-      this.observe?.(event, resp.ok, resp.ok ? 'ok' : feedbackCode(resp.status))
       if (!resp.ok) {
+        if (resp.status >= 500 || resp.status === 408) throw new DeliveryOutcomeUnknown('card_response_unknown')
+        this.observe?.(event, false, feedbackCode(resp.status))
         const text = await resp.text()
         return { ok: false as const, status: resp.status, text }
       }
+      if (target) {
+        const receipt = (await resp.json()) as {
+          success?: boolean
+          result?: { spaceId?: string; spaceType?: string; success?: boolean }[]
+        }
+        const spaceId = target.type === 'group' ? target.openConversationId : target.userId
+        const spaceType = target.type === 'group' ? 'IM_GROUP' : 'IM_ROBOT'
+        const entry =
+          Array.isArray(receipt?.result) &&
+          receipt.result.find((item) => item?.spaceId === spaceId && item.spaceType === spaceType)
+        if (receipt?.success === false || (entry && entry.success === false)) {
+          this.observe?.(event, false, 'rejected')
+          return { ok: false as const, status: 200, text: 'card_delivery_rejected' }
+        }
+        if (!entry || entry.success !== true) throw new DeliveryOutcomeUnknown('card_delivery_receipt_unknown')
+      }
+      this.observe?.(event, true)
       return { ok: true as const }
     }
     const request = () =>
@@ -132,7 +158,7 @@ export class AICard {
           false,
           error instanceof Error && /Timeout|Abort/.test(error.name) ? 'timeout' : 'transport',
         )
-        throw error
+        throw new DeliveryOutcomeUnknown('card_request_unconfirmed', { cause: error })
       })
     let result = await request()
     if (!result.ok && isQpsLimit(result.status, result.text)) {
@@ -154,7 +180,7 @@ export class AICard {
       cardData: {
         cardParamMap: {
           flowStatus,
-          msgContent: normalize(content),
+          msgContent: this.displayContent(content),
           staticMsgContent: '',
           sys_full_json_obj: JSON.stringify({ order: ['msgContent'] }),
           config: JSON.stringify({ autoLayout: true }),
@@ -170,7 +196,7 @@ export class AICard {
       await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.INPUTING, content, false))
       this.#inputingStarted = true
     }
-    const fixed = normalize(content)
+    const fixed = this.displayContent(content)
     await this.call('PUT', '/v1.0/card/streaming', {
       outTrackId: this.outTrackId,
       guid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -186,8 +212,19 @@ export class AICard {
 
   /** Final content + FINISHED state. */
   async finish(content: string): Promise<void> {
-    await this.stream(content, true)
-    await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FINISHED, content, true))
+    try {
+      await this.stream(content, true)
+    } catch (error) {
+      if (!this.#deliveryConfirmed) throw new DeliveryOutcomeUnknown('card_delivery_unconfirmed', { cause: error })
+      throw error
+    }
+    try {
+      await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FINISHED, content, true))
+    } catch (error) {
+      // The final text frame was already accepted. Do not publish a second answer.
+      throw new DeliveryOutcomeUnknown('card_final_state_unconfirmed', { cause: error })
+    }
+    if (!this.#deliveryConfirmed) throw new DeliveryOutcomeUnknown('card_delivery_unconfirmed')
     this.observe?.('card.finish', true)
   }
 
@@ -203,7 +240,7 @@ export class AICard {
       outTrackId: this.outTrackId,
       guid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       key: 'msgContent',
-      content: normalize(content),
+      content: this.displayContent(content),
       isFull: true,
       isFinalize: true,
       isError: false,
@@ -219,17 +256,22 @@ export class AICard {
     } catch {
       // The failure text still lands via the instances update below.
     }
-    await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FAILED, content, true))
+    try {
+      await this.call('PUT', '/v1.0/card/instances', this.instancesBody(FLOW.FAILED, content, true))
+    } finally {
+      if (!this.#deliveryConfirmed) throw new DeliveryOutcomeUnknown('card_delivery_unconfirmed')
+    }
   }
 
   /**
    * Create a card instance and deliver it into the conversation.
-   * @returns the card, or null on failure (caller falls back to markdown).
+   * @returns the original card on confirmed or uncertain delivery, or null when it can safely be replaced.
    */
   static async create(opts: {
     token: () => Promise<string>
     robotCode: string
     target: CardTarget
+    mention?: { senderStaffId: string; senderNick: string }
     capability?: CardCapability
     log: (line: string) => void
     observe?: ObserveFeedback
@@ -237,13 +279,29 @@ export class AICard {
     const capability = opts.capability ?? new CardCapability()
     if (!capability.available) return null
     const outTrackId = `dshdt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-    const card = new AICard(outTrackId, opts.token, capability, opts.log, opts.observe)
+    const mention = opts.target.type === 'group' && opts.mention?.senderStaffId ? opts.mention : undefined
+    const nick = mention?.senderNick?.replace(/\s+/gu, ' ').trim()
+    const mentionLine = nick
+      ? '@' +
+        nick
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replace(/[\\`*_\[\]~|]/g, '\\$&')
+      : ''
+    const card = new AICard(outTrackId, opts.token, capability, opts.log, opts.observe, mentionLine)
     const deliverBody =
       opts.target.type === 'group'
         ? {
             outTrackId,
             openSpaceId: `dtv1.card//IM_GROUP.${opts.target.openConversationId}`,
-            imGroupOpenDeliverModel: { robotCode: opts.robotCode },
+            ...(mention && { userIdType: 1 }),
+            imGroupOpenDeliverModel: {
+              robotCode: opts.robotCode,
+              ...(mention && {
+                atUserIds: { [mention.senderStaffId]: nick || mention.senderStaffId },
+              }),
+            },
           }
         : {
             outTrackId,
@@ -258,12 +316,23 @@ export class AICard {
       await card.call('POST', '/v1.0/card/instances', {
         cardTemplateId: AI_CARD_TEMPLATE_ID,
         outTrackId,
-        cardData: { cardParamMap: { config: JSON.stringify({ autoLayout: true }) } },
+        cardData: {
+          cardParamMap: {
+            config: JSON.stringify({ autoLayout: true }),
+            ...(mentionLine && { msgContent: mentionLine }),
+          },
+        },
         callbackType: 'STREAM',
         imGroupOpenSpaceModel: { supportForward: true },
         imRobotOpenSpaceModel: { supportForward: true },
       })
-      await card.call('POST', '/v1.0/card/instances/deliver', deliverBody)
+      try {
+        await card.call('POST', '/v1.0/card/instances/deliver', deliverBody, opts.target)
+        card.#deliveryConfirmed = true
+      } catch (err) {
+        if (!(err instanceof DeliveryOutcomeUnknown)) throw err
+        opts.log('card delivery unconfirmed; updating the original card only')
+      }
       return card
     } catch (err) {
       opts.log(`card create/deliver failed: ${err instanceof Error ? err.message : err}`)

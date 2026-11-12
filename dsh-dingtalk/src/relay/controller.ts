@@ -8,6 +8,7 @@ import { withRecoverableFileLock } from '../file-lock.js'
 import { loadDingTalkAccountCredentials, saveDingTalkAccountCredentials } from '../setup-state.js'
 import { Outbound } from '../outbound.js'
 import type { DingTalkIdentity } from '../identity.js'
+import type { InboundMessage } from '../stream.js'
 
 interface Personal {
   clientId: string
@@ -26,6 +27,21 @@ export interface PersonalRobotAuthority extends ChannelBinding {
   readonly profile: string
 }
 const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 24)
+// Old receivers hashed all five fields in the deployment's JSON key order.
+function matchesLegacyTarget(config: EnterpriseConnection, previous: string | undefined): boolean {
+  if (!previous || !/^[a-f0-9]{24}$/.test(previous)) return false
+  const entries = Object.entries(config).filter(([key]) => key !== 'queryTools')
+  function matches(prefix: typeof entries, remaining: typeof entries): boolean {
+    if (!remaining.length) return fingerprint(JSON.stringify(Object.fromEntries(prefix))) === previous
+    return remaining.some((entry, i) =>
+      matches(
+        [...prefix, entry],
+        remaining.filter((_, j) => i !== j),
+      ),
+    )
+  }
+  return matches([], entries)
+}
 const origin = 'http://127.0.0.1:19878'
 
 /** UI configuration and transport lifetimes are separate: disconnect never deletes app credentials. */
@@ -78,6 +94,18 @@ export class RobotConnection extends RelayClient {
     )
       return undefined
     return Object.freeze({ ...binding, profile: this.options.profile })
+  }
+  /** Only this enterprise receiver's authenticated message may obtain a query grant. */
+  enterpriseQueries(message: InboundMessage): ((name: string) => ChannelBinding | undefined) | undefined {
+    const lease = this.receivedLeases.get(message)
+    const config = this.enterprise
+    if (!lease || lease.aborted || !config?.queryTools?.length) return undefined
+    if (message.conversationType !== 'direct' && message.conversationType !== 'group') return undefined
+    return (name) => {
+      if (this.closed || this.problem || !config.queryTools?.includes(name)) return undefined
+      const binding = this.channelBinding()
+      return binding?.identity.corpId === config.corpId && binding.signal === lease ? binding : undefined
+    }
   }
   override status() {
     const transport = super.status()
@@ -251,9 +279,16 @@ export class RobotConnection extends RelayClient {
       })
       // A changed enterprise target must not reuse a token issued by another gateway.
       const saved = readState<{ url?: string }>(join(this.directory, 'relay-device.json'), {})
-      const target = this.enterprise ? fingerprint(JSON.stringify(this.enterprise)) : undefined
+      const target = this.enterprise
+        ? 'v2:' +
+          fingerprint(JSON.stringify([this.enterprise.corpId, this.enterprise.clientId, this.enterprise.gatewayUrl]))
+        : undefined
       const previous = readState<{ target?: string }>(join(this.directory, 'target.json'), {})
-      if (this.enterprise && (saved.url !== this.enterprise.gatewayUrl || previous.target !== target))
+      if (
+        this.enterprise &&
+        (saved.url !== this.enterprise.gatewayUrl ||
+          (previous.target !== target && !matchesLegacyTarget(this.enterprise, previous.target)))
+      )
         await super.disconnect()
       saveState(join(this.directory, 'target.json'), { target })
       // Register message handlers even if local hosting cannot start yet. UI retry
