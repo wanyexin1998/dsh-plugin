@@ -36,6 +36,8 @@ export class RelayClient {
   private diagnosing = false
   private heartbeat?: NodeJS.Timeout
   private channelLease = new AbortController()
+  /** Only messages already accepted on this instance and socket generation are recorded. */
+  protected readonly receivedLeases = new WeakMap<InboundMessage, AbortSignal>()
   private downloads = new Map<string, string>()
   private seen: Record<string, number>
   private callbacks?: Pick<StreamOptions, 'onMessage' | 'onCardCallback' | 'onStatus'>
@@ -74,7 +76,6 @@ export class RelayClient {
   }
   protected channelBinding(): ChannelBinding | undefined {
     if (
-      !this.relayOptions.channelOwned ||
       this.stopped ||
       this.view.status !== 'connected' ||
       this.peer?.socket.readyState !== WebSocket.OPEN ||
@@ -223,6 +224,7 @@ export class RelayClient {
         for (const code of msg.imageDownloadCodes ?? []) this.downloads.set(code, data.requestId)
         while (this.downloads.size > 4096) this.downloads.delete(this.downloads.keys().next().value!)
         if (!this.callbacks) throw new Error('not_ready')
+        this.receivedLeases.set(msg, this.channelLease.signal)
         await this.callbacks.onMessage(msg)
         return { accepted: true }
       }
@@ -337,9 +339,8 @@ export class RelayClient {
     const result = await this.operation(id, 'media', { code })
     return result ? { data: Buffer.from(result.data, 'base64'), mediaType: result.mediaType } : null
   }
-  async createCard(target: CardTarget) {
-    const requestId = this.requestFor(target)
-    const id = await this.operation(requestId, 'card.create', {})
+  async createCard(target: CardTarget, requestId = this.requestFor(target), mentionSender = false) {
+    const id = await this.operation(requestId, 'card.create', { mentionSender })
     if (!id) return null
     const invoke = async (method: string, content: string) => {
       await this.operation(requestId, method, { id, content })

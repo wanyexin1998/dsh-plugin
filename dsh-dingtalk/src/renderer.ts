@@ -12,9 +12,9 @@ import type { HostSession, HostSessionEvent } from './host.js'
 import type { InboundMessage } from './stream.js'
 import type { Emotion } from './emotion.js'
 import type { ReplySink } from './reply-sink.js'
-import { type AICard, type CardHandle, CardCapabilityError, type CardTarget } from './aicard.js'
+import { type CardHandle, CardCapabilityError, type CardTarget } from './aicard.js'
 import { cardTarget } from './targets.js'
-import { describeTurnError } from './errors.js'
+import { DeliveryOutcomeUnknown, describeTurnError } from './errors.js'
 
 const EMPTY_MODEL_RESPONSE =
   '⚠️ **模型本次未产出正文**\n> 可能是输出额度被推理占满，请调大 `max_tokens` 或更换模型后重试。'
@@ -47,6 +47,7 @@ interface TurnState {
    * the next frame rolls output over to a fresh card at the bottom.
    */
   needsRollover: boolean
+  cardMayHaveMentionedSender?: boolean
   cardUnavailable: boolean
   /** Chars already settled onto earlier cards; the live card shows the remainder. */
   carryOffset: number
@@ -84,7 +85,7 @@ export interface RendererDeps {
   outbound: ReplySink
   emotion: Pick<Emotion, 'add' | 'recall'> & Partial<Pick<Emotion, 'done'>>
   observe?: ObserveFeedback
-  createCard(target: CardTarget): Promise<CardHandle | null>
+  createCard(target: CardTarget, origin?: InboundMessage, mentionSender?: boolean): Promise<CardHandle | null>
   log(line: string): void
 }
 
@@ -127,10 +128,19 @@ export class Renderer {
       // Ack now; the settled result is pushed at turn end, no streaming card.
       void this.deps.outbound.sendText(msg, config.ackText)
     } else if (mode === 'aicard') {
-      state.cardPromise = this.deps.createCard(cardTarget(msg)).catch(() => {
-        this.deps.observe?.('card.create', false)
-        return null
-      })
+      const mentionSender = !isDirect && !!msg.senderStaffId
+      state.cardPromise = this.deps
+        .createCard(cardTarget(msg), msg, mentionSender)
+        .then((card) => {
+          state.cardMayHaveMentionedSender = !!card && mentionSender
+          return card
+        })
+        .catch((error) => {
+          // A lost create receipt can leave a placeholder that already mentioned the sender.
+          state.cardMayHaveMentionedSender = mentionSender && error instanceof DeliveryOutcomeUnknown
+          this.deps.observe?.('card.create', false)
+          return null
+        })
     }
 
     this.states.set(sessionId, state)
@@ -152,6 +162,18 @@ export class Renderer {
   /** Settle the old card with a pointer note and continue on a fresh one. */
   private async rollover(st: TurnState, card: CardHandle, content: string): Promise<CardHandle | null> {
     st.needsRollover = false
+    let nextCard: CardHandle | null
+    try {
+      nextCard = await this.deps.createCard(cardTarget(st.msg), st.msg)
+    } catch (error) {
+      if (error instanceof DeliveryOutcomeUnknown) {
+        this.deps.log('continuation delivery unconfirmed; keeping original card')
+        return card
+      }
+      nextCard = null
+    }
+    st.cardPromise = Promise.resolve(nextCard)
+    if (!nextCard) return null
     try {
       await card.finish(`${content || st.lastFlushed || '…'}\n\n> ⤵️ 输出继续，见下方新卡片`)
       this.deps.log('card rolled over')
@@ -159,8 +181,7 @@ export class Renderer {
       this.deps.log(`rollover finish failed: ${err instanceof Error ? err.message : err}`)
     }
     st.lastFlushed = ''
-    st.cardPromise = this.deps.createCard(cardTarget(st.msg))
-    return st.cardPromise
+    return nextCard
   }
 
   /** Current DSH publishes transient chunks on the agent bus, not the durable session log. */
@@ -253,7 +274,7 @@ export class Renderer {
       let card = st.cardPromise ? await st.cardPromise : null
       if (!card || !this.states.has(sessionId)) return
       const full = renderLive(st.live)
-      let content = full.slice(st.carryOffset)
+      const content = full.slice(st.carryOffset)
       if (!content.trim()) return
       // Over-length roll-over (Feishu streamMaxElementChars analog): settle the
       // full current card and continue the remainder on a fresh one.
@@ -261,12 +282,14 @@ export class Renderer {
         st.needsRollover = true
       }
       if (st.needsRollover) {
-        card = await this.rollover(st, card, content)
-        if (!card || !this.states.has(sessionId)) return
-        st.carryOffset = full.length
-        content = ''
-        return
-      } else if (content === st.lastFlushed) {
+        const nextCard = await this.rollover(st, card, content)
+        if (!nextCard || !this.states.has(sessionId)) return
+        if (nextCard !== card) {
+          st.carryOffset = full.length
+          return
+        }
+      }
+      if (content === st.lastFlushed) {
         return
       }
       await card.stream(content)
@@ -344,15 +367,21 @@ export class Renderer {
           await emotion.done?.(st.msg.msgId, st.msg.conversationId)
         return
       } catch (err) {
+        if (err instanceof DeliveryOutcomeUnknown) {
+          this.deps.observe?.('renderer.delivered', false)
+          this.deps.log('card completion unconfirmed; no second delivery')
+          return
+        }
         this.deps.log(`card settle failed, falling back to markdown: ${err instanceof Error ? err.message : err}`)
       }
     }
     if (st.mode === 'aicard' && !st.async) this.deps.observe?.('renderer.fallback', true)
     // markdown / text / asyncMode / card-fallback all land here.
+    const mentionOnReply = st.cardMayHaveMentionedSender ? undefined : true
     const delivered =
       st.mode === 'text' && !errText
-        ? await outbound.sendText(st.msg, text)
-        : await outbound.sendMarkdown(st.msg, config.markdownTitle, text)
+        ? await outbound.sendText(st.msg, text, mentionOnReply)
+        : await outbound.sendMarkdown(st.msg, config.markdownTitle, text, mentionOnReply)
     this.deps.observe?.('renderer.delivered', delivered !== false)
     if (delivered !== false && config.emotionFirstResponse && kind === 'completed')
       await emotion.done?.(st.msg.msgId, st.msg.conversationId)

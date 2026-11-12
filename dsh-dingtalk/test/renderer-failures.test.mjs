@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { DeliveryOutcomeUnknown } from '../lib/errors.js'
 import { Renderer } from '../lib/renderer.js'
 
 function createHarness(mode = 'aicard') {
@@ -153,4 +154,62 @@ test('正常的英文最终答复保留', async () => {
   await done
   await new Promise((resolve) => setImmediate(resolve))
   assert.deepEqual(h.sent, ['Here is your account information.'])
+})
+
+test('群卡片完成或取消都不另发提醒', async () => {
+  for (const kind of ['completed', 'aborted']) {
+    const h = createHarness()
+    h.msg.conversationType = 'group'
+    await settleTurn(h, { kind })
+    assert.deepEqual(h.sent, [])
+  }
+})
+
+test('群卡片只在首张提醒，续卡失败后文字答复不会再次提醒', async () => {
+  const h = createHarness()
+  h.msg.conversationType = 'group'
+  const requests = []
+  const fallback = []
+  const firstCard = h.renderer.deps.createCard
+  h.renderer.deps.createCard = async (_target, origin, mention = false) => {
+    assert.equal(origin, h.msg)
+    requests.push(mention)
+    if (requests.length === 1) return firstCard()
+    throw new Error('request_failed')
+  }
+  h.renderer.deps.outbound.sendMarkdown = async (_origin, _title, text, mention) => fallback.push({ text, mention })
+  const done = h.renderer.onInbound('s1', h.msg)
+  h.renderer.notifyInterleaved(h.msg.conversationId)
+  h.renderer.onSessionEvent(
+    { id: 's1' },
+    { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '完成' }] } } },
+  )
+  h.renderer.onSessionEvent({ id: 's1' }, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+  await done
+  assert.deepEqual(requests, [true, false])
+  assert.deepEqual(fallback, [{ text: '完成', mention: undefined }])
+})
+
+test('群首卡编号丢失时仍发送一次正文，正文收尾回执丢失时不再补发', async () => {
+  for (const stage of ['create', 'finish']) {
+    const h = createHarness()
+    h.msg.conversationType = 'group'
+    const answers = []
+    const unknown = async () => {
+      throw new DeliveryOutcomeUnknown('request_timeout')
+    }
+    h.renderer.deps.createCard = stage === 'create' ? unknown : async () => ({ finish: unknown })
+    h.renderer.deps.outbound.sendMarkdown = async (_origin, _title, text, mention) => {
+      answers.push({ text, mention })
+      return true
+    }
+    const done = h.renderer.onInbound('s1', h.msg)
+    h.renderer.onSessionEvent(
+      { id: 's1' },
+      { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '完整答复' }] } } },
+    )
+    h.renderer.onSessionEvent({ id: 's1' }, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    await done
+    assert.deepEqual(answers, stage === 'create' ? [{ text: '完整答复', mention: undefined }] : [])
+  }
 })

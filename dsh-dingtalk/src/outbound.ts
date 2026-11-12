@@ -87,6 +87,11 @@ export class Outbound {
         this.log(`reply failed ${resp.status}: ${await resp.text()}`)
         return false
       }
+      const receipt = (await resp.json()) as { errcode?: number }
+      if (receipt?.errcode !== 0) {
+        this.log('reply rejected or receipt incomplete')
+        return false
+      }
       this.log(`reply sent (${chars} chars)`)
       return true
     } catch (err) {
@@ -95,19 +100,24 @@ export class Outbound {
     }
   }
 
-  async sendMarkdown(sessionWebhook: string, title: string, text: string): Promise<boolean> {
+  async sendMarkdown(sessionWebhook: string, title: string, text: string, mention?: string): Promise<boolean> {
     return this.send(
       sessionWebhook,
       {
         msgtype: 'markdown',
+        ...(mention ? { at: { atUserIds: [mention], isAtAll: false } } : {}),
         markdown: { title: markdownSummary(text, title), text },
       },
       text.length,
     )
   }
 
-  async sendText(sessionWebhook: string, content: string): Promise<boolean> {
-    return this.send(sessionWebhook, { msgtype: 'text', text: { content } }, content.length)
+  async sendText(sessionWebhook: string, content: string, mention?: string): Promise<boolean> {
+    return this.send(
+      sessionWebhook,
+      { msgtype: 'text', text: { content }, ...(mention ? { at: { atUserIds: [mention], isAtAll: false } } : {}) },
+      content.length,
+    )
   }
 
   /** 应用机器人原会话回发；API 接受不等于客户端送达，不自动重试未知结果。 */

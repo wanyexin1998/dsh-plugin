@@ -20,6 +20,8 @@ export interface InboundMessage {
   msgId: string
   conversationId: string
   conversationType: 'direct' | 'group'
+  /** Set only by the robot's authenticated Stream callback when DingTalk reports an @mention of this robot. */
+  robotMentioned?: true
   senderStaffId: string
   /** Preserve enterprise fields for Host identity matching, never infer from Web. */
   senderCorpId?: string
@@ -241,25 +243,34 @@ class SeenStore {
     }
   }
 
-  private keys(data: any, fallbackId: string): string[] {
+  private keys(data: any, fallbackId: string): { keys: string[]; legacyGroupFingerprint?: string } {
     const keys: string[] = []
+    let legacyGroupFingerprint: string | undefined
     const msgId = data?.msgId ?? fallbackId
     if (msgId) keys.push(`id:${msgId}`)
     const createAt = data?.createAt ?? data?.createTime
     if (createAt && data?.conversationId) {
       const content = data?.msgtype === 'text' ? (data?.text?.content ?? '') : (data?.content ?? '')
-      const fingerprint = JSON.stringify([data.conversationId, String(createAt), data?.msgtype ?? '', content])
-      keys.push(`fp:${createHash('sha256').update(fingerprint).digest('hex')}`)
+      const parts = [data.conversationId, String(createAt), data?.msgtype ?? '', content]
+      const fingerprint = () => `fp:${createHash('sha256').update(JSON.stringify(parts)).digest('hex')}`
+      if (String(data.conversationType) === '2') {
+        // Older installations persisted group fingerprints without a sender. Honor those until their original TTL.
+        legacyGroupFingerprint = fingerprint()
+        parts.push(data.senderCorpId ?? '', data.senderStaffId ?? '')
+      }
+      keys.push(fingerprint())
     }
-    return keys
+    return { keys, legacyGroupFingerprint }
   }
 
   /** @returns true when this delivery was seen before (suppress it). */
   checkAndMark(data: any, fallbackId: string): boolean {
     const now = Date.now()
     for (const [k, t] of this.map) if (now - t > DEDUP_TTL_MS) this.map.delete(k)
-    const keys = this.keys(data, fallbackId)
-    const dup = keys.some((k) => this.map.has(k))
+    const { keys, legacyGroupFingerprint } = this.keys(data, fallbackId)
+    const dup =
+      keys.some((k) => this.map.has(k)) ||
+      (legacyGroupFingerprint !== undefined && this.map.has(legacyGroupFingerprint))
     for (const k of keys) this.map.set(k, now)
     this.persist()
     return dup
@@ -392,6 +403,7 @@ export async function startStream(opts: StreamOptions): Promise<() => void> {
         msgId,
         conversationId: data?.conversationId ?? '',
         conversationType,
+        ...(conversationType === 'group' && data?.isInAtList === true ? { robotMentioned: true as const } : {}),
         senderStaffId: data?.senderStaffId ?? '',
         ...(typeof data?.senderCorpId === 'string' ? { senderCorpId: data.senderCorpId } : {}),
         ...(typeof data?.chatbotCorpId === 'string' ? { chatbotCorpId: data.chatbotCorpId } : {}),

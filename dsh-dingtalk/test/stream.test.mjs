@@ -227,6 +227,69 @@ test('Stream 将 picture 与 richText 图片标准化后交给连接器', async 
   ])
 })
 
+test('official group mention and sender survive normalization and simultaneous same-text deliveries', async (t) => {
+  let callback
+  class FakeClient {
+    socket = Object.assign(new EventEmitter(), { readyState: 1 })
+    registerCallbackListener(topic, handler) {
+      if (topic === '/robot') callback = handler
+    }
+    async connect() {}
+    async disconnect() {}
+  }
+  mock.module('dingtalk-stream', { namedExports: { DWClient: FakeClient, TOPIC_ROBOT: '/robot', TOPIC_CARD: '/card' } })
+  t.after(() => mock.restoreAll())
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-dingtalk-mention-'))
+  t.after(() => import('node:fs/promises').then((fs) => fs.rm(root, { recursive: true, force: true })))
+  const messages = []
+  t.after(
+    await startStream({
+      clientId: 'bot',
+      clientSecret: 'fixture',
+      seenFile: path.join(root, 'seen.json'),
+      log() {},
+      onMessage: (message) => messages.push(message),
+    }),
+  )
+  const input = {
+    conversationId: 'group',
+    conversationType: '2',
+    msgtype: 'text',
+    text: { content: '@robot query' },
+    createAt: 1,
+  }
+  for (const [user, marker] of [
+    ['a', true],
+    ['b', true],
+    ['c', 'true'],
+    ['d', false],
+  ]) {
+    await callback({
+      headers: { messageId: user },
+      data: {
+        ...input,
+        senderCorpId: 'corp',
+        senderStaffId: user,
+        isInAtList: marker,
+        atUsers: [{ staffId: 'other' }],
+      },
+    })
+  }
+  await callback({
+    headers: { messageId: 'a-redelivery' },
+    data: { ...input, senderCorpId: 'corp', senderStaffId: 'a', isInAtList: true },
+  })
+  assert.deepEqual(
+    messages.map((msg) => [msg.senderStaffId, msg.robotMentioned === true]),
+    [
+      ['a', true],
+      ['b', true],
+      ['c', false],
+      ['d', false],
+    ],
+  )
+})
+
 test('卡片 Stream 回调解析并保留审批动作和绑定用户', () => {
   const callback = normalizeCardCallback({
     outTrackId: 'approval-1',

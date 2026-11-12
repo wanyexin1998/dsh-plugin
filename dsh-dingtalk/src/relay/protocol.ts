@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { DeliveryOutcomeUnknown } from '../errors.js'
 import type WebSocket from 'ws'
 
 export interface Frame {
@@ -32,13 +33,17 @@ export class Peer {
         if (!pending) return
         this.pending.delete(frame.reply)
         clearTimeout(pending.timer)
-        if (frame.error) pending.reject(new Error(frame.error))
+        if (frame.error === 'delivery_unknown') pending.reject(new DeliveryOutcomeUnknown(frame.error))
+        else if (frame.error) pending.reject(new Error(frame.error))
         else pending.resolve(frame.data)
       } else if (typeof frame.id === 'string' && typeof frame.method === 'string') {
         try {
           this.send({ reply: frame.id, data: await handler(frame.method, frame.data) })
-        } catch {
-          this.send({ reply: frame.id, error: 'request_failed' })
+        } catch (error) {
+          this.send({
+            reply: frame.id,
+            error: error instanceof DeliveryOutcomeUnknown ? 'delivery_unknown' : 'request_failed',
+          })
         }
       }
     })
@@ -46,7 +51,7 @@ export class Peer {
     socket.on('close', () => {
       for (const p of this.pending.values()) {
         clearTimeout(p.timer)
-        p.reject(new Error('connection_lost'))
+        p.reject(new DeliveryOutcomeUnknown('connection_lost'))
       }
       this.pending.clear()
     })
@@ -61,7 +66,7 @@ export class Peer {
       const id = randomUUID()
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error('request_timeout'))
+        reject(new DeliveryOutcomeUnknown('request_timeout'))
       }, timeout)
       this.pending.set(id, { resolve, reject, timer })
       this.send({ id, method, data })

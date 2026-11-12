@@ -40,7 +40,9 @@
 
 官方依据：[浏览器授权流程](https://open-dingtalk.github.io/developerpedia/docs/develop/permission/token/browser/get_user_app_token_browser/)、[unionId 换取企业 userId](https://open.dingtalk.com/document/orgapp-server/query-a-user-by-the-union-id)。
 
-群聊由管理员在 `allowedGroups` 列出允许群。互动审批卡复用现有模板；未配置模板时私聊沿用文字确认，群内需要审批的操作保持原有拒绝行为。入站图片/附件经过网关受限下载（20 MB）转给本人 DSH；文件回传工具仍受现有 IM 工具边界限制，未额外开放本机执行能力。
+将网关的 `groupMentionSenders` 设为 `"all"` 后，员工把机器人加进群，在群里 @机器人即可使用本人已连接的席位。试点时可填员工的钉钉 userId 数组。网关根据钉钉 Stream 回调的 `isInAtList` 识别机器人被 @，根据发消息的企业和员工选择席位。群内回复对群成员可见。群内第一张流式答复卡片在投放时通过员工 userId 请求钉钉提醒提问人。收到提问人的昵称时，卡片正文从创建到结束均显示「@昵称」。后续更新和续卡不重复提醒。普通文本和 Markdown 在发送答复时 @ 提问人。已有的 `allowedGroups` 继续生效，未配置 `groupMentionSenders` 时只接收名单内的群。
+
+互动审批卡复用现有模板；未配置模板时私聊沿用文字确认，群内需要审批的操作保持原有拒绝行为。入站图片/附件经过网关受限下载（20 MB）转给本人 DSH；文件回传工具仍受现有 IM 工具边界限制，未额外开放本机执行能力。
 
 ## 状态与失败行为
 
@@ -82,3 +84,5 @@
 本地验证记录（2026-11-03）：完整检查 359 项消息侧测试通过、51 项平台条件跳过，54 项 Web/DWS 测试通过；安装包与真实 DSH ToolRuntime 作用域检查通过。机器人应用补齐权限后，真实测试卡片创建、投放、3 次流式更新及结束均成功。安装 dev.8 时保留测试 Profile 的原配置；真实宿主 RPC 以桌面来源完成 bootstrap、status、disconnect-preview，未实际解除连接。随后真实私聊记录到 705 个流式帧、其中 508 个 text-delta 到达 Renderer，2 个回合正常结束并投递成功。三项前置验证通过后，才将测试私聊切为 aicard 并开启表情，群聊仍为 Markdown。
 
 启用后真实私聊验收通过：用户确认原消息及时出现 🤔、卡片正文边生成边更新、完成后显示 🥳 Done。本轮 Renderer 收到 310 个流式帧，其中 277 个 text-delta；回合结束和最终投递均成功。网关卡片创建、投放、2 次流式更新、结束，以及 Thinking 添加、撤回和 Done 添加均成功，所有记录失败数为 0，没有 Markdown 降级记录。`doctor --profile phase1-preview --json` 返回共享网关连接及 AI Card 验证均通过。此结果仅覆盖测试私聊；群聊流式效果与实际 Electron 窗口完整操作尚未单独验收。
+
+群卡片按目标会话校验投放回执。明确拒收会回退文字；投放结果未知时继续更新原卡，避免重复提醒或误标 Done。席位未收到首张卡片编号时，改用文字发送一次正文，避免再次 @ 提问人。正文已发出但收尾回执未知时，不再补发。续卡失败时保留最终正文。企业机器人按企业、应用 ID 和网关地址识别配对目标；完成旧指纹迁移后，调整显示名和配置顺序均可保留配对。

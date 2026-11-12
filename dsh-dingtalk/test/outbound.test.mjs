@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import { Outbound } from '../lib/outbound.js'
 
-async function captureMarkdown(text, title = 'DSH') {
+async function captureMarkdown(text, title = 'DSH', receipt = { errcode: 0 }) {
   const originalFetch = globalThis.fetch
   const requests = []
   globalThis.fetch = async (url, init) => {
@@ -11,7 +11,7 @@ async function captureMarkdown(text, title = 'DSH') {
       return { ok: true, json: async () => ({ accessToken: 'redacted', expireIn: 7200 }) }
     }
     requests.push({ url, body: JSON.parse(init.body) })
-    return { ok: true }
+    return Response.json(receipt)
   }
 
   try {
@@ -45,4 +45,9 @@ test('Markdown 会话摘要保留正文中的字面符号', async () => {
   const text = '路径 `~/.dsh/foo_bar` 保持不变'
 
   assert.equal((await captureMarkdown(text)).body.markdown.title, text)
+})
+
+test('业务拒收和不完整回执不会报告送达', async () => {
+  for (const receipt of [{ errcode: 310000 }, {}])
+    assert.equal((await captureMarkdown('hi', 'DSH', receipt)).sent, false)
 })

@@ -43,6 +43,21 @@ test('occupied real port rejects startup without an uncaught WebSocket error or 
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stdout, /conflict_handled/)
 })
+test('gateway rejects malformed group mention audience before startup', async () => {
+  const config = {
+    clientId: 'test',
+    clientSecret: 'test',
+    corpId: 'corp',
+    stateDirectory: '.',
+    publicOrigin: 'https://example.org',
+  }
+  for (const allowedGroups of ['group-abcd', [''], ['   '], [3], null]) {
+    await assert.rejects(startRobotGateway({ ...config, allowedGroups }, true), /invalid_allowed_groups/)
+  }
+  for (const groupMentionSenders of ['pilot', [''], ['*'], [3], null]) {
+    await assert.rejects(startRobotGateway({ ...config, groupMentionSenders }, true), /invalid_group_mention_senders/)
+  }
+})
 test('personal callback preparation does not subscribe Stream; activation is single-flight and closes once', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'gateway-deferred-'))
   let gateway
