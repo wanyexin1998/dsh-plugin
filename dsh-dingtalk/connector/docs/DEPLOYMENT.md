@@ -2,6 +2,8 @@
 
 本文只描述服务器侧 Connector 与既有 gateway 的部署；**不包含** Cellgent 接入，也不授权在 39/43 上执行。所有示例使用 `dsh.example.com` 等占位值。
 
+39 的开席默认值、群聊策略和分范围回滚见[企业席位部署与验收记录](../../docs/operations/39-seat-rollout.md)。
+
 ## 0. 制品与固定版本
 
 | 项             | 值                                                                                                                   |
