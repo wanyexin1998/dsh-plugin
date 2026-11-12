@@ -47,8 +47,7 @@ interface TurnState {
    * the next frame rolls output over to a fresh card at the bottom.
    */
   needsRollover: boolean
-  mentionedOnCard?: boolean
-  creationUnconfirmed?: boolean
+  cardMayHaveMentionedSender?: boolean
   cardUnavailable: boolean
   /** Chars already settled onto earlier cards; the live card shows the remainder. */
   carryOffset: number
@@ -133,11 +132,12 @@ export class Renderer {
       state.cardPromise = this.deps
         .createCard(cardTarget(msg), msg, mentionSender)
         .then((card) => {
-          state.mentionedOnCard = !!card && mentionSender
+          state.cardMayHaveMentionedSender = !!card && mentionSender
           return card
         })
         .catch((error) => {
-          state.creationUnconfirmed = error instanceof DeliveryOutcomeUnknown
+          // A lost create receipt can leave a placeholder that already mentioned the sender.
+          state.cardMayHaveMentionedSender = mentionSender && error instanceof DeliveryOutcomeUnknown
           this.deps.observe?.('card.create', false)
           return null
         })
@@ -351,11 +351,6 @@ export class Renderer {
     if (!text.trim()) text = EMPTY_MODEL_RESPONSE
 
     let card = !st.cardUnavailable && st.cardPromise ? await st.cardPromise : null
-    if (st.creationUnconfirmed) {
-      this.deps.observe?.('renderer.delivered', false)
-      this.deps.log('card creation unconfirmed; no second delivery')
-      return
-    }
     if (card && st.needsRollover && (substance || errText)) {
       // Newer bubbles sit below the old card: settle it with a pointer and
       // land the final answer on a fresh card at the bottom. Tool-lines-only
@@ -382,7 +377,7 @@ export class Renderer {
     }
     if (st.mode === 'aicard' && !st.async) this.deps.observe?.('renderer.fallback', true)
     // markdown / text / asyncMode / card-fallback all land here.
-    const mentionOnReply = st.mentionedOnCard ? undefined : true
+    const mentionOnReply = st.cardMayHaveMentionedSender ? undefined : true
     const delivered =
       st.mode === 'text' && !errText
         ? await outbound.sendText(st.msg, text, mentionOnReply)
