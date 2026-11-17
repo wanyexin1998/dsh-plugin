@@ -35,7 +35,10 @@ export interface ImToolFactory {
 
 type Audience = { kind: 'direct' | 'group'; id: string }
 type Grant = (name: string) => ChannelBinding | undefined
-type QueryRelay = { enterpriseQueries?(message: unknown): Grant | undefined }
+type QueryRelay = {
+  status?(): { mode?: string }
+  enterpriseQueries?(message: unknown): Grant | undefined
+}
 type Scope = {
   agent: HostAgent
   relay?: QueryRelay
@@ -89,7 +92,8 @@ export class ImTools {
     if (!factory) throw new Error('im_connection_service_unavailable')
     const host = ctx as HostAgentContext & QueryHost
     const relay = host.get?.('dingtalkRelay') as QueryRelay | undefined
-    const canQuery = !this.workspace && typeof relay?.enterpriseQueries === 'function'
+    const canQuery =
+      (!this.workspace || relay?.status?.().mode === 'enterprise') && typeof relay?.enterpriseQueries === 'function'
     const scope: Scope = { agent, relay: canQuery ? relay : undefined }
     const prepared = new WeakMap<object, AbortSignal>()
     const bindingFor = (name: string) => {
@@ -147,13 +151,13 @@ export class ImTools {
           return 'im_tool_unavailable: im_subagent_inheritance_unavailable'
         if (this.workspace && workspaceTools.has(exec.name)) return undefined
         if (['dingtalk_call', 'skill', 'ask_user_question'].includes(exec.name)) return undefined
-        if (this.workspace) return 'im_tool_unavailable: im_tool_inheritance_unreviewed'
         if (canQuery && reviewedQueryTool(exec.name)) {
           const binding = bindingFor(exec.name)
           if (!binding) return queryDenied
           prepared.set(exec, binding.signal)
           return undefined
         }
+        if (this.workspace) return 'im_tool_unavailable: im_tool_inheritance_unreviewed'
         // DSH 0.2.1-rc.5 supplies cwd/preset composition, not a trusted
         // principal -> workspace entitlement contract. Keep this fail closed.
         return 'im_tool_unavailable: im_workspace_policy_unavailable: 宿主未提供可信用户与工作区权限绑定，无法安全继承此工具。'

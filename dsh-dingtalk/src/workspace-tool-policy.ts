@@ -1,11 +1,12 @@
 import { realpathSync } from 'node:fs'
+import { isAbsolute, relative, sep } from 'node:path'
 import type { BridgeAuthorization } from './bridge.js'
 import type { HostAgent, HostAgentContext } from './host.js'
 import { messageIdentity, sameIdentity, type DingTalkIdentity } from './identity.js'
 import type { JsonStore } from './jsonstore.js'
 
-/** Issued only by the local personal channel's committed device pairing. */
-export interface PersonalAuthority {
+/** Live profile pairing, restricted to the configured employee for enterprise channels. */
+export interface WorkspaceAuthority {
   readonly identity: DingTalkIdentity
   readonly bindingId: string
   readonly profile: string
@@ -25,7 +26,7 @@ interface Grant {
   readonly agent: HostAgent
   readonly ctx: HostAgentContext
   readonly admission: BridgeAuthorization
-  readonly authority: PersonalAuthority
+  readonly authority: WorkspaceAuthority
   readonly selection: AbortController
   readonly owner: WorkspaceSessionOwner
   readonly controller: AbortController
@@ -45,21 +46,37 @@ interface DispatchContext {
   ): () => void
 }
 
-/** Local profile owner delegation, not a second workspace ACL or DWS grant. */
+/** Channel owner delegation; host filesystem/process isolation still governs tool bodies. */
 export class WorkspaceToolPolicy {
   private readonly grants = new WeakMap<HostAgent, Grant>()
   private readonly selections = new Map<string, AbortController>()
   private readonly active = new Map<string, Grant>()
   private closed = false
+  private readonly root?: string
 
   constructor(
     private readonly options: {
-      authority(): PersonalAuthority | undefined
+      authority(): WorkspaceAuthority | undefined
+      /** Enterprise session directories must stay inside this deployment-owned root. */
+      root?: string
       selectedWorkspace(scopeKey: string): string
       bindings: Pick<JsonStore<string>, 'get'>
       owners: Pick<JsonStore<WorkspaceSessionOwner>, 'get' | 'set'>
     },
-  ) {}
+  ) {
+    this.root = options.root === undefined ? undefined : realpathSync(options.root)
+  }
+
+  /** Validate a selected directory, including symlink targets and root replacement. */
+  checkWorkspace(selected: string): string {
+    const cwd = realpathSync(selected)
+    if (this.root !== undefined) {
+      if (realpathSync(this.options.root!) !== this.root) throw new Error('im_workspace_root_changed')
+      const path = relative(this.root, cwd)
+      if (path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path)) throw new Error('im_workspace_outside_root')
+    }
+    return cwd
+  }
 
   /** Snapshot before any inbound await, including commands with an invalid cwd. */
   receipt(scopeKey: string): AbortSignal {
@@ -82,12 +99,12 @@ export class WorkspaceToolPolicy {
     this.active.clear()
   }
 
-  capture(message: unknown, scopeKey: string, selected: string, captured?: PersonalAuthority): BridgeAuthorization {
+  capture(message: unknown, scopeKey: string, selected: string, captured?: WorkspaceAuthority): BridgeAuthorization {
     this.receipt(scopeKey)
     const authority = captured ?? this.options.authority()
     if (!authority || authority.signal.aborted || !sameIdentity(messageIdentity(message), authority.identity))
       throw new Error('im_channel_authorization_unavailable')
-    const cwd = realpathSync(selected)
+    const cwd = this.checkWorkspace(selected)
     let selection = this.selections.get(scopeKey)
     if (!selection) this.selections.set(scopeKey, (selection = new AbortController()))
     const lease = selection
@@ -120,7 +137,10 @@ export class WorkspaceToolPolicy {
         !sameIdentity(current.identity, authority.identity)
       )
         throw new Error('im_channel_authorization_changed')
-      if (realpathSync(selected) !== cwd || realpathSync(this.options.selectedWorkspace(scopeKey)) !== cwd)
+      if (
+        this.checkWorkspace(selected) !== cwd ||
+        this.checkWorkspace(this.options.selectedWorkspace(scopeKey)) !== cwd
+      )
         throw new Error('im_workspace_changed')
     }
     const checkContext = (ctx: HostAgentContext, agent: HostAgent) => {

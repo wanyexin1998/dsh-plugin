@@ -33,7 +33,9 @@ export interface CommandDeps {
   /** Registered host workspaces for /ws; empty when the registry is unavailable. */
   listWorkspaces?(): Promise<Array<{ path: string; title?: string }>>
   defaultWorkspace?: string
-  /** Revalidate a personal channel lease before command side effects. */
+  /** Deployment-owned directory restriction, applied to listing and every selection. */
+  allowWorkspace?(path: string): boolean
+  /** Revalidate the channel lease before command side effects. */
   authorize?(msg: InboundMessage): boolean
   beforeSessionChange?(scopeKey: string): void
   markdownTitle: string
@@ -93,6 +95,11 @@ export class Commands {
   private sessionChange(msg: InboundMessage, key: string): void {
     this.authorize(msg)
     this.deps.beforeSessionChange?.(key)
+  }
+
+  private async workspaces(): Promise<Array<{ path: string; title?: string }>> {
+    const items = await this.deps.listWorkspaces!()
+    return items.filter((item) => this.deps.allowWorkspace?.(item.path) ?? true)
   }
 
   markBusyNotice(conversationId: string, ctx: BusyContext): void {
@@ -276,7 +283,7 @@ export class Commands {
           await reply('工作区模块未装配。')
           return true
         }
-        const list = await this.deps.listWorkspaces()
+        const list = await this.workspaces()
         const current = this.deps.workspaceOverrides.get(key) ?? this.deps.defaultWorkspace
         const lines = list.length
           ? list.map(
@@ -299,6 +306,10 @@ export class Commands {
           return true
         }
         if (target === 'reset') {
+          if (this.deps.allowWorkspace && !this.deps.allowWorkspace(this.deps.defaultWorkspace ?? '')) {
+            await reply('默认工作区不在当前用户允许的范围内，请联系管理员。')
+            return true
+          }
           this.sessionChange(msg, key)
           this.deps.workspaceOverrides.delete(key)
           this.deps.bindings.delete(key)
@@ -307,7 +318,7 @@ export class Commands {
         }
         let dir = target
         if (/^\d+$/.test(target)) {
-          const list = await this.deps.listWorkspaces()
+          const list = await this.workspaces()
           const picked = list[Number(target) - 1]
           if (!picked) {
             await reply(`没有第 ${target} 个工作区，先 \`/ws\` 看清单。`)
@@ -317,6 +328,10 @@ export class Commands {
         }
         if (!existsSync(dir) || !statSync(dir).isDirectory()) {
           await reply(`目录不存在：\`${dir}\``)
+          return true
+        }
+        if (this.deps.allowWorkspace && !this.deps.allowWorkspace(dir)) {
+          await reply('该目录不在当前用户允许的工作区范围内。')
           return true
         }
         this.sessionChange(msg, key)

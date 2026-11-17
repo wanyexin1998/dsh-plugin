@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ImTools } from '../lib/im-tools.js'
 
-function fixture(relay) {
+function fixture(relay, workspace) {
   const guards = [],
     definitions = [],
     wrappers = []
@@ -27,14 +27,41 @@ function fixture(relay) {
       return name
     },
   }
-  const im = new ImTools(() => ({
-    createTool(identity, host) {
-      return { name: 'dingtalk_call', execute: async () => ({ identity: identity(), host: host() }) }
-    },
-  }))
+  const im = new ImTools(
+    () => ({
+      createTool(identity, host) {
+        return { name: 'dingtalk_call', execute: async () => ({ identity: identity(), host: host() }) }
+      },
+    }),
+    workspace,
+  )
   const agent = { id: 'session', ctx }
   return { ctx, agent, im, guards, definitions, wrappers }
 }
+
+test('enterprise workspace tools preserve the separate reviewed query grant', async () => {
+  const query = 'mcp__doris__exec_query'
+  const message = { senderCorpId: 'corp', senderStaffId: 'a', conversationType: 'direct', conversationId: 'dm-a' }
+  const signal = new AbortController().signal
+  let allowed = true
+  const relay = {
+    status: () => ({ mode: 'enterprise' }),
+    enterpriseQueries: (msg) =>
+      msg === message
+        ? (name) => (name === query ? { identity: { corpId: 'corp', userId: 'a' }, signal } : undefined)
+        : undefined,
+  }
+  const f = fixture(relay, { allowed: () => allowed })
+  f.im.bind(f.ctx, message, f.agent)
+  const execution = { name: query, agent: f.agent, signal: new AbortController().signal }
+  assert.equal(f.guards[0]({ name: 'write', agent: f.agent }), undefined)
+  assert.equal(f.guards[0](execution), undefined)
+  assert.equal(await f.wrappers[0](execution, async () => 'query-result'), 'query-result')
+  assert.match(f.guards[0]({ name: 'mcp__doris__kill_query', agent: f.agent }), /im_tool_inheritance_unreviewed/)
+  allowed = false
+  assert.match(f.guards[0]({ name: 'write', agent: f.agent }), /im_channel_authorization_changed/)
+  assert.match(f.guards[0](execution), /im_channel_authorization_changed/)
+})
 
 test('enterprise read queries use the verified sender, exact permitted audience and current lease through dispatch', async () => {
   const query = 'mcp__doris__exec_query'

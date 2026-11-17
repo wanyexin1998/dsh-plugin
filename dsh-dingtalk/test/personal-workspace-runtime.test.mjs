@@ -16,6 +16,8 @@ class RobotConnection extends RelayClient {
     super()
     this.directory = path.join(options.root, 'personal-runtime')
     this.profile = options.profile
+    this.enterprise = options.enterprise
+    this.received = new WeakSet()
     this.operations = []
     this.generation = 0
     this.pair()
@@ -41,10 +43,22 @@ class RobotConnection extends RelayClient {
     this.current = undefined
   }
   authority() {
-    return this.current
+    return this.enterprise ? undefined : this.current
+  }
+  workspaceRoot() {
+    return this.enterprise?.workspaceTools?.root
+  }
+  enterpriseAuthority() {
+    return this.enterprise?.workspaceTools?.userId === this.current?.identity.userId &&
+      this.enterprise.corpId === this.current.identity.corpId
+      ? this.current
+      : undefined
+  }
+  enterpriseWorkspace(message) {
+    return this.received.has(message) ? this.enterpriseAuthority() : undefined
   }
   status() {
-    return { mode: 'personal' }
+    return { mode: this.enterprise ? 'enterprise' : 'personal' }
   }
   async start(source) {
     this.source = source
@@ -102,8 +116,23 @@ async function flush() {
   for (let count = 0; count < 5; count++) await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCommit = false, resolveModelInfo } = {}) {
-  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dsh-personal-workspace-')))
+async function fixture(
+  t,
+  {
+    legacy = false,
+    foreign = false,
+    missing,
+    revokeAtCommit = false,
+    resolveModelInfo,
+    enterprise = false,
+    outsideWorkspace = false,
+  } = {},
+) {
+  const container = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dsh-channel-workspace-')))
+  const root = enterprise ? path.join(container, 'employee-a') : container
+  await mkdir(root, { recursive: true })
+  const other = path.join(container, 'employee-b')
+  await mkdir(other)
   const target = path.join(root, 'target')
   await mkdir(target)
   const state = path.join(root, 'state')
@@ -111,6 +140,10 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
   if (legacy) {
     await mkdir(account, { recursive: true })
     await writeFile(path.join(account, 'bindings.json'), JSON.stringify({ direct: 'legacy-session' }))
+  }
+  if (outsideWorkspace) {
+    await mkdir(account, { recursive: true })
+    await writeFile(path.join(account, 'workspaces.json'), JSON.stringify({ direct: other }))
   }
   const previous = process.env.DSH_DINGTALK_STATE_DIR
   process.env.DSH_DINGTALK_STATE_DIR = state
@@ -137,7 +170,7 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
     await lifecycle.fiber.dispose()
     if (previous === undefined) delete process.env.DSH_DINGTALK_STATE_DIR
     else process.env.DSH_DINGTALK_STATE_DIR = previous
-    await rm(root, { recursive: true, force: true })
+    await rm(container, { recursive: true, force: true })
   })
   const registerWorkspace = (dir) => {
     const workspace = {
@@ -153,6 +186,7 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
   }
   registerWorkspace(root)
   registerWorkspace(target)
+  if (enterprise) registerWorkspace(other)
   const prepare = async (options) => {
     const tools = new Map(),
       guards = [],
@@ -180,7 +214,7 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       },
     }
     // Host policy remains installed independently of the IM guard.
-    agentCtx.tools.guard((exec) => (exec.name === 'bash' ? 'host_tool_disabled' : undefined))
+    agentCtx.tools.guard((exec) => (!enterprise && exec.name === 'bash' ? 'host_tool_disabled' : undefined))
     const agent = {
       id: options.sessionId,
       ctx: agentCtx,
@@ -201,7 +235,7 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       requestApproval(signal) {
         return listeners.get('approval/request')[0]({ agent, toolName: 'bash', signal })
       },
-      async invoke(name) {
+      async invoke(name, args = {}) {
         const definition = tools.get(name)
         if (!definition) throw new Error('tool_not_registered')
         const reason = this.guard(name)
@@ -209,7 +243,7 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
         const exec = { name, agent, signal: new AbortController().signal }
         const dispatch = (listeners.get('tools/execute') ?? []).reduceRight(
           (next, listener) => () => listener(exec, next),
-          () => definition.execute({}, exec),
+          () => definition.execute(args, exec),
         )
         return dispatch()
       },
@@ -236,7 +270,10 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       },
     }
   }
-  const noDwsIdentity = { ...imToolFactory, identity: () => undefined }
+  const noDwsIdentity = {
+    ...imToolFactory,
+    identity: () => (enterprise ? { corpId: 'corp-a', userId: 'owner-a' } : undefined),
+  }
   await apply(
     {
       effect: (...args) => lifecycle.effect(...args),
@@ -271,11 +308,16 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
           return {
             resolve: async () => ({ id: 'fixture-preset' }),
             async mount(ctx) {
-              for (const name of ['read', 'bash'])
+              for (const name of ['read', 'write', 'bash'])
                 ctx.tools.register({
                   name,
-                  async execute(_args, exec) {
+                  async execute(args, exec) {
                     executed.push(name)
+                    if (name === 'write') {
+                      const destination = path.join(exec.agent.session.header.cwd, args.name)
+                      await writeFile(destination, args.data)
+                      return destination
+                    }
                     return exec.agent.session.header.cwd
                   },
                 })
@@ -287,6 +329,18 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       accounts: [],
       digitalEmployees: [],
       workspace: root,
+      ...(enterprise
+        ? {
+            robotConnection: {
+              mode: 'enterprise',
+              corpId: 'corp-a',
+              clientId: 'app',
+              displayName: 'Fixture',
+              gatewayUrl: 'wss://example.org/relay',
+              workspaceTools: { userId: 'owner-a', root },
+            },
+          }
+        : {}),
       tools: { enabled: false },
       replyMode: { direct: 'text', group: 'text' },
       streaming: { enabled: false },
@@ -297,10 +351,10 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
   connection = connections.at(-1)
   renderer = renderers.at(-1)
   assert.ok(connection instanceof RobotConnection)
-  assert.equal(noDwsIdentity.identity(), undefined)
+  if (!enterprise) assert.equal(noDwsIdentity.identity(), undefined)
   let sequence = 0
-  const send = (text, overrides = {}) =>
-    connection.source.onMessage({
+  const send = (text, overrides = {}) => {
+    const message = {
       msgId: `message-${++sequence}`,
       createAt: String(sequence),
       text,
@@ -311,11 +365,15 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
       senderNick: 'Fixture',
       sessionWebhook: 'fixture-request',
       ...overrides,
-    })
+    }
+    connection.received.add(message)
+    return connection.source.onMessage(message)
+  }
   const failures = () =>
     connection.operations.filter((op) => op.name === 'markdown' && /未能开始处理/.test(op.value.text)).length
   return {
     root,
+    other,
     target,
     account,
     connection,
@@ -332,6 +390,74 @@ async function fixture(t, { legacy = false, foreign = false, missing, revokeAtCo
     },
   }
 }
+
+test('enterprise public apply creates a workbook only in its employee workspace and rejects foreign routes and cwd', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('create workbook')
+  await waitUntil(() => h.followups.length === 1)
+  const agent = h.followups[0].agent
+  assert.equal(agent.guard('write'), undefined)
+  assert.equal(agent.guard('bash'), undefined)
+  const workbook = await readFile(new URL('./fixtures/workspace.xlsx', import.meta.url))
+  const output = await agent.invoke('write', { name: 'report.xlsx', data: workbook })
+  assert.equal(output, path.join(h.root, 'report.xlsx'))
+  assert.deepEqual(await readFile(output), workbook)
+  await h.send('foreign user', { senderStaffId: 'owner-b' })
+  assert.equal(h.followups.length, 1)
+  await h.send('/ws')
+  assert.doesNotMatch(h.connection.operations.at(-1).value.text, /employee-b/)
+  await h.send(`/cd ${h.other}`)
+  assert.match(h.connection.operations.at(-1).value.text, /不在当前用户允许/)
+  assert.equal(await agent.invoke('read'), h.root)
+  agent.session.header.cwd = h.other
+  await assert.rejects(
+    agent.invoke('write', { name: 'forbidden.xlsx', data: workbook }),
+    /im_channel_authorization_changed/,
+  )
+  await assert.rejects(readFile(path.join(h.other, 'forbidden.xlsx')), { code: 'ENOENT' })
+  agent.session.header.cwd = h.root
+  await h.send('/cd 2')
+  await assert.rejects(agent.invoke('read'), /im_channel_authorization_changed/)
+  await h.send('new workspace')
+  await waitUntil(() => h.followups.length === 2)
+  const next = h.followups[1].agent
+  assert.equal(await next.invoke('read'), h.target)
+  h.connection.revoke()
+  await assert.rejects(next.invoke('read'), /im_channel_authorization_changed/)
+})
+
+test('enterprise legacy directory override is reported before task admission and reset restores its own workspace', async (t) => {
+  const h = await fixture(t, { enterprise: true, outsideWorkspace: true })
+  await h.send('task in old directory')
+  assert.equal(h.followups.length, 0)
+  assert.match(h.connection.operations.at(-1).value.text, /工作区不可用.*cd reset/)
+  await h.send('/cd reset')
+  await h.send('task after reset')
+  await waitUntil(() => h.followups.length === 1)
+  assert.equal(await h.followups[0].agent.invoke('read'), h.root)
+})
+
+test('enterprise pending approval cannot survive reconnect or move to a replacement employee', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('hold')
+  await waitUntil(() => h.followups.length === 1)
+  const old = h.followups[0].agent
+  const request = new AbortController()
+  t.after(() => request.abort())
+  const outcome = old.requestApproval(request.signal)
+  await waitUntil(() => h.connection.operations.some((op) => /回复 `确认/.test(op.value.text ?? '')))
+  h.connection.reconnect()
+  assert.equal(await outcome, 'cancelled')
+  await assert.rejects(old.invoke('read'), /im_channel_authorization_changed/)
+  h.renderer.release(old.id)
+  await h.send('fresh task')
+  await waitUntil(() => h.followups.length === 2)
+  assert.equal(await h.followups[1].agent.invoke('read'), h.root)
+  h.connection.pair({ corpId: 'corp-a', userId: 'owner-b' })
+  await h.send('replacement employee', { senderStaffId: 'owner-b' })
+  assert.equal(h.followups.length, 2)
+  await assert.rejects(h.followups[1].agent.invoke('write'), /im_channel_authorization_changed/)
+})
 
 test('personal public apply uses channel identity without DWS OAuth and preserves host tool guards', async (t) => {
   const h = await fixture(t)

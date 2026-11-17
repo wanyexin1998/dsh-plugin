@@ -9,6 +9,7 @@ import { loadDingTalkAccountCredentials, saveDingTalkAccountCredentials } from '
 import { Outbound } from '../outbound.js'
 import type { DingTalkIdentity } from '../identity.js'
 import type { InboundMessage } from '../stream.js'
+import type { WorkspaceAuthority } from '../workspace-tool-policy.js'
 
 interface Personal {
   clientId: string
@@ -30,7 +31,7 @@ const fingerprint = (value: string) => createHash('sha256').update(value).digest
 // Old receivers hashed all five fields in the deployment's JSON key order.
 function matchesLegacyTarget(config: EnterpriseConnection, previous: string | undefined): boolean {
   if (!previous || !/^[a-f0-9]{24}$/.test(previous)) return false
-  const entries = Object.entries(config).filter(([key]) => key !== 'queryTools')
+  const entries = Object.entries(config).filter(([key]) => key !== 'queryTools' && key !== 'workspaceTools')
   function matches(prefix: typeof entries, remaining: typeof entries): boolean {
     if (!remaining.length) return fingerprint(JSON.stringify(Object.fromEntries(prefix))) === previous
     return remaining.some((entry, i) =>
@@ -94,6 +95,24 @@ export class RobotConnection extends RelayClient {
     )
       return undefined
     return Object.freeze({ ...binding, profile: this.options.profile })
+  }
+  /** Configured enterprise root; it never comes from a message or DWS tool argument. */
+  workspaceRoot(): string | undefined {
+    return this.problem ? undefined : this.enterprise?.workspaceTools?.root
+  }
+  /** Live authority for the deployment's exact employee and this receiver profile. */
+  enterpriseAuthority(): WorkspaceAuthority | undefined {
+    const config = this.enterprise
+    if (this.closed || this.problem || !config?.workspaceTools) return undefined
+    const binding = this.channelBinding()
+    if (binding?.identity.corpId !== config.corpId || binding.identity.userId !== config.workspaceTools.userId)
+      return undefined
+    return Object.freeze({ ...binding, profile: this.options.profile })
+  }
+  /** Require the actual message accepted on the current socket before admitting workspace work. */
+  enterpriseWorkspace(message: InboundMessage): WorkspaceAuthority | undefined {
+    const authority = this.enterpriseAuthority()
+    return authority && this.receivedLeases.get(message) === authority.signal ? authority : undefined
   }
   /** Only this enterprise receiver's authenticated message may obtain a query grant. */
   enterpriseQueries(message: InboundMessage): ((name: string) => ChannelBinding | undefined) | undefined {
@@ -222,7 +241,11 @@ export class RobotConnection extends RelayClient {
       if (this.enterprise) {
         const identity = this.options.identity()
         if (!identity) throw new Error('auth_required')
-        if (identity.corpId !== this.enterprise.corpId) throw new Error('identity_mismatch')
+        if (
+          identity.corpId !== this.enterprise.corpId ||
+          (this.enterprise.workspaceTools && identity.userId !== this.enterprise.workspaceTools.userId)
+        )
+          throw new Error('identity_mismatch')
       } else if (!this.personal) throw new Error('robot_not_configured')
       this.problem = undefined
       if (!this.enterprise) await this.prepareGateway()

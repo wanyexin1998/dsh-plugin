@@ -3,7 +3,7 @@ import { RobotConnection } from './relay/controller.js'
 import { RelayClient } from './relay/client.js'
 import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
-import { WorkspaceToolPolicy, type PersonalAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
+import { WorkspaceToolPolicy, type WorkspaceAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
 import type { InboundMessage } from './stream.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
@@ -29,7 +29,7 @@ import { Emotion } from './emotion.js'
 import { DeliveryOutcomeUnknown } from './errors.js'
 import { AICard, CardCapability, type CardTarget, type CardHandle } from './aicard.js'
 import { Renderer } from './renderer.js'
-import { Bridge } from './bridge.js'
+import { Bridge, type BridgeAuthorization } from './bridge.js'
 import { JsonStore } from './jsonstore.js'
 import { Queue } from './queue.js'
 import { Commands, isSessionControl, type ModelOverride } from './commands.js'
@@ -498,14 +498,21 @@ async function startAccount(
     config.interactionCardTemplateId || process.env.DINGTALK_INTERACTION_CARD_TEMPLATE_ID || ''
   const stateDir = accountStateDir(relay instanceof RobotConnection ? relay.directory : resolveStateDir(), account.id)
   const personal = relay instanceof RobotConnection && relay.status().mode === 'personal' ? relay : undefined
+  const enterpriseRoot = !personal && relay instanceof RobotConnection ? relay.workspaceRoot() : undefined
+  const workspaceAuthority = () =>
+    personal
+      ? personal.authority()
+      : enterpriseRoot && relay instanceof RobotConnection
+        ? relay.enterpriseAuthority()
+        : undefined
   const channelIdentity = () =>
     personal ? personal.authority()?.identity : (ctx.get('dingtalkImTools') as ImToolFactory).identity?.()
-  const incomingAuthority = new WeakMap<InboundMessage, PersonalAuthority>()
+  const incomingAuthority = new WeakMap<InboundMessage, WorkspaceAuthority>()
   const incomingSelection = new WeakMap<InboundMessage, AbortSignal>()
   const channelOwns = (msg: InboundMessage) => {
-    if (!personal) return true
+    if (!personal && !enterpriseRoot) return true
     const entered = incomingAuthority.get(msg),
-      current = personal.authority()
+      current = workspaceAuthority()
     return (
       !!entered &&
       !!current &&
@@ -662,14 +669,17 @@ async function startAccount(
   const modelOverrides = new JsonStore<ModelOverride>(path.join(stateDir, 'models.json'), log)
   const workspaceOverrides = new JsonStore<string>(path.join(stateDir, 'workspaces.json'), log)
   const queue = new Queue(log)
-  const workspacePolicy = personal
-    ? new WorkspaceToolPolicy({
-        authority: () => personal.authority(),
-        selectedWorkspace: (key) => workspaceOverrides.get(key) ?? cwd,
-        bindings,
-        owners: new JsonStore<WorkspaceSessionOwner>(path.join(stateDir, 'workspace-session-owners.json'), log),
-      })
-    : undefined
+  const workspacePolicy =
+    personal || enterpriseRoot
+      ? new WorkspaceToolPolicy({
+          authority: workspaceAuthority,
+          root: enterpriseRoot,
+          selectedWorkspace: (key) => workspaceOverrides.get(key) ?? cwd,
+          bindings,
+          owners: new JsonStore<WorkspaceSessionOwner>(path.join(stateDir, 'workspace-session-owners.json'), log),
+        })
+      : undefined
+  workspacePolicy?.checkWorkspace(cwd)
   const questions = new QuestionManager({
     outbound: replySink,
     markdownTitle: config.markdownTitle,
@@ -789,6 +799,18 @@ async function startAccount(
     toolsStatusLine: () => dwsTools?.statusLine() ?? 'DWS Agent 工具：未启用（不影响 Channel）',
     workspaceOverrides,
     defaultWorkspace: cwd,
+    ...(enterpriseRoot && workspacePolicy
+      ? {
+          allowWorkspace: (selected: string) => {
+            try {
+              workspacePolicy.checkWorkspace(selected)
+              return true
+            } catch {
+              return false
+            }
+          },
+        }
+      : {}),
     ...(workspacePolicy
       ? {
           authorize: channelOwns,
@@ -910,11 +932,15 @@ async function startAccount(
             ? JSON.stringify([msg.senderCorpId, msg.conversationId, msg.senderStaffId])
             : `${msg.conversationId}#${msg.senderStaffId}`
           : msg.conversationId
-      if (personal) {
-        const entered = personal.authority()
+      if (workspacePolicy) {
+        const entered = personal
+          ? personal.authority()
+          : relay instanceof RobotConnection
+            ? relay.enterpriseWorkspace(msg)
+            : undefined
         if (!entered || !sameIdentity(messageIdentity(msg), entered.identity)) return
         incomingAuthority.set(msg, entered)
-        incomingSelection.set(msg, workspacePolicy!.receipt(scopeKey))
+        incomingSelection.set(msg, workspacePolicy.receipt(scopeKey))
       }
       const access = owner.authorize(msg)
       if (access.kind === 'bound') {
@@ -980,12 +1006,19 @@ async function startAccount(
       // Capture the original channel lease and workspace before queueing. A
       // later re-pair or /cd cannot grant an old bubble a new execution context.
       if (!channelOwns(msg)) return
-      const admission = workspacePolicy?.capture(
-        msg,
-        scopeKey,
-        workspaceOverrides.get(scopeKey) ?? cwd,
-        incomingAuthority.get(msg),
-      )
+      let admission: BridgeAuthorization | undefined
+      try {
+        admission = workspacePolicy?.capture(
+          msg,
+          scopeKey,
+          workspaceOverrides.get(scopeKey) ?? cwd,
+          incomingAuthority.get(msg),
+        )
+      } catch (error) {
+        log(`workspace admission failed (${error instanceof Error ? error.message : 'unknown'})`)
+        await replySink.sendMarkdown(msg, config.markdownTitle, '当前会话工作区不可用，请发送 /cd reset 后重试。')
+        return
+      }
 
       if (config.emotionFirstResponse) emotion.add(msg.msgId, msg.conversationId)
       const lane = { skipped: false, started: false }

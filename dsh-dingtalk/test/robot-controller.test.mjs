@@ -188,7 +188,12 @@ test('enabling query tools preserves an existing enterprise device until the rob
   await migrated.close()
   const reordered = Object.fromEntries(Object.entries(enterprise).reverse())
   const updated = f.create({
-    enterprise: { ...reordered, displayName: 'renamed', queryTools: ['mcp__doris__get_db_list'] },
+    enterprise: {
+      ...reordered,
+      displayName: 'renamed',
+      queryTools: ['mcp__doris__get_db_list'],
+      workspaceTools: { userId: 'user', root: f.root },
+    },
   })
   await updated.start({})
   assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), binding)
@@ -205,6 +210,10 @@ test('invalid enterprise configuration and mismatched identity cannot fall back 
   await assert.rejects(c.connect(), /enterprise_configuration_invalid/)
   const other = f.create({ enterprise, identity: () => ({ corpId: 'other', userId: 'user' }) })
   await assert.rejects(other.connect(), /identity_mismatch/)
+  const wrongEmployee = f.create({
+    enterprise: { ...enterprise, workspaceTools: { userId: 'assigned-user', root: f.root } },
+  })
+  await assert.rejects(wrongEmployee.connect(), /identity_mismatch/)
 })
 test('configuration stores credential references and prepares callback without consuming Stream', async (t) => {
   const f = await fixture(t),
