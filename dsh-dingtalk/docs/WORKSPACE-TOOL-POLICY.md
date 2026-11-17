@@ -1,8 +1,33 @@
-# 个人机器人工作区工具权限（Issue #27）
+# 机器人工作区工具权限
 
 已支持**已配置的 personal、本机 profile owner、插件自有会话**继承已核实的普通宿主工具。权限依据是机器人渠道自身的可信配对和官方消息 sender，不要求 DWS OAuth 当前有效，不要求重新做工作区绑定，不新增工作区 ACL。
 
-企业机器人可按席位配置下列只读问数工具。旧共享 Relay、standalone 和数字员工不继承这些权限。原生子 Agent、工作流和文件/图片回传仍受原限制。
+企业机器人可按席位配置只读问数，并显式启用指定员工的普通工作区工具。旧共享 Relay、standalone 和数字员工不继承这些权限。原生子 Agent、工作流和文件/图片回传仍受原限制。
+
+## 企业机器人本地文件生成
+
+管理员在员工专属 Profile 的 `dingtalk-channel` 配置中指定默认工作目录，并在 `robotConnection.workspaceTools` 中指定同一员工的钉钉 staffId 和允许的绝对根目录。根目录必须已经存在，默认工作目录必须在该根目录内；未配置 `workspaceTools` 的企业席位仍只使用原有能力。
+
+```yaml
+workspace: /workspace/employee-a
+robotConnection:
+  mode: enterprise
+  corpId: YOUR_CORP_ID
+  clientId: YOUR_ROBOT_CLIENT_ID
+  displayName: 企业工作助手
+  gatewayUrl: wss://gateway.example.com/relay
+  workspaceTools:
+    userId: YOUR_EMPLOYEE_STAFF_ID
+    root: /workspace/employee-a
+```
+
+这项授权让下表中已注册的普通文件及命令工具进入宿主原有执行链，可用于在当前员工目录生成 Excel。Excel 库或其他文件生成程序仍由宿主安装；`load_workspace_dependencies`、PTC 和未审核的工具不随此配置放行。查询工具仍须单独配置 `queryTools`，DWS 数据操作仍须通过其独立授权与审批。
+
+授权同时要求在线配对的企业和员工与管理员配置一致、消息确由当前接收端的连接收取、会话属于该配对和 Profile，且会话 header 与宿主 workingDirectory 都匹配选定目录。相似的消息对象、另一接收端、另一员工或旧连接的消息不能获得授权。断连、换设备、换身份、`/new`、模型重开与 `/cd` 撤销旧任务和审批的授权。
+
+`/ws` 只列出根目录内的工作区；`/cd` 的路径和序号选择均受同一限制。真实路径检查拒绝兄弟目录、指向根目录外的符号链接和已改指的根目录。旧会话保存了越界目录时，不开始任务，提示员工使用 `/cd reset`。历史会话没有归属记录时保留原历史并创建新的机器人会话。
+
+`root` 限制的是会话目录选择，不是操作系统文件沙箱。部署方必须保留每员工独立容器/系统权限和宿主现有的文件、进程隔离，不挂载其他员工的私有目录；不能仅靠不同 cwd 在一个不受限的共享进程中隔离员工。插件不放宽宿主限制，不授予工作流、子 Agent 或额外文件发送能力。
 
 ## 企业机器人问数
 
@@ -33,7 +58,7 @@ queryTools:
 
 个人通道的状态、消息接收、owner 判断和工具授权均不再以当前 DWS identity 为条件。机器人断开、被其他设备替换、停止或连接关闭会使通道执行信号失效；DWS 注销不会撤销机器人配对。已有设备重启后用原 token 向 Gateway 验证，旧记录缺少 device 时从已认证握手补齐，无需重新配对。企业和旧 Relay 保留原有策略。
 
-全新、尚未配置的个人机器人仍需要首次取得企业信息：当前安装流程用 DWS 身份发现 corpId。本次未新增企业字段或更改设置页；这个初始化限制不适用于已经配置的机器人，也不作为普通工具执行、恢复或重新连接的授权前提。原有 personal 配置不会因 DWS 换号而迁到另一企业。
+全新、尚未配置的个人机器人仍需要首次取得企业信息：当前安装流程用 DWS 身份发现 corpId。这个初始化限制不适用于已经配置的个人机器人，也不作为个人普通工具执行、恢复或重新连接的授权前提。原有 personal 配置不会因 DWS 换号而迁到另一企业。
 
 ## 工作区与会话
 
@@ -108,6 +133,6 @@ DSH_TEST_RUNTIME=/tmp/dsh-issue27-runtime node scripts/verify-boundary.mjs
 
 完整结果在 PR 中记录。已知原始基线 `0c50a3b` 的 Web/DWS 环境限制：三个测试固定读取缺失的 `.cache/dingtalk-g0/bin-amd64/dws.exe`，一个进程树超时/Abort 夹具未及时达到预期状态；默认 umask 0077 还会收紧 doctor 的 0644 权限夹具，因此测试子 shell 使用 0022。没有删改/跳过失败测试使 CI 变绿。
 
-未连接真实企业或机器人，未操作 39/43、部署、发布或合并。全新个人配置的 corpId 引导、未核实工具、原生子 Agent 及非 personal 路径仍是明确限制。
+未连接真实企业或机器人，未进行部署或发布。全新个人配置的 corpId 引导、未核实工具、原生子 Agent，以及未显式配置工作区授权的其他渠道仍是明确限制。
 
 企业问数在 MCP 返回时再次校验派发时的员工和连接。执行期间撤权或换号的结果不会交回原会话。

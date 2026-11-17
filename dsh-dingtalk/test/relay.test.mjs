@@ -154,6 +154,53 @@ test('enterprise direct and group query grants belong only to the live receiver 
   assert.equal(a.c.enterpriseQueries(a.received[0]), undefined)
 })
 
+test('enterprise workspace authority belongs to the configured employee, receiver and accepted message generation', async (t) => {
+  const f = await fixture(t)
+  const config = {
+    mode: 'enterprise',
+    corpId: 'corp',
+    clientId: 'app',
+    displayName: 'Test',
+    gatewayUrl: 'wss://example.org/relay',
+  }
+  const a = await f.client('a', 'workspace-a', undefined, {
+    ...config,
+    workspaceTools: { userId: 'a', root: join(f.dir, 'files-a') },
+  })
+  const b = await f.client('b', 'workspace-b', undefined, {
+    ...config,
+    workspaceTools: { userId: 'b', root: join(f.dir, 'files-b') },
+  })
+  const wrong = await f.client('c', 'wrong-owner', undefined, {
+    ...config,
+    workspaceTools: { userId: 'a', root: join(f.dir, 'files-a') },
+  })
+  for (const [client, user] of [
+    [a, 'a'],
+    [b, 'b'],
+    [wrong, 'c'],
+  ])
+    await f.pair(client, user)
+  for (const user of ['a', 'b', 'c']) await f.gateway.receive(f.message(user))
+  const entered = a.c.enterpriseWorkspace(a.received[0])
+  assert.equal(entered.identity.userId, 'a')
+  assert.equal(entered.profile, join(f.dir, 'workspace-a'))
+  assert.equal(b.c.enterpriseWorkspace(b.received[0]).identity.userId, 'b')
+  assert.equal(b.c.enterpriseWorkspace(a.received[0]), undefined)
+  assert.equal(a.c.enterpriseWorkspace({ ...a.received[0] }), undefined)
+  assert.equal(wrong.c.enterpriseWorkspace(wrong.received[0]), undefined)
+  a.change({ corpId: 'corp', userId: 'b' })
+  assert.equal(a.c.enterpriseAuthority(), undefined)
+  a.change({ corpId: 'corp', userId: 'a' })
+  a.c.stop()
+  assert.equal(entered.signal.aborted, true)
+  assert.equal(a.c.enterpriseAuthority(), undefined)
+  await RelayClient.prototype.start.call(a.c, { onMessage: async (msg) => a.received.push(msg) })
+  assert.equal(a.c.enterpriseWorkspace(a.received[0]), undefined, 'old receipts cannot acquire a new connection lease')
+  await f.gateway.receive(f.message('a'))
+  assert.ok(a.c.enterpriseWorkspace(a.received.at(-1)))
+})
+
 test('personal pairing derives its owner from robot login and survives DWS logout or account change', async (t) => {
   const f = await fixture(t, { personal: true }),
     a = await f.client(undefined, 'personal')

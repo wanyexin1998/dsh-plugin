@@ -112,6 +112,33 @@ test('personal owner ordinary tools require commit, exact workspace and channel 
   assert.equal(f.policy.allowed({ ...target }), false)
 })
 
+test('enterprise workspace selection rejects siblings, symlink escapes and replacement of the configured root', async (t) => {
+  const f = await fixture(t)
+  const policy = new WorkspaceToolPolicy({ ...f.options, root: f.other })
+  f.select(f.other)
+  const target = f.agent('enterprise-session', f.other)
+  const admission = policy.capture(f.message, 'chat', f.other)
+  admission.setup(target.ctx, target, false).commit()
+  f.bindings.set('chat', target.id)
+  assert.equal(policy.allowed(target), true)
+  assert.throws(() => policy.capture(f.message, 'chat', f.cwd), /im_workspace_outside_root/)
+  const alias = join(f.other, 'escape')
+  await symlink(f.cwd, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  assert.throws(() => policy.checkWorkspace(alias), /im_workspace_outside_root/)
+  f.select(f.cwd)
+  assert.equal(policy.allowed(target), false)
+  f.select(f.other)
+  target.session.header.cwd = f.cwd
+  assert.equal(policy.allowed(target), false)
+  const rootAlias = join(f.cwd, 'root-alias')
+  await symlink(f.other, rootAlias, process.platform === 'win32' ? 'junction' : 'dir')
+  const rooted = new WorkspaceToolPolicy({ ...f.options, root: rootAlias })
+  assert.equal(rooted.checkWorkspace(f.other), f.other)
+  await rm(rootAlias)
+  await symlink(f.cwd, rootAlias, process.platform === 'win32' ? 'junction' : 'dir')
+  assert.throws(() => rooted.checkWorkspace(f.other), /im_workspace_root_changed/)
+})
+
 test('queued admission, setup and commit cannot cross channel revocation or re-pair even for the same owner', async (t) => {
   const f = await fixture(t),
     queued = f.capture(),

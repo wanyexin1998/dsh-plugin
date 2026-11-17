@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { resolve, join } from 'node:path'
+import { resolve, join, isAbsolute } from 'node:path'
 
 export interface EnterpriseConnection {
   mode: 'enterprise'
@@ -8,6 +8,8 @@ export interface EnterpriseConnection {
   displayName: string
   gatewayUrl: string
   queryTools?: string[]
+  /** Deployment-owned employee and root for ordinary workspace tools. */
+  workspaceTools?: { userId: string; root: string }
 }
 
 // Only reviewed operations can be enabled. The deployment must separately
@@ -42,7 +44,8 @@ export function enterpriseConnection(value: unknown): EnterpriseConnection | und
   if (
     data.mode !== 'enterprise' ||
     Object.keys(data).some(
-      (key) => !['mode', 'corpId', 'clientId', 'displayName', 'gatewayUrl', 'queryTools'].includes(key),
+      (key) =>
+        !['mode', 'corpId', 'clientId', 'displayName', 'gatewayUrl', 'queryTools', 'workspaceTools'].includes(key),
     )
   )
     throw new Error('enterprise_configuration_invalid')
@@ -56,6 +59,22 @@ export function enterpriseConnection(value: unknown): EnterpriseConnection | und
       !data.queryTools.every((item) => typeof item === 'string' && reviewedQueryTool(item)))
   )
     throw new Error('enterprise_configuration_invalid')
+  if (data.workspaceTools !== undefined) {
+    const workspace = data.workspaceTools
+    if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace))
+      throw new Error('enterprise_configuration_invalid')
+    const grant = workspace as Record<string, unknown>
+    if (
+      Object.keys(grant).some((key) => key !== 'userId' && key !== 'root') ||
+      typeof grant.userId !== 'string' ||
+      !grant.userId.trim() ||
+      grant.userId !== grant.userId.trim() ||
+      typeof grant.root !== 'string' ||
+      !isAbsolute(grant.root) ||
+      grant.root.includes('\0')
+    )
+      throw new Error('enterprise_configuration_invalid')
+  }
   let url: URL
   try {
     url = new URL(data.gatewayUrl as string)
