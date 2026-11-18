@@ -3,6 +3,7 @@ import { DeliveryOutcomeUnknown } from '../errors.js'
 import type WebSocket from 'ws'
 
 export const attachmentMethods = { file: 'attachment.send', image: 'attachment.sendImage' } as const
+export const scheduledReminderMethod = 'schedule.remind'
 
 export interface Frame {
   id?: string

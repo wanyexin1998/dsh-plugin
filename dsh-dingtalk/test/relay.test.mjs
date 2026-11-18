@@ -22,6 +22,7 @@ async function fixture(
     groupMentionSenders,
     exchange = async (code) => ({ corpId: 'corp', userId: code }),
     operation,
+    scheduledReminder,
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-relay-'))
@@ -45,6 +46,7 @@ async function fixture(
     groupMentionSenders,
     allowUnclaimedPersonalLogin: personal,
     notice: async (msg, text) => notices.push({ user: msg.senderStaffId, text }),
+    scheduledReminder,
     operation: async (msg, method, data, signal) => {
       if (operation) return operation(msg, method, data, signal)
       operations.push({ user: msg.senderStaffId, method, data, destination: msg.sessionWebhook })
@@ -124,6 +126,57 @@ async function fixture(
   }
   return { dir, opts, gateway, port, message, client, pair, finish, restore, notices, operations }
 }
+
+test('scheduled reminders use the authenticated private destination without an inbound request', async (t) => {
+  const sent = []
+  t.after(() => {
+    globalThis.fetch = originalFetch
+  })
+  globalThis.fetch = async (url, init) => {
+    const uri = new URL(url)
+    if (uri.hostname === '127.0.0.1') return originalFetch(url, init)
+    if (uri.pathname === '/v1.0/oauth2/accessToken')
+      return Response.json({ accessToken: 'fixture-app-token', expireIn: 7200 })
+    assert.equal(uri.pathname, '/v1.0/robot/oToMessages/batchSend')
+    sent.push(JSON.parse(init.body))
+    return Response.json({ processQueryKey: 'scheduled-accepted' })
+  }
+  let operations
+  const f = await fixture(t, {
+    personal: true,
+    scheduledReminder: (identity, text, signal) =>
+      operations.outbound.sendScheduledReminder(identity.userId, text, signal),
+  })
+  operations = createRobotOperations({
+    clientId: 'fixture-app',
+    clientSecret: 'fixture',
+    corpId: 'corp',
+    stateDirectory: f.dir,
+  })
+  t.after(() => operations.diagnostics.close())
+  const a = await f.client('a', 'scheduled-a')
+  const b = await f.client('b', 'scheduled-b')
+  await f.pair(a, 'a')
+  await f.pair(b, 'b')
+  const bind = a.c.channelBinding()
+  assert.equal(a.received.length, 0)
+  await assert.rejects(b.c.sendScheduledReminder(bind, 'unrelated employee'), /scheduled_binding_unavailable/)
+  await assert.rejects(
+    a.c.peer.call('schedule.remind', { bindingId: bind.bindingId, text: 'group', conversationId: 'group' }),
+    /request_failed/,
+  )
+  await assert.rejects(
+    a.c.peer.call('schedule.remind', { bindingId: b.c.channelBinding().bindingId, text: 'wrong device' }),
+    /request_failed/,
+  )
+  assert.deepEqual(await a.c.sendScheduledReminder(bind, 'fixture reminder'), {
+    status: 'accepted',
+    processQueryKey: 'scheduled-accepted',
+  })
+  assert.deepEqual(sent, [
+    { robotCode: 'fixture-app', userIds: ['a'], msgKey: 'sampleText', msgParam: '{"content":"fixture reminder"}' },
+  ])
+})
 
 test('paired gateway submits files and validated images only to the originator and does not replay unknown sends', async (t) => {
   const uploaded = new Map()

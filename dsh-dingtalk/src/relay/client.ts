@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import WebSocket from 'ws'
-import { attachmentMethods, Peer } from './protocol.js'
+import { attachmentMethods, Peer, scheduledReminderMethod } from './protocol.js'
 import { readState, saveState } from './state.js'
 import { sameIdentity, messageIdentity, type DingTalkIdentity } from '../identity.js'
 import type { StreamOptions, InboundMessage } from '../stream.js'
@@ -335,6 +335,17 @@ export class RelayClient {
     if (!this.peer) throw new Error('offline')
     return this.peer.call('operation', { requestId, method, data })
   }
+  /** Deliver only to the same employee and device authorized when the task was created. */
+  async sendScheduledReminder(binding: ChannelBinding, text: string): Promise<MediaReceipt> {
+    const peer = this.peer
+    if (!peer || this.channelBinding()?.signal !== binding.signal || binding.signal.aborted)
+      throw new Error('scheduled_binding_unavailable')
+    const value = await peer.call(scheduledReminderMethod, { bindingId: binding.bindingId, text }, 15_000)
+    if (value?.status !== 'accepted' || typeof value.processQueryKey !== 'string' || !value.processQueryKey)
+      throw new DeliveryOutcomeUnknown('scheduled_receipt_missing')
+    return { status: 'accepted', processQueryKey: value.processQueryKey }
+  }
+
   /** Send one approved snapshot over the same connection as its inbound request. Never replay it. */
   async sendAttachment(requestId: string, media: OutboundMedia, signal: AbortSignal): Promise<MediaReceipt> {
     const data = Buffer.from(media.data).toString('base64')

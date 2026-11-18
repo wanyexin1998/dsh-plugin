@@ -22,6 +22,7 @@ export interface AccountConfig {
 export interface Config {
   robotConnection?: unknown
   relay?: boolean
+  scheduledTasks?: boolean
 
   accounts: AccountConfig[]
   digitalEmployees: DigitalEmployeeConfig[]
@@ -91,6 +92,7 @@ const DigitalEmployeeConfigSchema: Schema<DigitalEmployeeConfig> = Schema.object
 export const Config: Schema<Config> = Schema.object({
   robotConnection: Schema.any().description('Enterprise robot connection'),
   relay: Schema.boolean().default(false).description('共享机器人模式；应用凭据只在网关配置'),
+  scheduledTasks: Schema.boolean().default(false).description('企业员工席位启用本人私聊定时任务'),
   interactionMode: Schema.union(['auto', 'text'])
     .default('auto')
     .description('数字员工审批/提问：auto 优先 A2UI，能力缺失时降级文字；text 强制文字'),
