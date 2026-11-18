@@ -52,7 +52,7 @@ interface TurnState {
   /** Chars already settled onto earlier cards; the live card shows the remainder. */
   carryOffset: number
   /** Resolves when the turn settles; the queue serializes on this. */
-  settle: () => void
+  settle: (completed: boolean) => void
 }
 
 /**
@@ -99,13 +99,13 @@ export class Renderer {
    * The emotion was already added at message intake (before queueing).
    * @returns a promise resolving when the turn settles.
    */
-  onInbound(sessionId: string, msg: InboundMessage): Promise<void> {
+  onInbound(sessionId: string, msg: InboundMessage): Promise<boolean> {
     const { config } = this.deps
     const isDirect = msg.conversationType === 'direct'
     const mode = isDirect ? config.replyMode.direct : config.replyMode.group
 
-    let settle!: () => void
-    const settled = new Promise<void>((resolve) => {
+    let settle!: (completed: boolean) => void
+    const settled = new Promise<boolean>((resolve) => {
       settle = resolve
     })
 
@@ -252,7 +252,7 @@ export class Renderer {
             this.deps.observe?.('renderer.delivered', false)
             this.deps.log('reply delivery failed')
           })
-          .finally(() => st.settle())
+          .finally(() => st.settle(event.data?.reason?.kind === 'completed'))
         break
       }
     }

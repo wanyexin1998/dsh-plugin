@@ -97,6 +97,14 @@ export class Commands {
     this.deps.beforeSessionChange?.(key)
   }
 
+  selectWorkspace(msg: InboundMessage, key: string, directory: string): void {
+    if (!this.deps.workspaceOverrides || this.deps.allowWorkspace?.(directory) === false)
+      throw new Error('im_workspace_outside_root')
+    this.sessionChange(msg, key)
+    this.deps.workspaceOverrides.set(key, directory)
+    this.deps.bindings.delete(key)
+  }
+
   private async workspaces(): Promise<Array<{ path: string; title?: string }>> {
     const items = await this.deps.listWorkspaces!()
     return items.filter((item) => this.deps.allowWorkspace?.(item.path) ?? true)
@@ -334,9 +342,7 @@ export class Commands {
           await reply('该目录不在当前用户允许的工作区范围内。')
           return true
         }
-        this.sessionChange(msg, key)
-        this.deps.workspaceOverrides.set(key, dir)
-        this.deps.bindings.delete(key)
+        this.selectWorkspace(msg, key, dir)
         await reply(`✅ 本会话工作区已切换为 \`${dir}\`，会话已重开（新任务在该目录执行）。`)
         return true
       }

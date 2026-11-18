@@ -24,7 +24,7 @@ import type { ModelOverride } from './commands.js'
 export type Bindings = JsonStore<string>
 
 export interface TurnRenderer {
-  onInbound(sessionId: string, msg: InboundMessage): Promise<void>
+  onInbound(sessionId: string, msg: InboundMessage): Promise<void | boolean>
 }
 
 /** Trusted channel-owned admission, captured before enqueue and rechecked at use. */
@@ -55,6 +55,9 @@ export interface BridgeOptions {
   compose(): Promise<{ agentPreset?: string; setup?: AgentSetup }>
   /** Refresh transport context for tools that wait on channel input. */
   onAgentMessage(agent: HostAgent, msg: InboundMessage, cwd: string): void | Promise<void>
+  /** Apply trusted channel commands to the Agent before the user prompt starts. */
+  prepareTurn?(agent: HostAgent, msg: InboundMessage): Promise<string | undefined>
+  onTurnSettled?(agent: HostAgent, msg: InboundMessage, scopeKey: string, completed: boolean): Promise<void>
   /** Resolve one inbound picture into a stored attachment block; null = degrade to text note. */
   resolveImage?(downloadCode: string, scopeKey: string): Promise<ImageBlock | null>
   /** 文件落盘到当前会话 cwd 后，以明确的文本引用交给宿主。 */
@@ -97,8 +100,11 @@ export class Bridge {
     await this.opts.onAgentMessage(agent, msg, cwd)
     authorization?.checkAgent(agent)
     if (this.closed) throw new Error('employee_stopping')
+    const promptOverride = await this.opts.prepareTurn?.(agent, msg)
+    authorization?.checkAgent(agent)
     const settled = this.renderer.onInbound(agent.id, msg)
-    const content: Array<TextBlock | ImageBlock> = []
+    const content: Array<TextBlock | ImageBlock> =
+      promptOverride === undefined ? [] : [{ type: 'text', text: promptOverride }]
     const parts = msg.contentParts?.length
       ? msg.contentParts
       : [
@@ -107,7 +113,7 @@ export class Bridge {
         ]
     for (const part of parts) {
       if (part.type === 'text') {
-        content.push({ type: 'text', text: part.text })
+        if (promptOverride === undefined) content.push({ type: 'text', text: part.text })
       } else if (part.type === 'file') {
         content.push(
           this.opts.resolveFile
@@ -128,7 +134,8 @@ export class Bridge {
       content,
       source: { kind: 'user' },
     })
-    await settled
+    const completed = (await settled) === true
+    await this.opts.onTurnSettled?.(agent, msg, scopeKey, completed)
     return agent.id
   }
 
