@@ -76,6 +76,7 @@ export class ImTools {
   constructor(
     private readonly factory: () => ImToolFactory | undefined,
     private readonly workspace?: { allowed(agent: HostAgent): boolean },
+    private readonly canSendAttachment?: (agent: HostAgent) => boolean,
   ) {}
 
   install(ctx: HostAgentContext, agent: HostAgent): void {
@@ -108,6 +109,11 @@ export class ImTools {
     )
     const unregister = tools.register({
       ...tool,
+      ...(this.canSendAttachment
+        ? {
+            description: `${tool.description} 当前工作区生成的文件请在企业机器人私聊使用 send_file 回传；DWS Connector 不能读取该路径。`,
+          }
+        : {}),
       execute: (args, exec) => {
         // A shadow inherited by another scope must never borrow this Agent's
         // identity, even if that scope does not execute our guard.
@@ -143,8 +149,8 @@ export class ImTools {
       tools.guard((exec) => {
         if (exec.agent !== agent) return 'im_agent_mismatch'
         if (this.workspace && !this.workspace.allowed(agent)) return 'im_channel_authorization_changed'
-        // Sending files has its own policy; a future workspace entitlement must
-        // not implicitly open this channel's outbound file/image tools.
+        // The outbound attachment needs a separate original-DM route in addition to workspace authority.
+        if (exec.name === 'send_file' && this.workspace && this.canSendAttachment?.(agent)) return undefined
         if (exec.name === 'send_file' || exec.name === 'send_image')
           return 'im_tool_unavailable: im_file_transfer_unavailable'
         if (exec.name === 'subagent' || exec.name === 'spawn_agent')

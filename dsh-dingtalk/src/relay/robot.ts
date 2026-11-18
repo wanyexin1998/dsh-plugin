@@ -1,6 +1,6 @@
 import { FeedbackDiagnostics } from '../feedback.js'
 import type { InboundMessage } from '../stream.js'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import { dingTalkLoginExchange } from './login.js'
 import { Gateway, type GatewayOptions } from './gateway.js'
 import { startStream } from '../stream.js'
@@ -9,7 +9,7 @@ import { AICard, CardCapability } from '../aicard.js'
 import { Emotion } from '../emotion.js'
 import { InteractionCards } from '../interaction-card.js'
 import { cardTarget } from '../targets.js'
-import { downloadFileByCode, MAX_MEDIA_BYTES } from '../media.js'
+import { downloadFileByCode, FILE_TYPES, MAX_MEDIA_BYTES } from '../media.js'
 
 export interface RobotGatewayConfig {
   clientId: string
@@ -34,7 +34,7 @@ export function createRobotOperations(config: RobotGatewayConfig) {
   const interactions = config.interactionCardTemplateId
     ? new InteractionCards(() => outbound.token(), config.clientId, config.interactionCardTemplateId, log)
     : undefined
-  const operation = async (msg: InboundMessage, method: string, data: any) => {
+  const operation = async (msg: InboundMessage, method: string, data: any, signal?: AbortSignal) => {
     const mention =
       data?.final === true && msg.conversationType === 'group' && msg.senderCorpId === config.corpId
         ? msg.senderStaffId
@@ -60,6 +60,28 @@ export function createRobotOperations(config: RobotGatewayConfig) {
       return true
     }
     if (method === 'interaction.create') return interactions?.create({ ...data, target: cardTarget(msg) }) ?? false
+    if (method === 'attachment.send') {
+      if (
+        msg.conversationType !== 'direct' ||
+        msg.senderCorpId !== config.corpId ||
+        !msg.senderStaffId ||
+        !data ||
+        Object.keys(data).length !== 2 ||
+        typeof data.name !== 'string' ||
+        Buffer.byteLength(data.name) > 180 ||
+        /[<>:"|?*\/\\\u0000-\u001f\u007f]/.test(data.name) ||
+        !FILE_TYPES.has(extname(data.name).slice(1).toLowerCase()) ||
+        typeof data.data !== 'string' ||
+        data.data.length === 0 ||
+        data.data.length > Math.ceil(MAX_MEDIA_BYTES / 3) * 4 ||
+        data.data.length % 4 !== 0
+      )
+        throw new Error('invalid_attachment')
+      const bytes = Buffer.from(data.data, 'base64')
+      if (!bytes.length || bytes.length > MAX_MEDIA_BYTES || bytes.toString('base64') !== data.data)
+        throw new Error('invalid_attachment')
+      return outbound.sendMedia(msg, { kind: 'file', name: data.name, data: bytes }, signal)
+    }
     if (method === 'media') {
       const codes = [
         ...(msg.imageDownloadCodes ?? []),

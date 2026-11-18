@@ -99,6 +99,8 @@ for (const kind of ['file', 'image']) {
       globalThis.fetch = async (url, init) => {
         requests.push({ url: String(url), init })
         if (String(url).includes('oauth2/accessToken')) return Response.json({ accessToken: 'fixture-token' })
+        if (String(url).includes('/gettoken?'))
+          return Response.json({ errcode: 0, access_token: 'fixture-upload-token' })
         if (String(url).includes('/media/upload')) return Response.json({ errcode: 0, media_id: 'fixture-media' })
         return Response.json({ processQueryKey: 'fixture-receipt' })
       }
@@ -109,11 +111,11 @@ for (const kind of ['file', 'image']) {
         name: kind === 'file' ? '报告.pdf' : '图.png',
         data: new Uint8Array([1, 2]),
       })
-      const upload = requests[1]
+      const upload = requests[2]
       assert.ok(upload.init.body instanceof FormData)
-      assert.equal(upload.init.body.get('type'), kind)
+      assert.equal(new URL(upload.url).searchParams.get('type'), kind)
       assert.equal(upload.init.body.get('media').name, kind === 'file' ? '报告.pdf' : '图.png')
-      const sent = requests[2]
+      const sent = requests[3]
       assert.equal(
         sent.url,
         `https://api.dingtalk.com/v1.0/robot/${conversationType === 'direct' ? 'oToMessages/batchSend' : 'groupMessages/send'}`,
@@ -145,6 +147,7 @@ test('上传业务错误、发送业务错误和超时均不误报送达，也�
     const logs = []
     globalThis.fetch = async (url) => {
       if (String(url).includes('oauth2')) return Response.json({ accessToken: 'private-token' })
+      if (String(url).includes('/gettoken?')) return Response.json({ errcode: 0, access_token: 'fixture-upload-token' })
       if (String(url).includes('/media/upload')) {
         uploads++
         return Response.json(

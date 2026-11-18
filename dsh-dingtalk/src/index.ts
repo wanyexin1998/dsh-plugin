@@ -602,7 +602,6 @@ async function startAccount(
         }) as typeof directOutbound.sendMedia,
       }
     : directOutbound
-  const files = new FileTransfer({ accountId: account.id, outbound, log })
   const replySink = new BotReplySink(outbound)
   // Shared by question/plan-review/approval cards and the queue busy card.
   const interactionCards = relay
@@ -679,6 +678,26 @@ async function startAccount(
           owners: new JsonStore<WorkspaceSessionOwner>(path.join(stateDir, 'workspace-session-owners.json'), log),
         })
       : undefined
+  const files = new FileTransfer({
+    accountId: account.id,
+    outbound,
+    log,
+    ...(enterpriseRoot && relay && workspacePolicy
+      ? {
+          attachment: {
+            signal: (agent) => workspacePolicy.signal(agent),
+            send: (requestId, media, signal) => relay.sendAttachment(requestId, media, signal),
+            approve: (request) => {
+              const host = request.agent.ctx as HostAgentContext & { get?(name: string): unknown }
+              const approval = host.get?.('approval') as
+                { request(input: typeof request): Promise<import('./host.js').HostApprovalOutcome> } | undefined
+              return approval?.request(request) ?? Promise.resolve('unavailable')
+            },
+            approvalTimeoutMs: config.approvalTimeoutMs,
+          },
+        }
+      : {}),
+  })
   workspacePolicy?.checkWorkspace(cwd)
   const questions = new QuestionManager({
     outbound: replySink,
@@ -695,7 +714,11 @@ async function startAccount(
     interactionCards,
     log,
   })
-  const imTools = new ImTools(() => ctx.get('dingtalkImTools') as ImToolFactory | undefined, workspacePolicy)
+  const imTools = new ImTools(
+    () => ctx.get('dingtalkImTools') as ImToolFactory | undefined,
+    workspacePolicy,
+    enterpriseRoot ? (agent) => files.canSendAttachment(agent) : undefined,
+  )
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
     questions.install(agentCtx, agent)
@@ -764,7 +787,14 @@ async function startAccount(
       installBotTools(agent.ctx, agent)
       imTools.bind(agent.ctx, msg, agent)
       questions.bindSession(agent.id, msg)
-      files.bindSession(agent, msg, sessionCwd)
+      const requestId =
+        msg.conversationType === 'direct' &&
+        enterpriseRoot &&
+        relay instanceof RobotConnection &&
+        relay.enterpriseWorkspace(msg)
+          ? msg.sessionWebhook
+          : undefined
+      files.bindSession(agent, msg, sessionCwd, requestId)
       void workspace.attach(agent.id, sessionCwd)
     },
     compose: async () => {

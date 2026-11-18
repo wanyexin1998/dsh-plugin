@@ -3,6 +3,7 @@
  * body. Port of dingtalk-openclaw-connector `src/services/messaging/send.ts`
  * (fetch instead of axios; access token cached until near expiry).
  */
+import { DeliveryOutcomeUnknown } from './errors.js'
 import type { DingTalkAppCredentials } from './credentials.js'
 import path from 'node:path'
 import { FILE_TYPES, IMAGE_TYPES, MAX_MEDIA_BYTES } from './media.js'
@@ -44,6 +45,7 @@ function markdownSummary(text: string, fallback: string): string {
 
 export class Outbound {
   #token: CachedToken | undefined
+  #uploadToken: CachedToken | undefined
 
   constructor(
     private readonly credentials: DingTalkAppCredentials,
@@ -70,6 +72,21 @@ export class Outbound {
       expiresAt: Date.now() + (data.expireIn ?? 7200) * 1000,
     }
     return this.#token.value
+  }
+
+  // The legacy media uploader and v1 robot send endpoint use separate token APIs.
+  private async mediaUploadToken(signal: AbortSignal): Promise<string> {
+    if (this.#uploadToken && Date.now() < this.#uploadToken.expiresAt - 60_000) return this.#uploadToken.value
+    const url = new URL('https://oapi.dingtalk.com/gettoken')
+    url.searchParams.set('appkey', this.credentials.clientId)
+    url.searchParams.set('appsecret', this.credentials.clientSecret)
+    const response = await fetch(url, { signal, redirect: 'error' })
+    if (!response.ok) throw new Error('upload_token_failed')
+    const result = (await response.json()) as { errcode?: number; access_token?: string; expires_in?: number }
+    if (result.errcode !== 0 || typeof result.access_token !== 'string' || !result.access_token)
+      throw new Error('upload_token_failed')
+    this.#uploadToken = { value: result.access_token, expiresAt: Date.now() + (result.expires_in ?? 7200) * 1000 }
+    return this.#uploadToken.value
   }
 
   private async send(sessionWebhook: string, payload: unknown, chars: number): Promise<boolean> {
@@ -133,13 +150,14 @@ export class Outbound {
     let mediaId: string
     try {
       token = await this.accessToken(bounded)
+      const uploadToken = await this.mediaUploadToken(bounded)
       bounded.throwIfAborted()
       const form = new FormData()
-      form.set('type', media.kind)
-      form.set('media', new Blob([new Uint8Array(media.data)]), media.name)
+      form.set('media', new Blob([new Uint8Array(media.data)], { type: 'application/octet-stream' }), media.name)
       const url = new URL('https://oapi.dingtalk.com/media/upload')
-      url.searchParams.set('access_token', token)
-      const response = await fetch(url, { method: 'POST', body: form, signal: bounded })
+      url.searchParams.set('access_token', uploadToken)
+      url.searchParams.set('type', media.kind)
+      const response = await fetch(url, { method: 'POST', body: form, signal: bounded, redirect: 'error' })
       if (!response.ok) throw new Error('upload_failed')
       const result = (await response.json()) as { errcode?: number; media_id?: string }
       if (result.errcode !== 0 || typeof result.media_id !== 'string' || !result.media_id)
@@ -149,7 +167,15 @@ export class Outbound {
       this.log('media upload failed')
       throw new Error('media_upload_failed')
     }
+    bounded.throwIfAborted()
     const direct = target.conversationType === 'direct'
+    let result: {
+      processQueryKey?: string
+      code?: string
+      errcode?: number
+      invalidStaffIdList?: string[]
+      flowControlledStaffIdList?: string[]
+    }
     try {
       const response = await fetch(
         `https://api.dingtalk.com/v1.0/robot/${direct ? 'oToMessages/batchSend' : 'groupMessages/send'}`,
@@ -168,14 +194,24 @@ export class Outbound {
         },
       )
       if (!response.ok) throw new Error('send_failed')
-      const result = (await response.json()) as { processQueryKey?: string; code?: string; errcode?: number }
-      if (typeof result.processQueryKey !== 'string' || !result.processQueryKey || result.code || result.errcode)
+      result = await response.json()
+      if (
+        !result ||
+        typeof result.processQueryKey !== 'string' ||
+        !result.processQueryKey ||
+        result.code ||
+        result.errcode
+      )
         throw new Error('send_failed')
-      this.log(`media send accepted (${media.kind}, ${media.data.length} bytes)`)
-      return { status: 'accepted', processQueryKey: result.processQueryKey }
     } catch {
       this.log('media send unconfirmed; no automatic retry')
-      throw new Error('media_send_unconfirmed')
+      throw new DeliveryOutcomeUnknown('media_send_unconfirmed')
     }
+    if (direct && (result.invalidStaffIdList?.length || result.flowControlledStaffIdList?.length)) {
+      this.log('media send rejected for recipient')
+      throw new Error('media_recipient_rejected')
+    }
+    this.log(`media send accepted (${media.kind}, ${media.data.length} bytes)`)
+    return { status: 'accepted', processQueryKey: result.processQueryKey }
   }
 }
