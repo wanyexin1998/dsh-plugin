@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, link, symlink, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test, { mock } from 'node:test'
@@ -70,6 +70,11 @@ class RobotConnection extends RelayClient {
   async operation(target, name, value) {
     this.operations.push({ target, name, value })
     return name !== 'interaction.create'
+  }
+  async sendAttachment(requestId, media, signal) {
+    signal.throwIfAborted()
+    this.operations.push({ target: requestId, name: 'attachment.send', value: media })
+    return { status: 'accepted', processQueryKey: 'test-receipt' }
   }
   requestFor() {
     return 'fixture-request'
@@ -209,6 +214,7 @@ async function fixture(
         return () => list.splice(list.indexOf(listener), 1)
       },
       get(name) {
+        if (name === 'approval') return { request: (request) => listeners.get('approval/request')[0](request) }
         if (name === 'workingDirectory' && missing !== 'workingDirectory')
           return { get: (session) => session.header.cwd }
       },
@@ -240,7 +246,7 @@ async function fixture(
         if (!definition) throw new Error('tool_not_registered')
         const reason = this.guard(name)
         if (reason) throw new Error(reason)
-        const exec = { name, agent, signal: new AbortController().signal }
+        const exec = { name, agent, callId: crypto.randomUUID(), signal: new AbortController().signal }
         const dispatch = (listeners.get('tools/execute') ?? []).reduceRight(
           (next, listener) => () => listener(exec, next),
           () => definition.execute(args, exec),
@@ -424,6 +430,53 @@ test('enterprise public apply creates a workbook only in its employee workspace 
   assert.equal(await next.invoke('read'), h.target)
   h.connection.revoke()
   await assert.rejects(next.invoke('read'), /im_channel_authorization_changed/)
+})
+
+test('enterprise attachment sends only the approved snapshot to its original DM', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('send workbook', { sessionWebhook: 'original-request' })
+  await waitUntil(() => h.followups.length === 1)
+  const agent = h.followups[0].agent
+  const workbook = await readFile(new URL('./fixtures/workspace.xlsx', import.meta.url))
+  const file = path.join(h.root, '验收.xlsx')
+  const foreign = path.join(h.other, 'foreign.xlsx')
+  await writeFile(file, workbook)
+  await writeFile(foreign, 'private')
+  await link(foreign, path.join(h.root, 'hard-link.xlsx'))
+  await symlink(h.other, path.join(h.root, 'outside'), process.platform === 'win32' ? 'junction' : 'dir')
+  const attempts = () => h.connection.operations.filter((op) => op.name === 'attachment.send')
+  const cards = () => h.connection.operations.filter((op) => /回复 `确认/.test(op.value.text ?? ''))
+  for (const unsafe of [foreign, '../employee-b/foreign.xlsx', 'hard-link.xlsx', 'outside/foreign.xlsx']) {
+    await assert.rejects(agent.invoke('send_file', { path: unsafe }), /file_outside_workspace/)
+  }
+  await assert.rejects(agent.invoke('send_file', { path: file, userId: 'owner-b' }), /file_invalid_arguments/)
+  assert.equal(cards().length, 0)
+  await h.send('group task', { conversationType: 'group', conversationId: 'group' })
+  await waitUntil(() => h.followups.length === 2)
+  await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /im_file_transfer_unavailable/)
+  for (const decision of ['拒绝', '确认', 'revoke']) {
+    const previous = cards().length
+    const pending = agent.invoke('send_file', { path: file })
+    const result = decision === '确认' ? pending : assert.rejects(pending, /file_confirmation_rejected|授权已失效/)
+    await waitUntil(() => cards().length > previous)
+    const notice = cards().at(-1).value.text
+    const code = notice.match(/回复 `确认 ([^`]+)`/)[1]
+    assert.match(notice, /验收\.xlsx/)
+    assert.equal(attempts().length, decision === 'revoke' ? 1 : 0)
+    if (decision === '确认') {
+      await h.send(`确认 ${code}`, { senderStaffId: 'owner-b' })
+      assert.equal(attempts().length, 0)
+      await writeFile(file, 'replacement after approval was requested')
+    }
+    if (decision === 'revoke') h.connection.reconnect()
+    else await h.send(`${decision} ${code}`, { sessionWebhook: 'approval-reply-request' })
+    if (decision === '确认') assert.deepEqual(await result, { status: 'accepted', processQueryKey: 'test-receipt' })
+    else await result
+  }
+  assert.equal(attempts().length, 1)
+  assert.equal(attempts()[0].target, 'original-request')
+  assert.equal(attempts()[0].value.name, '验收.xlsx')
+  assert.deepEqual(Buffer.from(attempts()[0].value.data), workbook)
 })
 
 test('enterprise legacy directory override is reported before task admission and reset restores its own workspace', async (t) => {

@@ -101,6 +101,7 @@ export interface HostToolDefinition {
 /** Runtime identity supplied to a model-facing tool call. */
 export interface HostToolExecution {
   readonly agent?: HostAgent
+  readonly callId?: string
   readonly signal: AbortSignal
 }
 
@@ -133,6 +134,7 @@ export type HostApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'u
 export interface HostApprovalRequest {
   readonly agent: HostAgent
   readonly toolName: string
+  readonly applicationWrite?: boolean
   readonly callId?: string
   readonly reason?: string
   readonly signal?: AbortSignal

@@ -65,6 +65,7 @@ test(
           : Response.json({ downloadUrl: 'https://fixture.invalid/content' })
       }
       if (url === 'https://fixture.invalid/content') return new Response('fixture PDF')
+      if (String(url).includes('/gettoken?')) return Response.json({ errcode: 0, access_token: 'fixture-upload-token' })
       if (String(url).includes('/media/upload')) return Response.json({ errcode: 0, media_id: 'fixture-media' })
       return Response.json({ processQueryKey: 'fixture-receipt' })
     }

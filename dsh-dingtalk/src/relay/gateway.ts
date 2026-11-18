@@ -21,6 +21,8 @@ interface RequestRoute extends Route {
   message: InboundMessage
   expires: number
 }
+// Only a few large attachment bodies may be uploading at once on this gateway.
+const MAX_ATTACHMENTS_IN_FLIGHT = 4
 const key = (identity: DingTalkIdentity) => JSON.stringify([identity.corpId, identity.userId])
 const hash = (token: string) => createHash('sha256').update(token).digest('hex')
 export interface GatewayOptions {
@@ -36,7 +38,7 @@ export interface GatewayOptions {
   /** Local personal onboarding can derive the user from robot OAuth itself. */
   allowUnclaimedPersonalLogin?: boolean
   notice(message: InboundMessage, text: string): Promise<unknown>
-  operation(message: InboundMessage, method: string, data: any): Promise<unknown>
+  operation(message: InboundMessage, method: string, data: any, signal?: AbortSignal): Promise<unknown>
 }
 
 /** One gateway instance owns exactly one robot application. */
@@ -47,6 +49,7 @@ export class Gateway {
   private login?: GatewayLogin
   private activations = new Map<string, Promise<void>>()
   private requests = new Map<string, RequestRoute>()
+  private attachmentsInFlight = 0
   private cards = new Map<string, string>()
   private seen: Record<string, number>
   private server = createServer((req, res) => {
@@ -80,6 +83,8 @@ export class Gateway {
       }
       let binding: Binding | undefined
       let initialized = false
+      let sendingAttachment = false
+      const connection = new AbortController()
       const deadline = setTimeout(() => {
         if (!initialized) socket.close(1008)
       }, 10_000)
@@ -138,6 +143,22 @@ export class Gateway {
         if (method !== 'operation' || typeof data?.requestId !== 'string') throw new Error('invalid_method')
         const route = this.requests.get(data.requestId)
         if (!route || route.peer !== peer || route.expires < Date.now()) throw new Error('invalid_request')
+        if (data.method === 'attachment.send') {
+          if (
+            route.message.conversationType !== 'direct' ||
+            sendingAttachment ||
+            this.attachmentsInFlight >= MAX_ATTACHMENTS_IN_FLIGHT
+          )
+            throw new Error('invalid_attachment_route')
+          sendingAttachment = true
+          this.attachmentsInFlight++
+          try {
+            return await options.operation(route.message, data.method, data.data, connection.signal)
+          } finally {
+            this.attachmentsInFlight--
+            sendingAttachment = false
+          }
+        }
         const allowed = [
           'text',
           'markdown',
@@ -161,6 +182,7 @@ export class Gateway {
         return options.operation(route.message, data.method, data.data)
       })
       socket.on('close', () => {
+        connection.abort()
         clearTimeout(deadline)
         if (binding && this.online.get(key(binding.identity))?.peer === peer) this.online.delete(key(binding.identity))
         this.attempts.get(peer)?.cancel()

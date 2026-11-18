@@ -12,10 +12,16 @@ import { RelayClient } from '../lib/relay/client.js'
 import { RobotConnection } from '../lib/relay/controller.js'
 import WebSocket from 'ws'
 import { Peer } from '../lib/relay/protocol.js'
+import { DeliveryOutcomeUnknown } from '../lib/errors.js'
 
 async function fixture(
   t,
-  { personal = false, groupMentionSenders, exchange = async (code) => ({ corpId: 'corp', userId: code }) } = {},
+  {
+    personal = false,
+    groupMentionSenders,
+    exchange = async (code) => ({ corpId: 'corp', userId: code }),
+    operation,
+  } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-relay-'))
   const notices = [],
@@ -38,7 +44,8 @@ async function fixture(
     groupMentionSenders,
     allowUnclaimedPersonalLogin: personal,
     notice: async (msg, text) => notices.push({ user: msg.senderStaffId, text }),
-    operation: async (msg, method, data) => {
+    operation: async (msg, method, data, signal) => {
+      if (operation) return operation(msg, method, data, signal)
       operations.push({ user: msg.senderStaffId, method, data, destination: msg.sessionWebhook })
       return true
     },
@@ -116,6 +123,98 @@ async function fixture(
   }
   return { dir, opts, gateway, port, message, client, pair, finish, restore, notices, operations }
 }
+
+test('paired gateway submits downloadable Excel to each original employee and does not replay unknown sends', async (t) => {
+  const uploaded = new Map()
+  const delivered = new Map()
+  let sendCalls = 0
+  let lostReceipt = false
+  let recipientRejected = false
+  t.after(() => {
+    globalThis.fetch = originalFetch
+  })
+  globalThis.fetch = async (url, init) => {
+    const uri = new URL(url)
+    if (uri.hostname === '127.0.0.1') return originalFetch(url, init)
+    if (uri.pathname === '/v1.0/oauth2/accessToken')
+      return Response.json({ accessToken: 'fixture-app-token', expireIn: 7200 })
+    if (uri.pathname === '/gettoken') return Response.json({ errcode: 0, access_token: 'fixture-upload-token' })
+    if (uri.pathname === '/media/upload') {
+      assert.equal(uri.searchParams.get('type'), 'file')
+      assert.equal(uri.searchParams.get('access_token'), 'fixture-upload-token')
+      const media = init.body.get('media')
+      const id = `media-${uploaded.size}`
+      uploaded.set(id, { name: media.name, bytes: Buffer.from(await media.arrayBuffer()) })
+      return Response.json({ errcode: 0, media_id: id })
+    }
+    if (uri.pathname === '/v1.0/robot/oToMessages/batchSend') {
+      const body = JSON.parse(init.body)
+      assert.equal(init.headers['x-acs-dingtalk-access-token'], 'fixture-app-token')
+      assert.equal(body.msgKey, 'sampleFile')
+      assert.equal(body.robotCode, 'fixture-app')
+      assert.equal(body.userIds.length, 1)
+      const { mediaId, fileName, fileType } = JSON.parse(body.msgParam)
+      assert.equal(fileType, 'xlsx')
+      assert.equal(fileName, uploaded.get(mediaId).name)
+      sendCalls++
+      if (recipientRejected)
+        return Response.json({ processQueryKey: 'receipt-rejected', invalidStaffIdList: body.userIds })
+      delivered.set(body.userIds[0], mediaId)
+      if (lostReceipt) throw new Error('fixture connection lost after accepting send')
+      return Response.json({ processQueryKey: `receipt-${sendCalls}` })
+    }
+    assert.fail(`unexpected fetch: ${uri}`)
+  }
+  let operations
+  const f = await fixture(t, { operation: (...args) => operations.operation(...args) })
+  operations = createRobotOperations({
+    clientId: 'fixture-app',
+    clientSecret: 'fixture',
+    corpId: 'corp',
+    stateDirectory: f.dir,
+  })
+  t.after(() => operations.diagnostics.close())
+  const a = await f.client('a', 'file-a', async () => {})
+  const b = await f.client('b', 'file-b', async () => {})
+  await f.pair(a, 'a')
+  await f.pair(b, 'b')
+  for (const user of ['a', 'b']) await f.gateway.receive(f.message(user))
+  await f.gateway.receive(f.message('a', 'group', { conversationType: 'group', conversationId: 'group' }))
+  const bytes = await readFile(new URL('./fixtures/workspace.xlsx', import.meta.url))
+  const file = { kind: 'file', name: '验收.xlsx', data: bytes }
+  const signal = new AbortController().signal
+  const aRequest = a.received[0].sessionWebhook
+  const bRequest = b.received[0].sessionWebhook
+  await assert.rejects(b.c.sendAttachment(aRequest, file, signal), /request_failed/)
+  await assert.rejects(a.c.sendAttachment(bRequest, file, signal), /request_failed/)
+  await assert.rejects(a.c.sendAttachment(a.received[1].sessionWebhook, file, signal), /request_failed/)
+  await assert.rejects(
+    a.c.operation(aRequest, 'attachment.send', { name: '验收.xlsx', data: 'some', userId: 'b' }),
+    /request_failed/,
+  )
+  await assert.rejects(
+    a.c.operation(aRequest, 'attachment.send', { name: '../验收.xlsx', data: 'eA==' }),
+    /request_failed/,
+  )
+  assert.equal(uploaded.size, 0)
+  for (const [client, request, employee] of [
+    [a, aRequest, 'a'],
+    [b, bRequest, 'b'],
+  ]) {
+    const result = await client.c.sendAttachment(request, file, signal)
+    assert.deepEqual(result, { status: 'accepted', processQueryKey: `receipt-${sendCalls}` })
+    assert.deepEqual(uploaded.get(delivered.get(employee)), { name: '验收.xlsx', bytes })
+  }
+  lostReceipt = true
+  await assert.rejects(a.c.sendAttachment(aRequest, file, signal), DeliveryOutcomeUnknown)
+  assert.equal(sendCalls, 3)
+  assert.equal(uploaded.size, 3)
+  lostReceipt = false
+  recipientRejected = true
+  await assert.rejects(b.c.sendAttachment(bRequest, file, signal), /request_failed/)
+  assert.equal(delivered.get('b'), 'media-1')
+  assert.equal(sendCalls, 4)
+})
 
 test('enterprise direct and group query grants belong only to the live receiver of the actual sender', async (t) => {
   const f = await fixture(t)

@@ -5,6 +5,8 @@ import { readState, saveState } from './state.js'
 import { sameIdentity, messageIdentity, type DingTalkIdentity } from '../identity.js'
 import type { StreamOptions, InboundMessage } from '../stream.js'
 import type { CardTarget } from '../aicard.js'
+import { DeliveryOutcomeUnknown } from '../errors.js'
+import type { MediaReceipt, OutboundMedia } from '../outbound.js'
 
 interface Saved {
   url?: string
@@ -332,6 +334,21 @@ export class RelayClient {
   async operation(requestId: string, method: string, data: unknown): Promise<any> {
     if (!this.peer) throw new Error('offline')
     return this.peer.call('operation', { requestId, method, data })
+  }
+  /** Send one approved snapshot over the same connection as its inbound request. Never replay it. */
+  async sendAttachment(requestId: string, media: OutboundMedia, signal: AbortSignal): Promise<MediaReceipt> {
+    const data = Buffer.from(media.data).toString('base64')
+    signal.throwIfAborted()
+    const peer = this.peer
+    if (this.stopped || !peer || !this.channelBinding()) throw new Error('offline')
+    const value = await peer.call(
+      'operation',
+      { requestId, method: 'attachment.send', data: { name: media.name, data } },
+      65_000,
+    )
+    if (value?.status !== 'accepted' || typeof value.processQueryKey !== 'string' || !value.processQueryKey)
+      throw new DeliveryOutcomeUnknown('attachment_receipt_missing')
+    return { status: 'accepted', processQueryKey: value.processQueryKey }
   }
   async media(code: string): Promise<{ data: Uint8Array; mediaType: string } | null> {
     const id = this.downloads.get(code)
