@@ -13,6 +13,7 @@ import { RobotConnection } from '../lib/relay/controller.js'
 import WebSocket from 'ws'
 import { Peer } from '../lib/relay/protocol.js'
 import { DeliveryOutcomeUnknown } from '../lib/errors.js'
+import { png } from './fixtures/workspace-image.mjs'
 
 async function fixture(
   t,
@@ -124,7 +125,7 @@ async function fixture(
   return { dir, opts, gateway, port, message, client, pair, finish, restore, notices, operations }
 }
 
-test('paired gateway submits downloadable Excel to each original employee and does not replay unknown sends', async (t) => {
+test('paired gateway submits files and validated images only to the originator and does not replay unknown sends', async (t) => {
   const uploaded = new Map()
   const delivered = new Map()
   let sendCalls = 0
@@ -140,22 +141,30 @@ test('paired gateway submits downloadable Excel to each original employee and do
       return Response.json({ accessToken: 'fixture-app-token', expireIn: 7200 })
     if (uri.pathname === '/gettoken') return Response.json({ errcode: 0, access_token: 'fixture-upload-token' })
     if (uri.pathname === '/media/upload') {
-      assert.equal(uri.searchParams.get('type'), 'file')
+      const kind = uri.searchParams.get('type')
+      assert.ok(kind === 'file' || kind === 'image')
       assert.equal(uri.searchParams.get('access_token'), 'fixture-upload-token')
       const media = init.body.get('media')
       const id = `media-${uploaded.size}`
-      uploaded.set(id, { name: media.name, bytes: Buffer.from(await media.arrayBuffer()) })
+      uploaded.set(id, { kind, name: media.name, bytes: Buffer.from(await media.arrayBuffer()) })
       return Response.json({ errcode: 0, media_id: id })
     }
     if (uri.pathname === '/v1.0/robot/oToMessages/batchSend') {
       const body = JSON.parse(init.body)
       assert.equal(init.headers['x-acs-dingtalk-access-token'], 'fixture-app-token')
-      assert.equal(body.msgKey, 'sampleFile')
       assert.equal(body.robotCode, 'fixture-app')
       assert.equal(body.userIds.length, 1)
-      const { mediaId, fileName, fileType } = JSON.parse(body.msgParam)
-      assert.equal(fileType, 'xlsx')
-      assert.equal(fileName, uploaded.get(mediaId).name)
+      assert.ok(!('openConversationId' in body))
+      const params = JSON.parse(body.msgParam)
+      const mediaId = params.mediaId ?? params.photoURL
+      const upload = uploaded.get(mediaId)
+      if (upload.kind === 'file') {
+        assert.equal(body.msgKey, 'sampleFile')
+        assert.deepEqual(params, { mediaId, fileName: upload.name, fileType: 'xlsx' })
+      } else {
+        assert.equal(body.msgKey, 'sampleImageMsg')
+        assert.deepEqual(params, { photoURL: mediaId })
+      }
       sendCalls++
       if (recipientRejected)
         return Response.json({ processQueryKey: 'receipt-rejected', invalidStaffIdList: body.userIds })
@@ -203,7 +212,7 @@ test('paired gateway submits downloadable Excel to each original employee and do
   ]) {
     const result = await client.c.sendAttachment(request, file, signal)
     assert.deepEqual(result, { status: 'accepted', processQueryKey: `receipt-${sendCalls}` })
-    assert.deepEqual(uploaded.get(delivered.get(employee)), { name: '验收.xlsx', bytes })
+    assert.deepEqual(uploaded.get(delivered.get(employee)), { kind: 'file', name: '验收.xlsx', bytes })
   }
   lostReceipt = true
   await assert.rejects(a.c.sendAttachment(aRequest, file, signal), DeliveryOutcomeUnknown)
@@ -214,6 +223,36 @@ test('paired gateway submits downloadable Excel to each original employee and do
   await assert.rejects(b.c.sendAttachment(bRequest, file, signal), /request_failed/)
   assert.equal(delivered.get('b'), 'media-1')
   assert.equal(sendCalls, 4)
+
+  recipientRejected = false
+  const image = { kind: 'image', name: '验收.PNG', data: png }
+  await assert.rejects(a.c.sendAttachment(bRequest, image, signal), /request_failed/)
+  await assert.rejects(b.c.sendAttachment(aRequest, image, signal), /request_failed/)
+  await assert.rejects(a.c.sendAttachment(a.received[1].sessionWebhook, image, signal), /request_failed/)
+  await assert.rejects(a.c.sendAttachment(aRequest, { ...image, name: 'wrong.gif' }, signal), /request_failed/)
+  await assert.rejects(
+    a.c.sendAttachment(aRequest, { ...image, data: Buffer.from('<svg />') }, signal),
+    /request_failed/,
+  )
+  await assert.rejects(
+    a.c.operation(aRequest, 'attachment.sendImage', {
+      name: image.name,
+      data: png.toString('base64'),
+      userId: 'b',
+    }),
+    /request_failed/,
+  )
+  assert.equal(uploaded.size, 4)
+  assert.deepEqual(await a.c.sendAttachment(aRequest, image, signal), {
+    status: 'accepted',
+    processQueryKey: 'receipt-5',
+  })
+  assert.deepEqual(uploaded.get(delivered.get('a')), { kind: 'image', name: image.name, bytes: png })
+  assert.equal(delivered.get('b'), 'media-1')
+  lostReceipt = true
+  await assert.rejects(a.c.sendAttachment(aRequest, image, signal), DeliveryOutcomeUnknown)
+  assert.equal(sendCalls, 6)
+  assert.equal(uploaded.size, 6)
 })
 
 test('enterprise direct and group query grants belong only to the live receiver of the actual sender', async (t) => {

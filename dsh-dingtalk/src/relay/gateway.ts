@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import { messageIdentity, sameIdentity, type DingTalkIdentity } from '../identity.js'
 import type { InboundMessage, InboundCardCallback } from '../stream.js'
-import { Peer } from './protocol.js'
+import { attachmentMethods, Peer } from './protocol.js'
 import { readState, saveState } from './state.js'
 import { GatewayLogin, type LoginOptions } from './login.js'
 
@@ -143,7 +143,7 @@ export class Gateway {
         if (method !== 'operation' || typeof data?.requestId !== 'string') throw new Error('invalid_method')
         const route = this.requests.get(data.requestId)
         if (!route || route.peer !== peer || route.expires < Date.now()) throw new Error('invalid_request')
-        if (data.method === 'attachment.send') {
+        if (data.method === attachmentMethods.file || data.method === attachmentMethods.image) {
           if (
             route.message.conversationType !== 'direct' ||
             sendingAttachment ||

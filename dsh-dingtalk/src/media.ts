@@ -11,6 +11,24 @@ export const MAX_MEDIA_BYTES = 20 * 1024 * 1024
 export const FILE_TYPES = new Set(['xlsx', 'pdf', 'zip', 'rar', 'doc', 'docx'])
 export const IMAGE_TYPES = new Set(['jpg', 'jpeg', 'gif', 'png', 'bmp'])
 
+/** 检查待上传图片的文件头和扩展名是否匹配。 */
+export function matchesImageType(extension: string, data: Uint8Array): boolean {
+  const bytes = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+  switch (extension) {
+    case 'jpg':
+    case 'jpeg':
+      return bytes.length >= 4 && bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
+    case 'png':
+      return bytes.length >= 33 && bytes.subarray(0, 16).equals(Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'))
+    case 'gif':
+      return bytes.length >= 14 && ['GIF87a', 'GIF89a'].includes(bytes.toString('latin1', 0, 6))
+    case 'bmp':
+      return bytes.length >= 26 && bytes.toString('latin1', 0, 2) === 'BM' && bytes.readUInt32LE(2) === bytes.length
+    default:
+      return false
+  }
+}
+
 /** 通用文件下载，不把未知二进制误标为 JPEG；下载链接和下载码不进入日志。 */
 export async function downloadFileByCode(
   token: string,
