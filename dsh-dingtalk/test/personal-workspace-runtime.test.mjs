@@ -7,6 +7,7 @@ import test, { mock } from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { imToolFactory } from './helpers/im-tool-factory.mjs'
+import { png } from './fixtures/workspace-image.mjs'
 
 // Only transport and rendering are replaced. Public apply composes the real
 // Bridge, Commands, ImTools, QuestionManager and WorkspaceToolPolicy.
@@ -492,7 +493,6 @@ test('enterprise attachment sends without approval only from the employee worksp
   const directTools = agent.ctx.tools.schemas().map(({ name }) => name)
   assert.ok(directTools.includes('load_workspace_dependencies'))
   assert.ok(directTools.includes('send_file'))
-  assert.ok(!directTools.includes('send_image'))
   for (const name of ['present', 'working_directory', 'todo_write', 'get_goal', 'exit_plan_mode'])
     assert.ok(directTools.includes(name), name)
   for (const name of ['visualize', 'subagent', 'run_code']) assert.ok(!directTools.includes(name), name)
@@ -532,6 +532,53 @@ test('enterprise attachment sends without approval only from the employee worksp
   assert.equal(attempts()[0].target, 'original-request')
   assert.equal(attempts()[0].value.name, '验收.xlsx')
   assert.deepEqual(Buffer.from(attempts()[0].value.data), workbook)
+})
+
+test('enterprise send_image validates the current employee workspace and sends only to the original DM', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('send picture', { sessionWebhook: 'image-original-request' })
+  await waitUntil(() => h.followups.length === 1)
+  const agent = h.followups[0].agent
+  assert.ok(agent.ctx.tools.schemas().some(({ name }) => name === 'send_image'))
+
+  const name = '验收.PNG'
+  const image = path.join(h.root, name)
+  const foreign = path.join(h.other, 'foreign.png')
+  await writeFile(image, png)
+  await writeFile(foreign, png)
+  await writeFile(path.join(h.root, 'wrong.jpg'), png)
+  await writeFile(path.join(h.root, 'fake.png'), '<svg />')
+  await writeFile(path.join(h.root, 'unsupported.svg'), png)
+  await link(foreign, path.join(h.root, 'hard-link.png'))
+  await symlink(h.other, path.join(h.root, 'outside'), process.platform === 'win32' ? 'junction' : 'dir')
+  const attempts = () => h.connection.operations.filter((op) => op.value?.kind === 'image')
+  for (const unsafe of [foreign, '../employee-b/foreign.png', 'hard-link.png', 'outside/foreign.png']) {
+    await assert.rejects(agent.invoke('send_image', { path: unsafe }), /file_outside_workspace/)
+  }
+  for (const invalid of ['wrong.jpg', 'fake.png']) {
+    await assert.rejects(agent.invoke('send_image', { path: invalid }), /file_image_type_mismatch/)
+  }
+  await assert.rejects(agent.invoke('send_image', { path: 'unsupported.svg' }), /unsupported_file_type/)
+  await assert.rejects(agent.invoke('send_image', { path: image, userId: 'owner-b' }), /file_invalid_arguments/)
+  await h.send('group picture', { conversationType: 'group', conversationId: 'image-group' })
+  await waitUntil(() => h.followups.length === 2)
+  const group = h.followups[1].agent
+  assert.ok(!group.ctx.tools.schemas().some(({ name }) => name === 'send_image'))
+  assert.match(group.guard('send_image'), /im_file_transfer_unavailable/)
+  assert.equal(attempts().length, 0)
+
+  assert.deepEqual(await agent.invoke('send_image', { path: name }), {
+    status: 'accepted',
+    processQueryKey: 'test-receipt',
+  })
+  const pending = agent.invoke('send_image', { path: image })
+  h.connection.reconnect()
+  await assert.rejects(pending, /file_authorization_changed/)
+  await assert.rejects(agent.invoke('send_image', { path: image }), /im_channel_authorization_changed/)
+  assert.equal(attempts().length, 1)
+  assert.equal(attempts()[0].target, 'image-original-request')
+  assert.equal(attempts()[0].value.name, name)
+  assert.deepEqual(Buffer.from(attempts()[0].value.data), png)
 })
 
 test('employee tools retain the original private recipient and switch workspace after successful settlement', async (t) => {

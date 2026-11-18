@@ -4,8 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { FileTransfer } from '../lib/file-transfer.js'
-import { downloadFileByCode, MAX_MEDIA_BYTES } from '../lib/media.js'
+import { downloadFileByCode, matchesImageType, MAX_MEDIA_BYTES } from '../lib/media.js'
 import { strictAgentContext } from './helpers/strict-agent-context.mjs'
+import { png } from './fixtures/workspace-image.mjs'
 
 async function fixture(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'dsh-transfer-'))
@@ -155,7 +156,7 @@ test('发送工具固定当前会话和工作区，拒绝跨 Agent、越界/符�
   })
   transfer.install(scope.ctx, agent)
   transfer.install(scope.ctx, agent)
-  assert.deepEqual([...tools.keys()], ['send_file', 'send_image'])
+  assert.deepEqual([...tools.keys()], ['send_file'])
   const exec = { agent, signal: new AbortController().signal }
   await assert.rejects(tools.get('send_file').execute({ path: '报告.pdf' }, exec), /route_unavailable/)
   const msg = { conversationType: 'direct', conversationId: 'one', senderStaffId: 'user' }
@@ -190,4 +191,29 @@ test('发送工具固定当前会话和工作区，拒绝跨 Agent、越界/符�
   assert.equal(sent.length, 4)
   transfer.close()
   await assert.rejects(tools.get('send_file').execute({ path: '报告.pdf' }, exec), /route_unavailable/)
+})
+
+test('回传图片识别支持的文件头，拒绝错误扩展名和截断文件头', () => {
+  const jpeg = Buffer.from('ffd8ffe0', 'hex')
+  const gif87 = Buffer.concat([Buffer.from('GIF87a'), Buffer.alloc(8)])
+  const gif89 = Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(8)])
+  const bmp = Buffer.alloc(26)
+  bmp.write('BM')
+  bmp.writeUInt32LE(bmp.length, 2)
+  for (const [extension, bytes] of [
+    ['jpg', jpeg],
+    ['jpeg', jpeg],
+    ['png', png],
+    ['gif', gif87],
+    ['gif', gif89],
+    ['bmp', bmp],
+  ]) {
+    assert.equal(matchesImageType(extension, bytes), true, extension)
+    assert.equal(matchesImageType(extension, bytes.subarray(0, 2)), false, extension)
+    assert.equal(matchesImageType(extension, Buffer.from('<svg />')), false, extension)
+  }
+  assert.equal(matchesImageType('jpeg', png), false)
+  assert.equal(matchesImageType('svg', png), false)
+  bmp.writeUInt32LE(100, 2)
+  assert.equal(matchesImageType('bmp', bmp), false)
 })

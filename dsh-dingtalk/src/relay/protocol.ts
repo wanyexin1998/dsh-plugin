@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { DeliveryOutcomeUnknown } from '../errors.js'
 import type WebSocket from 'ws'
 
+export const attachmentMethods = { file: 'attachment.send', image: 'attachment.sendImage' } as const
+
 export interface Frame {
   id?: string
   reply?: string

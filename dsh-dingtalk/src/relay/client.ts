@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import WebSocket from 'ws'
-import { Peer } from './protocol.js'
+import { attachmentMethods, Peer } from './protocol.js'
 import { readState, saveState } from './state.js'
 import { sameIdentity, messageIdentity, type DingTalkIdentity } from '../identity.js'
 import type { StreamOptions, InboundMessage } from '../stream.js'
@@ -343,7 +343,7 @@ export class RelayClient {
     if (this.stopped || !peer || !this.channelBinding()) throw new Error('offline')
     const value = await peer.call(
       'operation',
-      { requestId, method: 'attachment.send', data: { name: media.name, data } },
+      { requestId, method: attachmentMethods[media.kind], data: { name: media.name, data } },
       65_000,
     )
     if (value?.status !== 'accepted' || typeof value.processQueryKey !== 'string' || !value.processQueryKey)

@@ -3,7 +3,7 @@ import { constants } from 'node:fs'
 import { lstat, mkdir, open, readlink, realpath, rm } from 'node:fs/promises'
 import path from 'node:path'
 import type { HostAgent, HostAgentContext, HostToolDefinition, HostToolExecution } from './host.js'
-import { FILE_TYPES, IMAGE_TYPES, MAX_MEDIA_BYTES } from './media.js'
+import { FILE_TYPES, IMAGE_TYPES, matchesImageType, MAX_MEDIA_BYTES } from './media.js'
 import { DeliveryOutcomeUnknown } from './errors.js'
 import type { MediaTarget, MediaReceipt, OutboundMedia, Outbound } from './outbound.js'
 
@@ -138,7 +138,7 @@ export class FileTransfer {
     }
     if (this.installed.has(ctx)) return
     const file = ctx.tools.register(this.definition('file', agent))
-    if (offerAttachment === true) {
+    if (!this.opts.attachment) {
       this.installed.set(ctx, file)
       return
     }
@@ -198,9 +198,11 @@ export class FileTransfer {
     return {
       name: kind === 'file' ? 'send_file' : 'send_image',
       description:
-        kind === 'file' && this.opts.attachment
-          ? '将当前员工工作区内的文件（xlsx/pdf/zip/rar/doc/docx）以可下载附件发回原钉钉私聊。仅在用户要求回传时使用，无需再次确认。只提供工作区内路径，最大 20 MB。发送结果未知时先请用户检查聊天，不要自动重发。'
-          : `仅在用户要求回传文件或图片时，将当前工作区中的${kind === 'file' ? '文件（xlsx/pdf/zip/rar/doc/docx）' : '图片（jpg/jpeg/png/gif/bmp）'}发回当前钉钉会话。最大 20 MB。path 是相对于工作区或工作区内的绝对路径。接口接受不代表客户端已送达；结果未知时不要自动重发。`,
+        kind === 'image'
+          ? '仅在用户要求回传图片时，将当前员工工作区中的 JPG、JPEG、PNG、GIF 或 BMP 图片发回原钉钉私聊。图片内容须与扩展名一致，最大 20 MB。只提供工作区内路径。发送结果未知时先请用户检查聊天，不要自动重发。'
+          : this.opts.attachment
+            ? '将当前员工工作区内的文件（xlsx/pdf/zip/rar/doc/docx）以可下载附件发回原钉钉私聊。仅在用户要求回传时使用，无需再次确认。只提供工作区内路径，最大 20 MB。发送结果未知时先请用户检查聊天，不要自动重发。'
+            : '仅在用户要求回传文件时，将当前工作区中的文件（xlsx/pdf/zip/rar/doc/docx）发回当前钉钉会话。最大 20 MB。path 是相对于工作区或工作区内的绝对路径。接口接受不代表客户端已送达；结果未知时不要自动重发。',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -243,9 +245,8 @@ export class FileTransfer {
     )
       throw new Error('file_invalid_arguments')
     if (this.opts.attachment) {
-      if (kind !== 'file' || !this.canSendAttachment(agent) || !route.requestId)
-        throw new Error('file_route_unavailable')
-      return this.sendEnterpriseAttachment(this.opts.attachment, route, route.requestId, args.path, exec)
+      if (!this.canSendAttachment(agent) || !route.requestId) throw new Error('file_route_unavailable')
+      return this.sendEnterpriseAttachment(this.opts.attachment, route, route.requestId, kind, args.path, exec)
     }
     const signal = AbortSignal.any([exec.signal, this.abort.signal])
     signal.throwIfAborted()
@@ -259,7 +260,7 @@ export class FileTransfer {
     if (!(await lstat(actual)).isFile()) throw new Error('file_not_regular')
     const name = path.basename(actual)
     const extension = path.extname(name).slice(1).toLowerCase()
-    if (!(kind === 'file' ? FILE_TYPES : IMAGE_TYPES).has(extension)) throw new Error('unsupported_file_type')
+    if (!FILE_TYPES.has(extension)) throw new Error('unsupported_file_type')
     const handle = await open(actual, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
     let data: Uint8Array
     try {
@@ -282,12 +283,13 @@ export class FileTransfer {
       await handle.close()
     }
     signal.throwIfAborted()
-    return this.opts.outbound.sendMedia(route.target, { kind, name, data }, signal)
+    return this.opts.outbound.sendMedia(route.target, { kind: 'file', name, data }, signal)
   }
   private async sendEnterpriseAttachment(
     attachment: EnterpriseAttachment,
     route: FileRoute,
     requestId: string,
+    kind: OutboundMedia['kind'],
     input: string,
     exec: HostToolExecution,
   ): Promise<MediaReceipt> {
@@ -314,10 +316,11 @@ export class FileTransfer {
       )
         throw new Error('file_outside_workspace: 只允许发送当前工作区内的普通文件。')
       const name = path.basename(file)
+      const extension = path.extname(name).slice(1).toLowerCase()
       if (
         safeName(name) !== name ||
         /[`\u202a-\u202e\u2066-\u2069]/.test(name) ||
-        !FILE_TYPES.has(path.extname(name).slice(1).toLowerCase())
+        !(kind === 'file' ? FILE_TYPES : IMAGE_TYPES).has(extension)
       )
         throw new Error('unsupported_file_type: 附件名称或格式不受支持。')
       const data = await snapshot(root, file, signal).catch((error: NodeJS.ErrnoException) => {
@@ -326,9 +329,11 @@ export class FileTransfer {
         throw error
       })
       check()
+      if (kind === 'image' && !matchesImageType(extension, data))
+        throw new Error('file_image_type_mismatch: 图片内容与扩展名不符。')
       const sending = Date.now()
       try {
-        return await attachment.send(requestId, { kind: 'file', name, data }, signal)
+        return await attachment.send(requestId, { kind, name, data }, signal)
       } catch (error) {
         if (error instanceof DeliveryOutcomeUnknown)
           throw new Error('file_delivery_unknown: 发送结果未确认，请先查看钉钉私聊，勿自动重发。')

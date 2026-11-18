@@ -69,6 +69,7 @@ function audienceOf(message: unknown): Audience | null {
 }
 
 const queryDenied = 'im_enterprise_query_unavailable: 请检查本人的机器人连接，或联系管理员核对该席位启用的查询工具。'
+const mediaTools = new Set(['send_file', 'send_image'])
 
 export class ImTools {
   private readonly scopes = new WeakMap<HostAgentContext, Scope>()
@@ -115,7 +116,7 @@ export class ImTools {
         unregisterDirectory = undefined
         const inherited = schemas(agent).map(({ name }) => name)
         const allow = inherited
-          .filter((name) => name !== 'dingtalk_call' && name !== 'ask_user_question' && name !== 'send_file')
+          .filter((name) => name !== 'dingtalk_call' && name !== 'ask_user_question' && !mediaTools.has(name))
           .filter((name) => denial(name) === undefined)
         liftRestriction = restrict({ allow })
         if (employeeTools && allow.includes('working_directory'))
@@ -143,9 +144,10 @@ export class ImTools {
         if (name === 'visualize' && !employeeTools.origin) return 'im_visualization_link_unavailable'
         return undefined
       }
-      // The outbound attachment needs a separate original-DM route in addition to workspace authority.
-      if (name === 'send_file' && this.workspace && this.canSendAttachment?.(agent)) return undefined
-      if (name === 'send_file' || name === 'send_image') return 'im_tool_unavailable: im_file_transfer_unavailable'
+      if (mediaTools.has(name))
+        return this.workspace && this.canSendAttachment?.(agent)
+          ? undefined
+          : 'im_tool_unavailable: im_file_transfer_unavailable'
       if (name === 'subagent' || name === 'spawn_agent')
         return 'im_tool_unavailable: im_subagent_inheritance_unavailable'
       if (
@@ -171,7 +173,7 @@ export class ImTools {
       ...tool,
       ...(this.canSendAttachment
         ? {
-            description: `${tool.description} 当前工作区生成的文件请在企业机器人私聊使用 send_file 回传；DWS Connector 不能读取该路径。`,
+            description: `${tool.description} 当前工作区生成的文件或图片请在企业机器人私聊使用 send_file 或 send_image 回传；DWS Connector 不能读取该路径。`,
           }
         : {}),
       execute: (args, exec) => {

@@ -9,7 +9,8 @@ import { AICard, CardCapability } from '../aicard.js'
 import { Emotion } from '../emotion.js'
 import { InteractionCards } from '../interaction-card.js'
 import { cardTarget } from '../targets.js'
-import { downloadFileByCode, FILE_TYPES, MAX_MEDIA_BYTES } from '../media.js'
+import { downloadFileByCode, FILE_TYPES, IMAGE_TYPES, matchesImageType, MAX_MEDIA_BYTES } from '../media.js'
+import { attachmentMethods } from './protocol.js'
 
 export interface RobotGatewayConfig {
   clientId: string
@@ -60,7 +61,9 @@ export function createRobotOperations(config: RobotGatewayConfig) {
       return true
     }
     if (method === 'interaction.create') return interactions?.create({ ...data, target: cardTarget(msg) }) ?? false
-    if (method === 'attachment.send') {
+    if (method === attachmentMethods.file || method === attachmentMethods.image) {
+      const kind = method === attachmentMethods.image ? 'image' : 'file'
+      const extension = typeof data?.name === 'string' ? extname(data.name).slice(1).toLowerCase() : ''
       if (
         msg.conversationType !== 'direct' ||
         msg.senderCorpId !== config.corpId ||
@@ -70,7 +73,7 @@ export function createRobotOperations(config: RobotGatewayConfig) {
         typeof data.name !== 'string' ||
         Buffer.byteLength(data.name) > 180 ||
         /[<>:"|?*\/\\\u0000-\u001f\u007f]/.test(data.name) ||
-        !FILE_TYPES.has(extname(data.name).slice(1).toLowerCase()) ||
+        !(kind === 'file' ? FILE_TYPES : IMAGE_TYPES).has(extension) ||
         typeof data.data !== 'string' ||
         data.data.length === 0 ||
         data.data.length > Math.ceil(MAX_MEDIA_BYTES / 3) * 4 ||
@@ -80,7 +83,8 @@ export function createRobotOperations(config: RobotGatewayConfig) {
       const bytes = Buffer.from(data.data, 'base64')
       if (!bytes.length || bytes.length > MAX_MEDIA_BYTES || bytes.toString('base64') !== data.data)
         throw new Error('invalid_attachment')
-      return outbound.sendMedia(msg, { kind: 'file', name: data.name, data: bytes }, signal)
+      if (kind === 'image' && !matchesImageType(extension, bytes)) throw new Error('invalid_attachment')
+      return outbound.sendMedia(msg, { kind, name: data.name, data: bytes }, signal)
     }
     if (method === 'media') {
       const codes = [
