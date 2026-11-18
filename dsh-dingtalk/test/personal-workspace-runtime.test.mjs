@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, link, symlink, readFile, realpath, rm, writeFile } from
 import os from 'node:os'
 import path from 'node:path'
 import test, { mock } from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
@@ -111,11 +112,11 @@ mock.module('../lib/renderer.js', { namedExports: { Renderer } })
 const { apply, Config } = await import('../lib/index.js')
 
 async function waitUntil(check) {
-  for (let attempt = 0; attempt < 300; attempt++) {
-    if (check()) return
-    await new Promise((resolve) => setImmediate(resolve))
+  const deadline = performance.now() + 5_000
+  while (!check()) {
+    if (performance.now() >= deadline) assert.fail('personal runtime did not reach the expected state')
+    await delay(5)
   }
-  assert.fail('personal runtime did not reach the expected state')
 }
 async function flush() {
   for (let count = 0; count < 5; count++) await new Promise((resolve) => setImmediate(resolve))
@@ -214,7 +215,13 @@ async function fixture(
         return () => list.splice(list.indexOf(listener), 1)
       },
       get(name) {
-        if (name === 'approval') return { request: (request) => listeners.get('approval/request')[0](request) }
+        if (name === 'approval')
+          return {
+            request: (request) => {
+              assert.notEqual(request.toolName, 'send_file', 'native attachment must not request approval')
+              return listeners.get('approval/request')[0](request)
+            },
+          }
         if (name === 'workingDirectory' && missing !== 'workingDirectory')
           return { get: (session) => session.header.cwd }
       },
@@ -432,7 +439,7 @@ test('enterprise public apply creates a workbook only in its employee workspace 
   await assert.rejects(next.invoke('read'), /im_channel_authorization_changed/)
 })
 
-test('enterprise attachment sends only the approved snapshot to its original DM', async (t) => {
+test('enterprise attachment sends without approval only from the employee workspace to its original DM', async (t) => {
   const h = await fixture(t, { enterprise: true })
   await h.send('send workbook', { sessionWebhook: 'original-request' })
   await waitUntil(() => h.followups.length === 1)
@@ -445,34 +452,23 @@ test('enterprise attachment sends only the approved snapshot to its original DM'
   await link(foreign, path.join(h.root, 'hard-link.xlsx'))
   await symlink(h.other, path.join(h.root, 'outside'), process.platform === 'win32' ? 'junction' : 'dir')
   const attempts = () => h.connection.operations.filter((op) => op.name === 'attachment.send')
-  const cards = () => h.connection.operations.filter((op) => /回复 `确认/.test(op.value.text ?? ''))
   for (const unsafe of [foreign, '../employee-b/foreign.xlsx', 'hard-link.xlsx', 'outside/foreign.xlsx']) {
     await assert.rejects(agent.invoke('send_file', { path: unsafe }), /file_outside_workspace/)
   }
   await assert.rejects(agent.invoke('send_file', { path: file, userId: 'owner-b' }), /file_invalid_arguments/)
-  assert.equal(cards().length, 0)
+  assert.equal(attempts().length, 0)
   await h.send('group task', { conversationType: 'group', conversationId: 'group' })
   await waitUntil(() => h.followups.length === 2)
   await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /im_file_transfer_unavailable/)
-  for (const decision of ['拒绝', '确认', 'revoke']) {
-    const previous = cards().length
-    const pending = agent.invoke('send_file', { path: file })
-    const result = decision === '确认' ? pending : assert.rejects(pending, /file_confirmation_rejected|授权已失效/)
-    await waitUntil(() => cards().length > previous)
-    const notice = cards().at(-1).value.text
-    const code = notice.match(/回复 `确认 ([^`]+)`/)[1]
-    assert.match(notice, /验收\.xlsx/)
-    assert.equal(attempts().length, decision === 'revoke' ? 1 : 0)
-    if (decision === '确认') {
-      await h.send(`确认 ${code}`, { senderStaffId: 'owner-b' })
-      assert.equal(attempts().length, 0)
-      await writeFile(file, 'replacement after approval was requested')
-    }
-    if (decision === 'revoke') h.connection.reconnect()
-    else await h.send(`${decision} ${code}`, { sessionWebhook: 'approval-reply-request' })
-    if (decision === '确认') assert.deepEqual(await result, { status: 'accepted', processQueryKey: 'test-receipt' })
-    else await result
-  }
+  assert.equal(attempts().length, 0)
+  assert.deepEqual(await agent.invoke('send_file', { path: '验收.xlsx' }), {
+    status: 'accepted',
+    processQueryKey: 'test-receipt',
+  })
+  const pending = agent.invoke('send_file', { path: file })
+  h.connection.reconnect()
+  await assert.rejects(pending, /file_authorization_changed/)
+  await assert.rejects(agent.invoke('send_file', { path: file }), /im_channel_authorization_changed/)
   assert.equal(attempts().length, 1)
   assert.equal(attempts()[0].target, 'original-request')
   assert.equal(attempts()[0].value.name, '验收.xlsx')

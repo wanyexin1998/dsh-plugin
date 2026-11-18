@@ -5,6 +5,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRemoteConnection, createRemoteConnectionFor, parseRemoteSettings } from '../lib/adapters/remote/index.js';
+import { parseHostConfig } from '../lib/host/confirmation.js';
+import { dingtalkTool } from '../lib/host/tool.js';
 import { createUIRpc } from '../lib/host/ui-rpc.js';
 import { parseConfig, DEFAULT_LIMITS } from '../lib/shared/config.js';
 import { createConnectionService } from '../lib/shared/service.js';
@@ -94,6 +96,49 @@ test('seat pairs before data consent and IM calls require the currently authoriz
     assert.equal((await connection.invokeFor(principal, input)).status, 'auth_required');
     assert.deepEqual(connection.identity(), principal);
     assert.equal(fake.requests.filter(r => r.path === '/v1/invoke').length, 1);
+  } finally {
+    await connection.backend.dispose();
+    await fake.close();
+    await rm(token.root, { recursive: true, force: true });
+  }
+});
+test('connector accepts opts for send, delete, permission, and jobs while retaining normal authorization', async () => {
+  const fake = await fakeConnector();
+  const token = await isolatedToken();
+  const principal = { corpId: 'test-corp', userId: 'test-user' };
+  const connection = await createRemoteConnection({ ...settingsFor(fake), seatIdentity: principal,
+    endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, DEFAULT_LIMITS);
+  try {
+    const enabled = parseHostConfig({ mode: 'connector', confirmationAllowlist: {
+      'chat message send': true, 'todo task delete': true, 'drive permission add': true,
+      'aitable base create': true, 'audit export': true, 'chat thread promote': true,
+      'doc create': false,
+    } }).confirmationAllowlist;
+    const agent = { id: 'agent', session: { id: 'session-test' } }, execution = { agent, signal: new AbortController().signal };
+    let actor = principal, prompts = 0;
+    const service = { invoke: (input, options) => connection.invokeFor(actor, input, options) };
+    const tool = dingtalkTool(service, () => ({ approval: { request: async () => { prompts++; return 'rejected'; } } }), enabled);
+    const input = (command, parameters, rest = {}) => ({ operationId: 'dws.execute', args: { command, parameters, ...rest } });
+    const calls = [
+      input('chat message send', { user: 'fixture-user', text: '合成消息' }),
+      input('todo task delete', { 'task-id': 'fixture-task' }),
+      input('drive permission add', { node: 'fixture-node', role: 'viewer' }),
+      input('aitable base create', { name: '合成表', 'template-id': 'fixture-template' }, { background: true }),
+    ];
+    assert.equal((await tool.execute(input('doc create', { name: '保持审批' }), execution)).reasonCode, 'confirmation_rejected');
+    assert.equal((await tool.execute(input('audit export', {}), execution)).reasonCode, 'host_managed_operation');
+    assert.equal((await tool.execute(input('chat thread promote', {}), execution)).reasonCode, 'command_unavailable');
+    assert.equal((await tool.execute(input('todo task delete', {}, { confirmed: true }), execution)).reasonCode, 'invalid_request');
+    actor = { ...principal, userId: 'different-user' };
+    assert.equal((await tool.execute(calls[0], execution)).reasonCode, 'identity_mismatch');
+    actor = principal;
+    assert.equal(fake.requests.filter(r => r.path === '/v1/invoke').length, 0);
+    for (const call of calls) assert.equal((await tool.execute(call, execution)).status, 'ok');
+    assert.equal(prompts, 1);
+    const noApprovalService = dingtalkTool(service, undefined, enabled);
+    assert.equal((await noApprovalService.execute(calls[0], execution)).status, 'ok');
+    assert.deepEqual(fake.requests.filter(r => r.path === '/v1/invoke').map(r => r.body),
+      [...calls, calls[0]].map(call => ({ ...call, sessionId: 'session-test', confirmed: true, expectedProfile: 'test-corp:test-user' })));
   } finally {
     await connection.backend.dispose();
     await fake.close();

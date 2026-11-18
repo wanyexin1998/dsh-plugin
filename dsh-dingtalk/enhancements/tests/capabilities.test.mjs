@@ -11,6 +11,7 @@ import { createLocalBackend } from '../lib/adapters/local/index.js';
 import { createConnectionService } from '../lib/shared/service.js';
 import { parseInvokeInput, publicInvokeResult } from '../lib/shared/validation.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
+import { parseHostConfig } from '../lib/host/confirmation.js';
 import { dingtalkTool } from '../lib/host/tool.js';
 import { fixture as officialFixture, officialFixtureSkip } from '../scripts/p0-fixture.mjs';
 
@@ -115,6 +116,36 @@ test('native approval is mandatory for writes; rejected or absent approval spawn
     const trace = await f.trace(); assert.ok(trace.some(x => x.stage === 'contact user get-self'));
     const sent = trace.find(x => x.stage === 'todo task create'); assert.ok(sent.args.includes('--yes'));
     assert.ok(!JSON.stringify(result).includes('test-private'));
+  } finally { await f.dispose(); }
+});
+
+test('local opt-in skips confirmation for writes and file commands without granting paths or identity', async () => {
+  const f = await fixture();
+  try {
+    const signal = new AbortController().signal, agent = { id: 'agent-1', session: { id: 'session-1' } };
+    const execution = { agent, signal };
+    const input = (command, parameters) => ({ operationId: 'dws.execute', args: { command, parameters } });
+    const document = input('doc create', { name: '合成文档', content: '正文' });
+    let prompts = 0;
+    const host = () => ({ workingDirectory: { get: () => f.root },
+      approval: { request: async () => { prompts++; return 'rejected'; } } });
+    const parse = confirmationAllowlist => parseHostConfig({ confirmationAllowlist }).confirmationAllowlist;
+    for (const disabled of [undefined, parse({ 'doc create': false })]) {
+      assert.equal((await dingtalkTool(f.service, host, disabled).execute(document, execution)).reasonCode, 'confirmation_rejected');
+    }
+    const tool = dingtalkTool(f.service, host, parse({ 'doc create': true, 'aicard lint': true, 'todo task delete': true }));
+    assert.equal((await tool.execute(write, execution)).reasonCode, 'confirmation_rejected');
+    assert.equal((await tool.execute(input('aicard lint', { file: '../private.json' }), execution)).reasonCode, 'file_access_denied');
+    assert.equal((await f.trace()).length, 0);
+    await writeFile(join(f.root, 'card.json'), '{}');
+    assert.equal((await tool.execute(input('aicard lint', { file: 'card.json' }), execution)).status, 'ok');
+    assert.equal((await tool.execute(document, execution)).status, 'ok');
+    assert.equal((await tool.execute(input('todo task delete', { 'task-id': 'fixture-task' }), execution)).status, 'ok');
+    assert.equal(prompts, 3);
+    const trace = await f.trace();
+    assert.equal(trace.filter(x => x.stage === 'doc create').length, 1);
+    assert.equal(trace.filter(x => x.stage === 'todo task delete').length, 1);
+    assert.ok(trace.some(x => x.stage === 'contact user get-self'));
   } finally { await f.dispose(); }
 });
 

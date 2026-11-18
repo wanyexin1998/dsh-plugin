@@ -687,13 +687,6 @@ async function startAccount(
           attachment: {
             signal: (agent) => workspacePolicy.signal(agent),
             send: (requestId, media, signal) => relay.sendAttachment(requestId, media, signal),
-            approve: (request) => {
-              const host = request.agent.ctx as HostAgentContext & { get?(name: string): unknown }
-              const approval = host.get?.('approval') as
-                { request(input: typeof request): Promise<import('./host.js').HostApprovalOutcome> } | undefined
-              return approval?.request(request) ?? Promise.resolve('unavailable')
-            },
-            approvalTimeoutMs: config.approvalTimeoutMs,
           },
         }
       : {}),

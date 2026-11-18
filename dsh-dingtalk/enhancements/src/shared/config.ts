@@ -15,14 +15,16 @@ export function parseLimits(value: unknown = {}): ExecutionLimits {
   }
   return result;
 }
-export interface PluginConfig { mode: BackendMode; execution: ExecutionLimits }
+export interface PluginConfig { mode: BackendMode; execution: ExecutionLimits; confirmationAllowlist?: unknown }
 export function parseConfig(value: unknown = {}): PluginConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)
-    || Object.keys(value).some(key => key !== 'mode' && key !== 'execution')) throw new Error('dsh-dingtalk: expected config { mode, execution? }');
+    || Object.keys(value).some(key => !['mode', 'execution', 'confirmationAllowlist'].includes(key)))
+    throw new Error('dsh-dingtalk: expected config { mode, execution?, confirmationAllowlist? }');
   const configuredMode = (value as Record<string, unknown>).mode;
   const mode = configuredMode === undefined ? 'local' : configuredMode;
   if (mode !== 'local' && mode !== 'connector' && mode !== 'cellgent') throw new Error('dsh-dingtalk: mode must be local, connector or cellgent');
   // Cellgent stays rejected: this delivery ships a neutral standalone Connector, not a Cellgent adapter.
   if (mode === 'cellgent') throw new Error('dsh-dingtalk: cellgent mode is deferred; use connector mode with the standalone Connector');
-  return { mode, execution: parseLimits((value as Record<string, unknown>).execution) };
+  const config = value as Record<string, unknown>;
+  return { mode, execution: parseLimits(config.execution), confirmationAllowlist: config.confirmationAllowlist };
 }

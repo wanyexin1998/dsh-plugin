@@ -1,6 +1,6 @@
 > 当前定制版在 `dsh-plugin/dsh-dingtalk` 维护；独立 fork 仅跟踪官方。不使用 GitHub Actions，不发布 NPM。构建及安装方式见 [仓库与维护](docs/REPOSITORY.md)。
 
-> Web 能力扩展：已接入锁定版 DWS 的完整功能目录与通用调用，使用与限制见 [能力说明](docs/DWS-CAPABILITIES.md)。
+> Web 能力扩展：已接入锁定版 DWS 的完整功能目录与通用调用，使用与限制见 [能力说明](docs/DWS-CAPABILITIES.md)，审批配置见 [免确认白名单](docs/DWS-CAPABILITIES.md#免确认白名单)。
 
 > 第二阶段：本人 Web、私聊和获准内部群聊共用授权，IM 工具逐次核对企业和用户。三个入口查询、断开同步及重连恢复已通过真实验收；范围与限制见 [阶段说明](docs/PHASE2.md)。下方保留的官方功能说明不代表定制版已开放全部 IM 工具。
 
@@ -29,7 +29,7 @@
 - **发送状态**：工具返回 `accepted` 只表示钉钉接口接受请求，不能作为客户端送达或已读证明。上传失败或发送结果未知时不会自动重试。
 - **本地文件**：接收内容不会自动解压或执行，也不会自动清理；不再需要时可自行删除 inbox 内的附件目录。
 
-启用员工工作区工具的企业机器人在私聊中使用 `send_file` 回传附件，须由该员工确认，且只发回原私聊。安装与验收见[企业机器人私聊回传附件](docs/WORKSPACE-TOOL-POLICY.md#企业机器人私聊回传附件)。
+启用员工工作区工具的企业机器人在私聊中使用 `send_file` 回传附件，无需再次确认，只发回原私聊。安装与验收见[企业机器人私聊回传附件](docs/WORKSPACE-TOOL-POLICY.md#企业机器人私聊回传附件)。
 
 接口与格式限制见钉钉官方文档：[接收文件下载](https://open.dingtalk.com/document/orgapp/download-the-file-content-of-the-robot-receiving-message.md)、[机器人消息类型](https://open.dingtalk.com/document/orgapp/types-of-messages-sent-by-robots.md)、[上传媒体文件](https://open.dingtalk.com/document/orgapp/upload-media-files.md)。
 

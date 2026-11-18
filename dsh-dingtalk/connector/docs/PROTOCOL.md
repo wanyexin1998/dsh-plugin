@@ -26,7 +26,7 @@
 
 约束：
 
-- `invoke` 只接受本次交付的服务器操作：`dws.catalog`、`dws.describe`、`dws.execute`、`dws.jobs`、`identity.getSelf`、`calendar.listEvents`、`docs.search`。其他 operationId 返回 `command_unavailable`（HTTP 403）。`dws.execute` 执行锁定目录里的官方命令，包括读、写、文件和后台任务；`dws.jobs` 列出、读取或停止这些任务。写操作、文件操作和后台任务要先由 Host 完成原生确认，再带 `confirmed: true`；模型参数里不能带 `confirmed` 或 `yes`。`sessionId` 只标识本调用方的后台任务属主。参数复用插件的 `parseInvokeInput`。请求体和 `args` 不能带 `userId`、`corpId`、`profile`、`token`、`code`、`cookie`、`authorization`、`argv`、`path`、`url`、`home`、`keychain`、`configDirectory`、`binaryPath`；调用方是谁由 socket 绑定决定。
+- `invoke` 只接受本次交付的服务器操作：`dws.catalog`、`dws.describe`、`dws.execute`、`dws.jobs`、`identity.getSelf`、`calendar.listEvents`、`docs.search`。其他 operationId 返回 `command_unavailable`（HTTP 403）。`dws.execute` 执行锁定目录里的官方命令，包括读、写、文件和后台任务；`dws.jobs` 列出、读取或停止这些任务。需要审批的调用由 Host 核对免确认配置或取得原生确认，再带 `confirmed: true`；模型参数里不能带 `confirmed` 或 `yes`。`sessionId` 只标识本调用方的后台任务属主。参数复用插件的 `parseInvokeInput`。请求体和 `args` 不能带 `userId`、`corpId`、`profile`、`token`、`code`、`cookie`、`authorization`、`argv`、`path`、`url`、`home`、`keychain`、`configDirectory`、`binaryPath`；调用方是谁由 socket 绑定决定。
 - `status` 返回调用方本人的绑定身份，仅供 Host 与本调用方使用；`createConnectionService` 的白名单投影不会把 `corpId/userId` 投影给 Client 或模型。
 - `authorization/begin` 的 `origin` 必须精确命中 Connector 配置的受信 Origin 列表，`returnPath` 只能同源绝对路径，且不得携带 token/code/secret/state 参数。
 - `identity` 只在 Connector 判定为已连接（或仅缺在线业务核验）时返回，否则 `null`。

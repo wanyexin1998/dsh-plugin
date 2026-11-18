@@ -6,7 +6,29 @@
 
 安装后在设置中连接钉钉，然后直接用自然语言请求，例如“查看我的待办”“搜索项目文档”“创建明天下午的会议”“读取这张多维表格”。无需填写 JSON 或逐项启用技能。新会话可发现 1 个通用技能与 33 个产品技能；产品技能按需读取目录与参数，不把全部命令正文塞入上下文。
 
-查询返回普通对话结果。写入、删除、文件操作和后台执行通过 DSH 原生确认；拒绝确认不会执行。授权仍在回复末尾的原位组件中处理。
+查询返回普通对话结果。默认情况下，写入、删除、文件操作和后台执行通过 DSH 原生确认；拒绝确认不会执行。授权仍在回复末尾的原位组件中处理。
+
+## 免确认白名单
+
+在 `@wanyexin1998/dsh-dingtalk/web` 的现有 `config` 内添加 `confirmationAllowlist`，保留原有 `mode` 等配置。它只影响机器人和 Web 会话里的 `dingtalk_call`。`true` 跳过该命令的 Host 确认，包含发消息、删除、改权限、文件和后台操作。缺省或 `false` 使用原审批设置。
+
+```yaml
+confirmationAllowlist:
+  'doc create': true # 创建在线文档
+  'chat message send': true # 发送消息
+  'todo task delete': true # 删除待办
+  'drive permission add': true # 添加协作成员权限
+```
+
+通配符、未知命令和非布尔值会使 Host 配置报错。钉钉账号、企业身份、资源权限、命令参数和本地工作区限制不变；上游标记不可用或由 Host 管理的入口仍不可执行。机器人原生 `send_file` 独立于此名单；未更改工作区和原私聊的限制。免确认调用保留工具调用和结果记录。
+
+在源码目录生成当前锁定目录的完整 YAML 清单。每条都有中文注释，所有命令均为未注释的 `true`。复制整份清单即可让当前版本下可执行的 DWS 命令免确认。升级 DWS 后重新生成清单，以覆盖新命令并移除已删除的命令。
+
+```sh
+cd dsh-dingtalk
+pnpm run build
+pnpm --silent run dws:confirmation-template > dws-confirmation.yaml
+```
 
 ## 覆盖与限制
 

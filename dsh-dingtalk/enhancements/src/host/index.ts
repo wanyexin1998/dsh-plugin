@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { createConnectionService } from '../shared/service.js';
 import type { DingtalkConnectionService } from '../shared/models.js';
-import { parseConfig } from '../shared/config.js';
+import { parseHostConfig } from './confirmation.js';
 import { loadLocalSettings } from '../adapters/local/settings.js';
 import { loadPrivateSettings } from './private-settings.js';
 import { createManagedConnection } from './managed-connection.js';
@@ -23,7 +23,7 @@ declare module '@deepseek-ai/cordis' {
 export const name = 'dsh-dingtalk';
 export const provide = ['dingtalkConnection', 'dingtalkImTools'];
 export async function apply(ctx: Context, config: unknown): Promise<void> {
-  const parsed = parseConfig(config);
+  const parsed = parseHostConfig(config);
   const profile = ctx.get('profileContext') as { dir?: string } | undefined;
   // The backend is selected by explicit config. `connector` talks to the standalone server-side
   // Connector over its private channel; `local` keeps the existing single-user desktop behavior.
@@ -41,13 +41,13 @@ export async function apply(ctx: Context, config: unknown): Promise<void> {
       const principal = identity();
       return principal ? managed.invokeFor(principal, input, options)
         : Promise.resolve({ status: 'denied' as const, reasonCode: 'identity_mismatch' as const, retryable: false });
-    } }, host),
+    } }, host, parsed.confirmationAllowlist),
   });
   ctx.inject(['connection', 'webServer'], scope => {
     const connection = (scope as unknown as { connection: HostConnection }).connection;
     scope.effect(() => createUIRpc(connection, managed, owner.service, () => scope.get('dingtalkRelay') as import('./ui-rpc.js').RelayControl | undefined));
   });
-  ctx.inject(['tools'], scope => { (scope as unknown as { tools: { register(tool: ReturnType<typeof dingtalkTool>): unknown } }).tools.register(dingtalkTool(owner.service, () => ({ approval: scope.get('approval'), workingDirectory: scope.get('workingDirectory') } as ToolHost))); });
+  ctx.inject(['tools'], scope => { (scope as unknown as { tools: { register(tool: ReturnType<typeof dingtalkTool>): unknown } }).tools.register(dingtalkTool(owner.service, () => ({ approval: scope.get('approval'), workingDirectory: scope.get('workingDirectory') } as ToolHost), parsed.confirmationAllowlist)); });
   ctx.inject(['skills'], async scope => {
     const guide = await readFile(new URL('../../skills/dingtalk-workspace/SKILL.md', import.meta.url), 'utf8');
     const registry = (scope as unknown as { skills: { register(skill: object): unknown } }).skills;
