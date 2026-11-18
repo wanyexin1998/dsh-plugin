@@ -20,7 +20,7 @@ interface EnterpriseAttachment {
 }
 
 // Read through the verified descriptor and send only the copied bytes.
-async function snapshot(root: string, file: string, signal: AbortSignal): Promise<Buffer> {
+export async function snapshot(root: string, file: string, signal: AbortSignal): Promise<Buffer> {
   const denied = () => new Error('file_outside_workspace: 只允许发送当前工作区内的普通文件，不支持链接。')
   const select = async () => {
     if ((await realpath(root)) !== root) throw denied()

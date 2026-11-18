@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import { messageIdentity, sameIdentity, type DingTalkIdentity } from '../identity.js'
 import type { InboundMessage, InboundCardCallback } from '../stream.js'
-import { attachmentMethods, Peer } from './protocol.js'
+import { attachmentMethods, Peer, scheduledReminderMethod } from './protocol.js'
 import { readState, saveState } from './state.js'
 import { GatewayLogin, type LoginOptions } from './login.js'
 
@@ -39,6 +39,7 @@ export interface GatewayOptions {
   allowUnclaimedPersonalLogin?: boolean
   notice(message: InboundMessage, text: string): Promise<unknown>
   operation(message: InboundMessage, method: string, data: any, signal?: AbortSignal): Promise<unknown>
+  scheduledReminder?(identity: DingTalkIdentity, text: string, signal: AbortSignal): Promise<unknown>
 }
 
 /** One gateway instance owns exactly one robot application. */
@@ -84,6 +85,7 @@ export class Gateway {
       let binding: Binding | undefined
       let initialized = false
       let sendingAttachment = false
+      let sendingReminder = false
       const connection = new AbortController()
       const deadline = setTimeout(() => {
         if (!initialized) socket.close(1008)
@@ -140,6 +142,26 @@ export class Gateway {
           return true
         }
         if (method === 'diagnostics') return options.diagnostics?.() ?? {}
+        if (method === scheduledReminderMethod) {
+          if (
+            !options.scheduledReminder ||
+            sendingReminder ||
+            binding.identity.corpId !== options.allowedCorpId ||
+            !data ||
+            Object.keys(data).length !== 2 ||
+            data.bindingId !== binding.device ||
+            typeof data.text !== 'string' ||
+            !data.text.trim() ||
+            Buffer.byteLength(data.text) > 2048
+          )
+            throw new Error('invalid_scheduled_reminder')
+          sendingReminder = true
+          try {
+            return await options.scheduledReminder(binding.identity, data.text, connection.signal)
+          } finally {
+            sendingReminder = false
+          }
+        }
         if (method !== 'operation' || typeof data?.requestId !== 'string') throw new Error('invalid_method')
         const route = this.requests.get(data.requestId)
         if (!route || route.peer !== peer || route.expires < Date.now()) throw new Error('invalid_request')

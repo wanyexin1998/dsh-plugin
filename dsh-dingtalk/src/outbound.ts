@@ -137,6 +137,42 @@ export class Outbound {
     )
   }
 
+  /** Push an approved reminder to the employee bound to this robot application. */
+  async sendScheduledReminder(userId: string, content: string, signal: AbortSignal): Promise<MediaReceipt> {
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(12_000)])
+    const token = await this.accessToken(bounded)
+    bounded.throwIfAborted()
+    let result: {
+      processQueryKey?: string
+      code?: string
+      invalidStaffIdList?: string[]
+      flowControlledStaffIdList?: string[]
+    }
+    try {
+      const response = await fetch('https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': token },
+        body: JSON.stringify({
+          robotCode: this.credentials.clientId,
+          userIds: [userId],
+          msgKey: 'sampleText',
+          msgParam: JSON.stringify({ content }),
+        }),
+        signal: bounded,
+        redirect: 'error',
+      })
+      if (!response.ok) throw new DeliveryOutcomeUnknown('scheduled_send_unconfirmed')
+      result = await response.json()
+    } catch {
+      throw new DeliveryOutcomeUnknown('scheduled_send_unconfirmed')
+    }
+    if (result?.invalidStaffIdList?.length || result?.flowControlledStaffIdList?.length)
+      throw new Error('scheduled_recipient_rejected')
+    if (!result || result.code || typeof result.processQueryKey !== 'string' || !result.processQueryKey)
+      throw new DeliveryOutcomeUnknown('scheduled_receipt_missing')
+    return { status: 'accepted', processQueryKey: result.processQueryKey }
+  }
+
   /** 应用机器人原会话回发；API 接受不等于客户端送达，不自动重试未知结果。 */
   async sendMedia(target: MediaTarget, media: OutboundMedia, signal?: AbortSignal): Promise<MediaReceipt> {
     const extension = path.extname(media.name).slice(1).toLowerCase()

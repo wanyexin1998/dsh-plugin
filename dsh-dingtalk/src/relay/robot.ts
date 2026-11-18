@@ -171,6 +171,7 @@ export async function startRobotGateway(config: RobotGatewayConfig, deferStream 
     allowUnclaimedPersonalLogin: config.allowUnclaimedPersonalLogin,
     notice: (msg, text) => outbound.sendText(msg.sessionWebhook, text),
     operation,
+    scheduledReminder: (identity, text, signal) => outbound.sendScheduledReminder(identity.userId, text, signal),
     diagnostics: () => diagnostics.snapshot(),
   })
   let port: number

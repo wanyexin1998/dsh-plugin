@@ -6,6 +6,12 @@ import { ImTools, type ImToolFactory } from './im-tools.js'
 import { WorkspaceToolPolicy, type WorkspaceAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
 import { EmployeeWorkspace, cellgentWorkspaceRoots, installEmployeeWorkspace } from './employee-workspace.js'
 import { EmployeeChannelTools, requestedPlan, visualizationOrigin } from './employee-channel-tools.js'
+import {
+  EmployeeSchedules,
+  scheduledTaskCommand,
+  type HostSchedule,
+  type HostScheduleCommands,
+} from './scheduled-tasks.js'
 import type { InboundMessage } from './stream.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
@@ -516,6 +522,50 @@ async function startAccount(
       : enterpriseRoot && relay instanceof RobotConnection
         ? relay.enterpriseAuthority()
         : undefined
+  let scheduled: EmployeeSchedules | undefined
+  let removeScheduledProvider: (() => void) | undefined
+  const refreshScheduledProvider = () => {
+    if (scheduled && workspaceAuthority()) {
+      removeScheduledProvider ??= scheduled.install()
+    } else {
+      removeScheduledProvider?.()
+      removeScheduledProvider = undefined
+    }
+  }
+  if (config.scheduledTasks && !personal && relay instanceof RobotConnection && sharedRoots && employeeWorkspace) {
+    ctx.inject(['schedule', 'commands'], (host) => {
+      const schedule = host.get('schedule') as HostSchedule | undefined
+      const commands = host.get('commands') as HostScheduleCommands | undefined
+      if (!schedule || !commands || typeof schedule.registerManagedDelivery !== 'function') {
+        log('scheduled tasks unavailable: compatible Host Schedule and commands required')
+        return
+      }
+      const manager = new EmployeeSchedules(
+        schedule,
+        employeeWorkspace,
+        stateDir,
+        () => relay.enterpriseAuthority(),
+        (binding, text) => relay.sendScheduledReminder(binding, text),
+        process.env.DSH_PRIMARY_RUNTIME &&
+          path.join(process.env.DSH_PRIMARY_RUNTIME, 'dependencies', 'python', 'bin', 'python3'),
+      )
+      host.effect(() =>
+        commands.register({
+          name: 'dt-task',
+          description: '管理本人钉钉私聊提醒和工作区定时报表',
+          input: { hint: 'list、remind、report、pause、resume、move 或 delete' },
+          recordInput: false,
+          handler: ({ agent, rawInput, signal }) => manager.command(rawInput, async () => agent, signal),
+        }),
+      )
+      scheduled = manager
+      refreshScheduledProvider()
+      host.effect(() => () => {
+        if (scheduled === manager) scheduled = undefined
+        refreshScheduledProvider()
+      })
+    })
+  }
   const channelIdentity = () =>
     personal ? personal.authority()?.identity : (ctx.get('dingtalkImTools') as ImToolFactory).identity?.()
   const incomingAuthority = new WeakMap<InboundMessage, WorkspaceAuthority>()
@@ -984,6 +1034,7 @@ async function startAccount(
     },
     onStatus: (status) => {
       streamStatus = status
+      refreshScheduledProvider()
       fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
       const runtimeFile = path.join(stateDir, 'runtime.json')
       fs.writeFileSync(
@@ -1045,6 +1096,30 @@ async function startAccount(
       await accessReplyQueues.get(msg.conversationId)?.catch(() => undefined)
       if (!channelOwns(msg)) return
       log(`inbound message accepted (${msg.conversationType})`)
+
+      if (scheduled && workspacePolicy && scheduledTaskCommand.test(msg.text)) {
+        if (msg.conversationType !== 'direct') {
+          await replySink.sendText(msg, '请在本人企业机器人私聊中管理定时任务。')
+          return
+        }
+        const manager = scheduled
+        const signal = AbortSignal.any([incomingAuthority.get(msg)!.signal, incomingSelection.get(msg)!])
+        const outcome = await manager.command(
+          msg.text.slice('/dt-task'.length),
+          async () => {
+            const admission = workspacePolicy.capture(
+              msg,
+              scopeKey,
+              workspaceOverrides.get(scopeKey) ?? cwd,
+              incomingAuthority.get(msg),
+            )
+            return bridge.forCommand(scopeKey, admission)
+          },
+          signal,
+        )
+        if (channelOwns(msg)) await replySink.sendText(msg, outcome.text)
+        return
+      }
 
       // Any new bubble below a live streaming card breaks reading order —
       // mark the turn so its next frame rolls over to a fresh card at the bottom.
@@ -1196,6 +1271,7 @@ async function startAccount(
     return async () => {
       workspacePolicy?.close()
       await source.stop()
+      refreshScheduledProvider()
       await files.close()
       await bridge.close()
       feedback.close()
