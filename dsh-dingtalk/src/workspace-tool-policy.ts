@@ -4,6 +4,7 @@ import type { BridgeAuthorization } from './bridge.js'
 import type { HostAgent, HostAgentContext } from './host.js'
 import { messageIdentity, sameIdentity, type DingTalkIdentity } from './identity.js'
 import type { JsonStore } from './jsonstore.js'
+import type { EmployeeWorkspace } from './employee-workspace.js'
 
 /** Live profile pairing, restricted to the configured employee for enterprise channels. */
 export interface WorkspaceAuthority {
@@ -59,6 +60,7 @@ export class WorkspaceToolPolicy {
       authority(): WorkspaceAuthority | undefined
       /** Enterprise session directories must stay inside this deployment-owned root. */
       root?: string
+      employeeWorkspace?: EmployeeWorkspace
       selectedWorkspace(scopeKey: string): string
       bindings: Pick<JsonStore<string>, 'get'>
       owners: Pick<JsonStore<WorkspaceSessionOwner>, 'get' | 'set'>
@@ -69,6 +71,7 @@ export class WorkspaceToolPolicy {
 
   /** Validate a selected directory, including symlink targets and root replacement. */
   checkWorkspace(selected: string): string {
+    if (this.options.employeeWorkspace) return this.options.employeeWorkspace.directory(selected)
     const cwd = realpathSync(selected)
     if (this.root !== undefined) {
       if (realpathSync(this.options.root!) !== this.root) throw new Error('im_workspace_root_changed')

@@ -1,3 +1,4 @@
+import { toolSurface } from './helpers/tool-surface.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
@@ -39,6 +40,7 @@ async function fixture(t) {
         if (name === 'workingDirectory') return { get: (session) => session.header.cwd }
       },
       tools: {
+        ...toolSurface(),
         register(tool) {
           tools.set(tool.name, tool)
           return () => tools.delete(tool.name)

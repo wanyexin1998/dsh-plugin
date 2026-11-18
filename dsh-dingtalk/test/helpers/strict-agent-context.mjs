@@ -1,3 +1,4 @@
+import { toolSurface } from './tool-surface.mjs'
 import { Context } from '@deepseek-ai/cordis'
 
 /** 真正启用 Cordis inject 检查；不存在 agent 服务，也不伪造自有 agent 属性。 */
@@ -7,6 +8,7 @@ export function strictAgentContext(register = () => () => {}) {
   // These component fixtures call definitions directly; runtime denial is
   // separately exercised against the real ToolRuntime by verify:boundary.
   root.provide('tools', {
+    ...toolSurface(),
     register,
     guard(fn) {
       guards.push(fn)

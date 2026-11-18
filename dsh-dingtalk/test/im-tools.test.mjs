@@ -1,8 +1,9 @@
+import { toolSurface } from './helpers/tool-surface.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ImTools } from '../lib/im-tools.js'
 
-function fixture(relay, workspace) {
+function fixture(relay, workspace, inherited, attachment) {
   const guards = [],
     definitions = [],
     wrappers = []
@@ -13,6 +14,7 @@ function fixture(relay, workspace) {
       return () => wrappers.pop()
     },
     tools: {
+      ...toolSurface(inherited),
       register(tool) {
         definitions.push(tool)
         return () => {}
@@ -34,10 +36,49 @@ function fixture(relay, workspace) {
       },
     }),
     workspace,
+    attachment,
   )
   const agent = { id: 'session', ctx }
   return { ctx, agent, im, guards, definitions, wrappers }
 }
+
+test('DingTalk advertises only reviewed inherited tools available to the bound employee', () => {
+  const owner = { corpId: 'corp', userId: 'employee' }
+  const controller = new AbortController()
+  const query = 'mcp__doris__exec_query'
+  const names = ['load_workspace_dependencies', 'skill', 'bash', 'present', 'visualize', 'subagent', query]
+  const relay = {
+    status: () => ({ mode: 'enterprise' }),
+    enterpriseQueries: () => (name) => (name === query ? { identity: owner, signal: controller.signal } : undefined),
+  }
+  const message = {
+    senderCorpId: 'corp',
+    senderStaffId: 'employee',
+    conversationType: 'direct',
+    conversationId: 'chat',
+  }
+  let allowed = true
+  const f = fixture(relay, { allowed: () => allowed }, names, () => false)
+  const advertised = () => f.ctx.tools.schemas().map(({ name }) => name)
+  f.im.install(f.ctx, f.agent)
+  assert.deepEqual(advertised(), [])
+  f.im.bind(f.ctx, message, f.agent)
+  assert.deepEqual(advertised(), ['load_workspace_dependencies', 'skill', 'bash', query])
+  for (const name of names) {
+    assert.equal(f.guards[0]({ name, agent: f.agent }) === undefined, advertised().includes(name), name)
+  }
+  controller.abort()
+  assert.match(f.guards[0]({ name: query, agent: f.agent }), /im_enterprise_query_unavailable/)
+  f.im.bind(f.ctx, message, f.agent)
+  assert.ok(!advertised().includes(query))
+  allowed = false
+  assert.match(f.guards[0]({ name: 'load_workspace_dependencies', agent: f.agent }), /im_channel_authorization_changed/)
+  f.im.bind(f.ctx, message, f.agent)
+  assert.deepEqual(advertised(), [])
+  const personal = fixture(undefined, { allowed: () => true }, names)
+  personal.im.bind(personal.ctx, message, personal.agent)
+  assert.ok(!personal.ctx.tools.schemas().some(({ name }) => name === 'load_workspace_dependencies'))
+})
 
 test('enterprise workspace tools preserve the separate reviewed query grant', async () => {
   const query = 'mcp__doris__exec_query'
@@ -154,6 +195,7 @@ test('a committed workspace policy still denies the unverified PTC entry while a
   const guards = []
   const ctx = {
     tools: {
+      ...toolSurface(),
       register: () => () => {},
       guard(fn) {
         guards.push(fn)

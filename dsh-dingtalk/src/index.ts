@@ -4,6 +4,8 @@ import { RelayClient } from './relay/client.js'
 import { messageIdentity, sameIdentity } from './identity.js'
 import { ImTools, type ImToolFactory } from './im-tools.js'
 import { WorkspaceToolPolicy, type WorkspaceAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
+import { EmployeeWorkspace, cellgentWorkspaceRoots, installEmployeeWorkspace } from './employee-workspace.js'
+import { EmployeeChannelTools, requestedPlan, visualizationOrigin } from './employee-channel-tools.js'
 import type { InboundMessage } from './stream.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
@@ -499,6 +501,15 @@ async function startAccount(
   const stateDir = accountStateDir(relay instanceof RobotConnection ? relay.directory : resolveStateDir(), account.id)
   const personal = relay instanceof RobotConnection && relay.status().mode === 'personal' ? relay : undefined
   const enterpriseRoot = !personal && relay instanceof RobotConnection ? relay.workspaceRoot() : undefined
+  const employee = enterpriseRoot && relay instanceof RobotConnection ? relay.workspaceEmployee() : undefined
+  const sharedRoots = enterpriseRoot && employee ? cellgentWorkspaceRoots(enterpriseRoot, employee) : undefined
+  const employeeWorkspace = enterpriseRoot ? new EmployeeWorkspace(sharedRoots?.volume ?? [enterpriseRoot]) : undefined
+  const authorizedSelection = sharedRoots ? new EmployeeWorkspace(sharedRoots.selection) : employeeWorkspace
+  if (sharedRoots && employeeWorkspace) {
+    ctx.inject(['tools'], (host) => {
+      installEmployeeWorkspace(host, employeeWorkspace)
+    })
+  }
   const workspaceAuthority = () =>
     personal
       ? personal.authority()
@@ -672,7 +683,7 @@ async function startAccount(
     personal || enterpriseRoot
       ? new WorkspaceToolPolicy({
           authority: workspaceAuthority,
-          root: enterpriseRoot,
+          employeeWorkspace: authorizedSelection,
           selectedWorkspace: (key) => workspaceOverrides.get(key) ?? cwd,
           bindings,
           owners: new JsonStore<WorkspaceSessionOwner>(path.join(stateDir, 'workspace-session-owners.json'), log),
@@ -707,15 +718,28 @@ async function startAccount(
     interactionCards,
     log,
   })
+  const employeeTools =
+    employeeWorkspace && workspacePolicy
+      ? new EmployeeChannelTools(
+          employeeWorkspace,
+          sharedRoots ? visualizationOrigin() : undefined,
+          (agent, message) =>
+            message.conversationType === 'direct' &&
+            files.canSendAttachment(agent) &&
+            workspacePolicy.allowed(agent) &&
+            channelOwns(message),
+          (directory) => workspacePolicy.checkWorkspace(directory),
+        )
+      : undefined
   const imTools = new ImTools(
     () => ctx.get('dingtalkImTools') as ImToolFactory | undefined,
     workspacePolicy,
     enterpriseRoot ? (agent) => files.canSendAttachment(agent) : undefined,
+    employeeTools,
   )
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
     questions.install(agentCtx, agent)
-    files.install(agentCtx, agent)
   }
   const bridge = new Bridge(agents, renderer, bindings, {
     exclusiveOwnership: true,
@@ -778,8 +802,6 @@ async function startAccount(
       // Recheck the channel-owned Agent on every message. Bridge never borrows
       // a live Web Agent; restored/new contexts still need the scoped boundary.
       installBotTools(agent.ctx, agent)
-      imTools.bind(agent.ctx, msg, agent)
-      questions.bindSession(agent.id, msg)
       const requestId =
         msg.conversationType === 'direct' &&
         enterpriseRoot &&
@@ -787,8 +809,39 @@ async function startAccount(
         relay.enterpriseWorkspace(msg)
           ? msg.sessionWebhook
           : undefined
-      files.bindSession(agent, msg, sessionCwd, requestId)
+      const offerAttachment = imTools.bind(agent.ctx, msg, agent, () => {
+        files.bindSession(agent, msg, sessionCwd, requestId)
+        employeeTools?.bind(agent, msg)
+      })
+      questions.bindSession(agent.id, msg)
+      files.install(agent.ctx, agent, offerAttachment)
       void workspace.attach(agent.id, sessionCwd)
+    },
+    prepareTurn: async (agent, msg) => {
+      const task = employeeTools && requestedPlan(msg.text)
+      if (!task || !workspacePolicy) return
+      await employeeTools.enterPlan(agent, workspacePolicy.signal(agent))
+      return task
+    },
+    onTurnSettled: async (agent, msg, key, completed) => {
+      const turn = employeeTools?.settle(agent, msg, completed)
+      if (!turn || !workspacePolicy) return
+      try {
+        if (turn.charts.size && workspacePolicy.allowed(agent) && channelOwns(msg)) {
+          const links = [...turn.charts].map((link) => `[打开 Cellgent 图表](${link})`)
+          await replySink.sendMarkdown(msg, config.markdownTitle, links.join('\n\n'))
+        }
+        if (turn.directory && workspacePolicy.allowed(agent) && channelOwns(msg)) {
+          commands.selectWorkspace(msg, key, turn.directory)
+          await replySink.sendMarkdown(
+            msg,
+            config.markdownTitle,
+            `已切换工作目录为 \`${turn.directory}\`。下条消息将在该目录开启新会话。`,
+          )
+        }
+      } catch (error) {
+        log(`workspace result delivery failed (${error instanceof Error ? error.message : 'unknown'})`)
+      }
     },
     compose: async () => {
       // Optional service: a deployment without a roster runs preset-less
@@ -1023,8 +1076,13 @@ async function startAccount(
       // matching answer before commands/queue to avoid a circular wait.
       if (questions.handleInbound(msg)) return
 
-      // Commands and queue choices answer immediately, outside the queue.
-      if (await commands.handle(msg, scopeKey)) return
+      const plan = employeeTools && requestedPlan(msg.text)
+      if (plan !== undefined && (!plan || plan === 'off' || msg.conversationType !== 'direct')) {
+        await replySink.sendMarkdown(msg, config.markdownTitle, '请在企业机器人原私聊发送 `/plan <任务内容>`。')
+        return
+      }
+      // The agent-owned plan command waits for the active turn like a normal prompt.
+      if (plan === undefined && (await commands.handle(msg, scopeKey))) return
 
       // Capture the original channel lease and workspace before queueing. A
       // later re-pair or /cd cannot grant an old bubble a new execution context.

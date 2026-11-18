@@ -100,6 +100,13 @@ export class RobotConnection extends RelayClient {
   workspaceRoot(): string | undefined {
     return this.problem ? undefined : this.enterprise?.workspaceTools?.root
   }
+  /** Deployment identity used to match the employee's Web seat. */
+  workspaceEmployee(): DingTalkIdentity | undefined {
+    const config = this.enterprise
+    return !this.problem && config?.workspaceTools
+      ? { corpId: config.corpId, userId: config.workspaceTools.userId }
+      : undefined
+  }
   /** Live authority for the deployment's exact employee and this receiver profile. */
   enterpriseAuthority(): WorkspaceAuthority | undefined {
     const config = this.enterprise

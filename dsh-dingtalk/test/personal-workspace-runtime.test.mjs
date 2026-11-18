@@ -1,3 +1,4 @@
+import { toolSurface } from './helpers/tool-surface.mjs'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, link, symlink, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
@@ -49,6 +50,10 @@ class RobotConnection extends RelayClient {
   workspaceRoot() {
     return this.enterprise?.workspaceTools?.root
   }
+  workspaceEmployee() {
+    if (this.enterprise?.workspaceTools)
+      return { corpId: this.enterprise.corpId, userId: this.enterprise.workspaceTools.userId }
+  }
   enterpriseAuthority() {
     return this.enterprise?.workspaceTools?.userId === this.current?.identity.userId &&
       this.enterprise.corpId === this.current.identity.corpId
@@ -95,8 +100,8 @@ class Renderer {
   onInbound(id, msg) {
     return msg.text === 'hold' ? new Promise((resolve) => this.pending.set(id, resolve)) : Promise.resolve()
   }
-  release(id) {
-    this.pending.get(id)?.()
+  release(id, completed = false) {
+    this.pending.get(id)?.(completed)
     this.pending.delete(id)
   }
   releaseAll() {
@@ -197,8 +202,31 @@ async function fixture(
     const tools = new Map(),
       guards = [],
       listeners = new Map()
+    const inherited = toolSurface([
+      'load_workspace_dependencies',
+      'skill',
+      'bash',
+      'read',
+      'write',
+      'edit',
+      'present',
+      'visualize',
+      'working_directory',
+      'todo_write',
+      'get_goal',
+      'exit_plan_mode',
+      'subagent',
+    ])
     const agentCtx = {
       tools: {
+        ...inherited,
+        schemas: () =>
+          [
+            ...inherited.schemas(),
+            ...[...tools.values()].filter(({ name }) =>
+              ['dingtalk_call', 'ask_user_question', 'send_file', 'send_image'].includes(name),
+            ),
+          ].map(({ name }) => ({ name })),
         register(definition) {
           tools.set(definition.name, definition)
           return () => tools.delete(definition.name)
@@ -222,6 +250,16 @@ async function fixture(
               return listeners.get('approval/request')[0](request)
             },
           }
+        if (name === 'commands')
+          return {
+            async execute(agent, line, attachments, signal) {
+              assert.equal(line, '/plan')
+              assert.deepEqual(attachments, [])
+              signal.throwIfAborted()
+              agent.planMode = true
+              return { result: { kind: 'success' } }
+            },
+          }
         if (name === 'workingDirectory' && missing !== 'workingDirectory')
           return { get: (session) => session.header.cwd }
       },
@@ -242,8 +280,8 @@ async function fixture(
       steer() {
         assert.fail('unexpected steering')
       },
-      guard(name) {
-        return guards.map((fn) => fn({ name, agent })).find(Boolean)
+      guard(name, args) {
+        return guards.map((fn) => fn({ name, agent, arguments: args })).find(Boolean)
       },
       requestApproval(signal) {
         return listeners.get('approval/request')[0]({ agent, toolName: 'bash', signal })
@@ -251,14 +289,21 @@ async function fixture(
       async invoke(name, args = {}) {
         const definition = tools.get(name)
         if (!definition) throw new Error('tool_not_registered')
-        const reason = this.guard(name)
+        const reason = this.guard(name, args)
         if (reason) throw new Error(reason)
-        const exec = { name, agent, callId: crypto.randomUUID(), signal: new AbortController().signal }
+        const exec = { name, agent, arguments: args, callId: crypto.randomUUID(), signal: new AbortController().signal }
         const dispatch = (listeners.get('tools/execute') ?? []).reduceRight(
           (next, listener) => () => listener(exec, next),
           () => definition.execute(args, exec),
         )
-        return dispatch()
+        const value = await dispatch()
+        const project = (listeners.get('tools/post-execute') ?? []).reduceRight(
+          (next, listener) => () => listener(exec, { isError: false, value, content: [] }, next),
+          () => Promise.resolve({ kind: 'accept' }),
+        )
+        await project()
+        for (const listener of listeners.get('tools/result') ?? []) listener(exec, { isError: false, value })
+        return value
       },
     }
     const attempt = { agent }
@@ -321,7 +366,7 @@ async function fixture(
           return {
             resolve: async () => ({ id: 'fixture-preset' }),
             async mount(ctx) {
-              for (const name of ['read', 'write', 'bash'])
+              for (const name of ['read', 'write', 'bash', 'todo_write', 'get_goal', 'exit_plan_mode', 'present'])
                 ctx.tools.register({
                   name,
                   async execute(args, exec) {
@@ -444,6 +489,13 @@ test('enterprise attachment sends without approval only from the employee worksp
   await h.send('send workbook', { sessionWebhook: 'original-request' })
   await waitUntil(() => h.followups.length === 1)
   const agent = h.followups[0].agent
+  const directTools = agent.ctx.tools.schemas().map(({ name }) => name)
+  assert.ok(directTools.includes('load_workspace_dependencies'))
+  assert.ok(directTools.includes('send_file'))
+  assert.ok(!directTools.includes('send_image'))
+  for (const name of ['present', 'working_directory', 'todo_write', 'get_goal', 'exit_plan_mode'])
+    assert.ok(directTools.includes(name), name)
+  for (const name of ['visualize', 'subagent', 'run_code']) assert.ok(!directTools.includes(name), name)
   const workbook = await readFile(new URL('./fixtures/workspace.xlsx', import.meta.url))
   const file = path.join(h.root, '验收.xlsx')
   const foreign = path.join(h.other, 'foreign.xlsx')
@@ -459,7 +511,14 @@ test('enterprise attachment sends without approval only from the employee worksp
   assert.equal(attempts().length, 0)
   await h.send('group task', { conversationType: 'group', conversationId: 'group' })
   await waitUntil(() => h.followups.length === 2)
-  await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /im_file_transfer_unavailable/)
+  const group = h.followups[1].agent
+  for (const name of ['send_file', 'present', 'visualize', 'exit_plan_mode']) {
+    assert.ok(!group.ctx.tools.schemas().some((schema) => schema.name === name), name)
+    assert.match(group.guard(name), /im_private_reply_required|im_file_transfer_unavailable/, name)
+  }
+  assert.ok(group.ctx.tools.schemas().some(({ name }) => name === 'working_directory'))
+  assert.match(group.guard('working_directory', { cd: h.target }), /im_private_reply_required/)
+  await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /tool_not_registered/)
   assert.equal(attempts().length, 0)
   assert.deepEqual(await agent.invoke('send_file', { path: '验收.xlsx' }), {
     status: 'accepted',
@@ -473,6 +532,67 @@ test('enterprise attachment sends without approval only from the employee worksp
   assert.equal(attempts()[0].target, 'original-request')
   assert.equal(attempts()[0].value.name, '验收.xlsx')
   assert.deepEqual(Buffer.from(attempts()[0].value.data), workbook)
+})
+
+test('employee tools retain the original private recipient and switch workspace after successful settlement', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('hold', { sessionWebhook: 'first-batch-request' })
+  await waitUntil(() => h.followups.length === 1)
+  const agent = h.followups[0].agent
+  assert.deepEqual(await agent.invoke('working_directory'), { cwd: h.root })
+  assert.equal(await agent.invoke('todo_write'), h.root)
+  assert.equal(await agent.invoke('get_goal'), h.root)
+  await assert.rejects(agent.invoke('working_directory', { cd: h.other }), /employee_workspace_access_denied/)
+  await assert.rejects(agent.invoke('present', { files: [{ path: h.other }] }), /employee_workspace_access_denied/)
+
+  assert.deepEqual(await agent.invoke('working_directory', { cd: 'target' }), {
+    cwd: h.root,
+    pending: h.target,
+  })
+  assert.equal(await agent.invoke('read'), h.root)
+  await h.send('queued under previous workspace')
+  h.renderer.release(agent.id, true)
+  await waitUntil(() =>
+    h.connection.operations.some((op) => op.name === 'markdown' && op.value.text.includes('已切换工作目录')),
+  )
+  assert.equal(h.followups.length, 1)
+  assert.match(agent.guard('read'), /im_channel_authorization_changed/)
+  await h.send('next workspace')
+  await waitUntil(() => h.followups.length === 2)
+  assert.equal(await h.followups[1].agent.invoke('read'), h.target)
+})
+
+test('enterprise /plan enters the host plan mode only from the bound private chat', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('/plan prepare workbook', { conversationType: 'group', conversationId: 'group' })
+  await h.send('/plan')
+  assert.equal(h.followups.length, 0)
+  await h.send('/plan prepare workbook')
+  await waitUntil(() => h.followups.length === 1)
+  const { agent, message } = h.followups[0]
+  assert.equal(agent.planMode, true)
+  assert.deepEqual(message.content, [{ type: 'text', text: 'prepare workbook' }])
+  assert.ok(agent.ctx.tools.schemas().some(({ name }) => name === 'exit_plan_mode'))
+})
+
+test('failed turns and lost employee authorization cannot commit a requested workspace switch', async (t) => {
+  const h = await fixture(t, { enterprise: true })
+  await h.send('hold')
+  await waitUntil(() => h.followups.length === 1)
+  const agent = h.followups[0].agent
+  await agent.invoke('working_directory', { cd: 'target' })
+  h.renderer.release(agent.id)
+  await h.send('hold')
+  await waitUntil(() => h.followups.length === 2)
+  const sameAgent = h.followups[1].agent
+  assert.equal(await sameAgent.invoke('read'), h.root)
+  await sameAgent.invoke('working_directory', { cd: 'target' })
+  h.connection.reconnect()
+  h.renderer.release(sameAgent.id, true)
+  await h.send('fresh connection')
+  await waitUntil(() => h.followups.length === 3)
+  assert.equal(await h.followups[2].agent.invoke('read'), h.root)
+  assert.ok(h.connection.operations.every((op) => !op.value?.text?.includes('已切换工作目录')))
 })
 
 test('enterprise legacy directory override is reported before task admission and reset restores its own workspace', async (t) => {

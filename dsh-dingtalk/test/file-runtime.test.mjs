@@ -38,7 +38,7 @@ mock.module('../lib/bridge.js', {
 const { apply, Config } = await import('../lib/index.js')
 
 test(
-  '公开 apply：未授权不下载，/cd 后落盘并注入可读引用，模型可回传文件，失败不伪造成功',
+  '公开 apply：未授权不下载，/cd 后落盘并注入可读引用，独立机器人不发布附件工具，失败不伪造成功',
   { timeout: 5000 },
   async (t) => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-file-runtime-'))
@@ -156,9 +156,9 @@ test(
     assert.equal(await readFile(ref.path, 'utf8'), 'fixture PDF')
     assert.doesNotMatch(text, /fixture-code|fixture-token/)
     const agent = messages[0].agent
-    await agent.tools.get('send_file').execute({ path: ref.path }, { agent, signal: new AbortController().signal })
-    const sent = requests.find(({ url }) => url.endsWith('oToMessages/batchSend'))
-    assert.deepEqual(JSON.parse(sent.init.body).userIds, ['owner'])
+    assert.equal(agent.tools.has('send_file'), false)
+    assert.equal(agent.tools.has('send_image'), false)
+    assert.ok(!requests.some(({ url }) => url.endsWith('oToMessages/batchSend')))
     failDownload = true
     const failed = new Promise((resolve) => {
       onFollowup = resolve
@@ -169,9 +169,5 @@ test(
     assert.match(messages[1].message.content[0].text, /下载或保存失败/)
     assert.doesNotMatch(messages[1].message.content[0].text, /已保存/)
     await lifecycle.fiber.dispose()
-    await assert.rejects(
-      agent.tools.get('send_file').execute({ path: ref.path }, { agent, signal: new AbortController().signal }),
-      /route_unavailable/,
-    )
   },
 )
