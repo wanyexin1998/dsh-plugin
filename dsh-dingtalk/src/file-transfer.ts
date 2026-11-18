@@ -86,7 +86,7 @@ function safeName(name: string): string {
 
 /** 每个机器人独立持有文件通道；模型只提供路径，不提供收件人、账号或凭据。 */
 export class FileTransfer {
-  private readonly installed = new WeakSet<HostAgentContext>()
+  private readonly installed = new WeakMap<HostAgentContext, () => void>()
   private readonly routes = new Map<string, FileRoute>()
   private readonly pending = new Set<Promise<unknown>>()
   private readonly abort = new AbortController()
@@ -130,16 +130,28 @@ export class FileTransfer {
     )
   }
 
-  install(ctx: HostAgentContext, agent: HostAgent): void {
+  install(ctx: HostAgentContext, agent: HostAgent, offerAttachment?: boolean): void {
+    if (offerAttachment === false) {
+      this.installed.get(ctx)?.()
+      this.installed.delete(ctx)
+      return
+    }
     if (this.installed.has(ctx)) return
-    const disposers: Array<() => void> = []
+    const file = ctx.tools.register(this.definition('file', agent))
+    if (offerAttachment === true) {
+      this.installed.set(ctx, file)
+      return
+    }
     try {
-      for (const kind of ['file', 'image'] as const) disposers.push(ctx.tools.register(this.definition(kind, agent)))
+      const image = ctx.tools.register(this.definition('image', agent))
+      this.installed.set(ctx, () => {
+        image()
+        file()
+      })
     } catch (error) {
-      for (const dispose of disposers.reverse()) dispose()
+      file()
       throw error
     }
-    this.installed.add(ctx)
   }
 
   async close(): Promise<void> {

@@ -715,7 +715,6 @@ async function startAccount(
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
     questions.install(agentCtx, agent)
-    files.install(agentCtx, agent)
   }
   const bridge = new Bridge(agents, renderer, bindings, {
     exclusiveOwnership: true,
@@ -778,8 +777,6 @@ async function startAccount(
       // Recheck the channel-owned Agent on every message. Bridge never borrows
       // a live Web Agent; restored/new contexts still need the scoped boundary.
       installBotTools(agent.ctx, agent)
-      imTools.bind(agent.ctx, msg, agent)
-      questions.bindSession(agent.id, msg)
       const requestId =
         msg.conversationType === 'direct' &&
         enterpriseRoot &&
@@ -787,7 +784,11 @@ async function startAccount(
         relay.enterpriseWorkspace(msg)
           ? msg.sessionWebhook
           : undefined
-      files.bindSession(agent, msg, sessionCwd, requestId)
+      const offerAttachment = imTools.bind(agent.ctx, msg, agent, () => {
+        files.bindSession(agent, msg, sessionCwd, requestId)
+      })
+      questions.bindSession(agent.id, msg)
+      files.install(agent.ctx, agent, offerAttachment)
       void workspace.attach(agent.id, sessionCwd)
     },
     compose: async () => {

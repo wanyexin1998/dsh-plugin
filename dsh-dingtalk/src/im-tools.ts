@@ -45,6 +45,7 @@ type Scope = {
   grant?: Grant
   identity?: DingTalkIdentity
   audience?: Audience | null
+  refresh(): boolean
 }
 type QueryHost = {
   get?(name: string): unknown
@@ -87,20 +88,61 @@ export class ImTools {
     }
     const tools = ctx.tools as HostAgentContext['tools'] & {
       guard?: (fn: (execution: { name: string; agent?: HostAgent }) => string | undefined) => () => void
+      schemas?: (agent: HostAgent) => readonly { name: string }[]
+      restrict?: (filter: { allow: readonly string[] }) => () => void
+      presentAs?: (mode: 'native') => () => void
     }
-    if (!tools.guard) throw new Error('im_tool_boundary_unavailable')
+    if (!tools.guard || !tools.schemas || !tools.restrict || !tools.presentAs)
+      throw new Error('im_tool_boundary_unavailable')
+    const restrict = tools.restrict.bind(tools)
+    const schemas = tools.schemas.bind(tools)
     const factory = this.factory()
     if (!factory) throw new Error('im_connection_service_unavailable')
     const host = ctx as HostAgentContext & QueryHost
     const relay = host.get?.('dingtalkRelay') as QueryRelay | undefined
-    const canQuery =
-      (!this.workspace || relay?.status?.().mode === 'enterprise') && typeof relay?.enterpriseQueries === 'function'
-    const scope: Scope = { agent, relay: canQuery ? relay : undefined }
+    const enterprise = relay?.status?.().mode === 'enterprise'
+    const canQuery = (!this.workspace || enterprise) && typeof relay?.enterpriseQueries === 'function'
+    let liftRestriction: (() => void) | undefined
+    const scope: Scope = {
+      agent,
+      relay: canQuery ? relay : undefined,
+      refresh() {
+        liftRestriction?.()
+        // Channel-owned tools are registered separately in the Agent's layer.
+        const allow = schemas(agent)
+          .map(({ name }) => name)
+          .filter((name) => name !== 'dingtalk_call' && name !== 'ask_user_question' && name !== 'send_file')
+          .filter((name) => denial(name) === undefined)
+        liftRestriction = restrict({ allow })
+        return denial('send_file') === undefined
+      },
+    }
     const prepared = new WeakMap<object, AbortSignal>()
     const bindingFor = (name: string) => {
       if (!canQuery || !scope.audience || !scope.identity) return undefined
       const binding = scope.grant?.(name)
       return binding && !binding.signal.aborted && sameIdentity(scope.identity, binding.identity) ? binding : undefined
+    }
+    const denial = (name: string): string | undefined => {
+      if (this.workspace && !this.workspace.allowed(agent)) return 'im_channel_authorization_changed'
+      // The outbound attachment needs a separate original-DM route in addition to workspace authority.
+      if (name === 'send_file' && this.workspace && this.canSendAttachment?.(agent)) return undefined
+      if (name === 'send_file' || name === 'send_image') return 'im_tool_unavailable: im_file_transfer_unavailable'
+      if (name === 'subagent' || name === 'spawn_agent')
+        return 'im_tool_unavailable: im_subagent_inheritance_unavailable'
+      if (
+        this.workspace &&
+        (workspaceTools.has(name) || (this.canSendAttachment && name === 'load_workspace_dependencies'))
+      )
+        return undefined
+      if (['dingtalk_call', 'skill', 'ask_user_question'].includes(name)) return undefined
+      if (canQuery && reviewedQueryTool(name)) {
+        return bindingFor(name) ? undefined : queryDenied
+      }
+      if (this.workspace) return 'im_tool_unavailable: im_tool_inheritance_unreviewed'
+      // DSH 0.2.1-rc.5 supplies cwd/preset composition, not a trusted
+      // principal -> workspace entitlement contract. Keep this fail closed.
+      return 'im_tool_unavailable: im_workspace_policy_unavailable: 宿主未提供可信用户与工作区权限绑定，无法安全继承此工具。'
     }
     // Shadow the inherited Web tool in this Agent, before permitting its name.
     const tool = factory.createTool(
@@ -124,6 +166,8 @@ export class ImTools {
       },
     })
     let unregisterQuery: (() => void) | undefined
+    let unregisterGuard: (() => void) | undefined
+    let restorePresentation: (() => void) | undefined
     try {
       if (canQuery) {
         // Host approval/scheduling can separate tool selection from execution.
@@ -146,29 +190,23 @@ export class ImTools {
           { prepend: true },
         )
       }
-      tools.guard((exec) => {
+      unregisterGuard = tools.guard((exec) => {
         if (exec.agent !== agent) return 'im_agent_mismatch'
-        if (this.workspace && !this.workspace.allowed(agent)) return 'im_channel_authorization_changed'
-        // The outbound attachment needs a separate original-DM route in addition to workspace authority.
-        if (exec.name === 'send_file' && this.workspace && this.canSendAttachment?.(agent)) return undefined
-        if (exec.name === 'send_file' || exec.name === 'send_image')
-          return 'im_tool_unavailable: im_file_transfer_unavailable'
-        if (exec.name === 'subagent' || exec.name === 'spawn_agent')
-          return 'im_tool_unavailable: im_subagent_inheritance_unavailable'
-        if (this.workspace && workspaceTools.has(exec.name)) return undefined
-        if (['dingtalk_call', 'skill', 'ask_user_question'].includes(exec.name)) return undefined
-        if (canQuery && reviewedQueryTool(exec.name)) {
+        const reason = denial(exec.name)
+        if (reason !== undefined) return reason
+        if (reviewedQueryTool(exec.name)) {
           const binding = bindingFor(exec.name)
           if (!binding) return queryDenied
           prepared.set(exec, binding.signal)
-          return undefined
         }
-        if (this.workspace) return 'im_tool_unavailable: im_tool_inheritance_unreviewed'
-        // DSH 0.2.1-rc.5 supplies cwd/preset composition, not a trusted
-        // principal -> workspace entitlement contract. Keep this fail closed.
-        return 'im_tool_unavailable: im_workspace_policy_unavailable: 宿主未提供可信用户与工作区权限绑定，无法安全继承此工具。'
+        return undefined
       })
+      // PTC transport is outside the inherited registry mask and is unavailable in this channel.
+      restorePresentation = tools.presentAs('native')
+      liftRestriction = restrict({ allow: [] })
     } catch (error) {
+      restorePresentation?.()
+      unregisterGuard?.()
       unregisterQuery?.()
       unregister()
       throw error
@@ -176,7 +214,7 @@ export class ImTools {
     this.scopes.set(ctx, scope)
   }
 
-  bind(ctx: HostAgentContext, message: unknown, agent: HostAgent): void {
+  bind(ctx: HostAgentContext, message: unknown, agent: HostAgent, bindAttachment?: () => void): boolean {
     this.install(ctx, agent)
     const scope = this.scopes.get(ctx)!
     const identity = messageIdentity(message)
@@ -191,5 +229,7 @@ export class ImTools {
       scope.grant = scope.relay.enterpriseQueries!(message)
     }
     scope.identity = identity
+    bindAttachment?.()
+    return scope.refresh()
   }
 }

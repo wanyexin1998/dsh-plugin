@@ -21,7 +21,9 @@ robotConnection:
     root: /workspace/employee-a
 ```
 
-这项授权让下表中已注册的普通文件及命令工具进入宿主原有执行链，可用于在当前员工目录生成 Excel。Excel 库或其他文件生成程序仍由宿主安装；`load_workspace_dependencies`、PTC 和未审核的工具不随此配置放行。查询工具仍须单独配置 `queryTools`，DWS 数据操作遵循其独立授权与审批配置。
+这项授权允许普通文件与命令工具运行在宿主的执行环境中。已绑定的企业机器人会话可以调用标准 Profile 的 `load_workspace_dependencies`，用返回的 Python 路径和预装 Office 库生成文件。Cellgent 的标准部署从镜像内原位读取依赖。员工工作区保存脚本与成品；Office 运行环境由部署方维护。查询工具仍须单独配置 `queryTools`，DWS 操作遵循其独立授权与审批配置。
+
+每次钉钉消息进入 Agent 时，插件按当前绑定筛选模型看到的继承工具，并在执行前用同一规则重新核对会话授权。PTC、子 Agent 和未审核工具不列入钉钉工具清单。只有原企业私聊的附件路由可用时才提供 `send_file`。
 
 授权同时要求在线配对的企业和员工与管理员配置一致、消息确由当前接收端的连接收取、会话属于该配对和 Profile，且会话 header 与宿主 workingDirectory 都匹配选定目录。相似的消息对象、另一接收端、另一员工或旧连接的消息不能获得授权。断连、换设备、换身份、`/new`、模型重开与 `/cd` 撤销旧任务和审批的授权。
 

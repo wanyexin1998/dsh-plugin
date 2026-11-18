@@ -41,6 +41,7 @@ try {
       agent.ctx = scope.ctx
       agent.ctx.tools.register(definition('bash'))
       agent.ctx.tools.register(definition('unknown'))
+      agent.ctx.tools.register(definition('ask_user_question'))
       const im = new ImTools(() => ({
         createTool: (identity) => ({
           ...definition('dingtalk_call'),
@@ -225,11 +226,20 @@ try {
         agent.ctx = createScope(ctx, agent).ctx
         agent.ctx.tools.restrict({ deny: ['read_image'] })
         agent.ctx.tools.guard((exec) => (exec.name === 'glob' ? 'fixture_scoped_denial' : undefined))
-        im.bind(agent.ctx, message, agent)
+        im.install(agent.ctx, agent)
         const admission = policy.capture(message, id, cwd)
         const commit = admission.setup(agent.ctx, agent, false)
         bindings.set(id, id)
-        return { agent, lease, commit }
+        return {
+          agent,
+          lease,
+          commit: {
+            commit() {
+              commit.commit()
+              im.bind(agent.ctx, message, agent)
+            },
+          },
+        }
       }
       ctx.provide('workspaceProbe', { createOwner })
     },

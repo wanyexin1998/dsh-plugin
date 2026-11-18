@@ -1,3 +1,4 @@
+import { toolSurface } from './helpers/tool-surface.mjs'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, link, symlink, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
@@ -197,8 +198,27 @@ async function fixture(
     const tools = new Map(),
       guards = [],
       listeners = new Map()
+    const inherited = toolSurface([
+      'load_workspace_dependencies',
+      'skill',
+      'bash',
+      'read',
+      'write',
+      'edit',
+      'present',
+      'visualize',
+      'subagent',
+    ])
     const agentCtx = {
       tools: {
+        ...inherited,
+        schemas: () =>
+          [
+            ...inherited.schemas(),
+            ...[...tools.values()].filter(({ name }) =>
+              ['dingtalk_call', 'ask_user_question', 'send_file', 'send_image'].includes(name),
+            ),
+          ].map(({ name }) => ({ name })),
         register(definition) {
           tools.set(definition.name, definition)
           return () => tools.delete(definition.name)
@@ -444,6 +464,11 @@ test('enterprise attachment sends without approval only from the employee worksp
   await h.send('send workbook', { sessionWebhook: 'original-request' })
   await waitUntil(() => h.followups.length === 1)
   const agent = h.followups[0].agent
+  const directTools = agent.ctx.tools.schemas().map(({ name }) => name)
+  assert.ok(directTools.includes('load_workspace_dependencies'))
+  assert.ok(directTools.includes('send_file'))
+  assert.ok(!directTools.includes('send_image'))
+  for (const name of ['present', 'visualize', 'subagent', 'run_code']) assert.ok(!directTools.includes(name), name)
   const workbook = await readFile(new URL('./fixtures/workspace.xlsx', import.meta.url))
   const file = path.join(h.root, '验收.xlsx')
   const foreign = path.join(h.other, 'foreign.xlsx')
@@ -459,7 +484,8 @@ test('enterprise attachment sends without approval only from the employee worksp
   assert.equal(attempts().length, 0)
   await h.send('group task', { conversationType: 'group', conversationId: 'group' })
   await waitUntil(() => h.followups.length === 2)
-  await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /im_file_transfer_unavailable/)
+  assert.ok(!h.followups[1].agent.ctx.tools.schemas().some(({ name }) => name === 'send_file'))
+  await assert.rejects(h.followups[1].agent.invoke('send_file', { path: file }), /tool_not_registered/)
   assert.equal(attempts().length, 0)
   assert.deepEqual(await agent.invoke('send_file', { path: '验收.xlsx' }), {
     status: 'accepted',
