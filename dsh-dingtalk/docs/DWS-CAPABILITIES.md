@@ -10,18 +10,19 @@
 
 ## 免确认白名单
 
-在 `@wanyexin1998/dsh-dingtalk/web` 的现有 `config` 内添加 `confirmationAllowlist`。保留原有 `mode` 等配置。它只影响机器人和 Web 会话里的 `dingtalk_call`。缺省或 `false` 沿用原审批规则；`true` 仅对下列已审核的普通前台调用生效。
+在 `@wanyexin1998/dsh-dingtalk/web` 的现有 `config` 内添加 `confirmationAllowlist`，保留原有 `mode` 等配置。它只影响机器人和 Web 会话里的 `dingtalk_call`。`true` 跳过该命令的 Host 确认，包含发消息、删除、改权限、文件和后台操作。缺省或 `false` 使用原审批设置。
 
 ```yaml
 confirmationAllowlist:
-  'doc create': true # 仅传 name，在「我的文档」根目录创建空文档
-  'aitable base create': true # 仅传 name，在默认位置创建空多维表
-  'todo tag create': true # 仅传 name，为当前账号创建待办标签
+  'doc create': true # 创建在线文档
+  'chat message send': true # 发送消息
+  'todo task delete': true # 删除待办
+  'drive permission add': true # 添加协作成员权限
 ```
 
-免确认调用只接受一个 1–50 字的普通名称。指定正文、位置、模板或本地文件，使用后台模式，或改用别名，都会保留现有审批或参数限制。发消息、删数据和改权限不能设为免确认。通配符、未知命令和非布尔值会使 Host 配置报错。钉钉账号、企业身份、资源权限和命令参数仍按原规则校验；`send_file` 的单次审批保持不变。免确认调用仍保留工具调用和结果记录。
+通配符、未知命令和非布尔值会使 Host 配置报错。钉钉账号、企业身份、资源权限、命令参数和本地工作区限制不变；上游标记不可用或由 Host 管理的入口仍不可执行。机器人原生 `send_file` 独立于 DWS，仍需单次审批。免确认调用保留工具调用和结果记录。
 
-在源码目录生成当前锁定目录的完整 YAML 清单。每条都有中文注释，示例值均为 `true`。只有已审核的条目会写入有效配置，其他命令以注释列出，供查阅。可以复制整份清单，再注释掉不想开启的条目。升级 DWS 后重新生成清单；未经重新审核的版本不能启用现有例外。
+在源码目录生成当前锁定目录的完整 YAML 清单。每条都有中文注释，所有命令均为未注释的 `true`。复制整份清单即可让当前版本下可执行的 DWS 命令免确认。升级 DWS 后重新生成清单，以覆盖新命令并移除已删除的命令。
 
 ```sh
 cd dsh-dingtalk

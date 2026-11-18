@@ -102,37 +102,43 @@ test('seat pairs before data consent and IM calls require the currently authoriz
     await rm(token.root, { recursive: true, force: true });
   }
 });
-test('connector carries Host authorization only for an opted-in restricted call and keeps other writes behind approval', async () => {
+test('connector accepts opts for send, delete, permission, and jobs while retaining normal authorization', async () => {
   const fake = await fakeConnector();
   const token = await isolatedToken();
   const principal = { corpId: 'test-corp', userId: 'test-user' };
   const connection = await createRemoteConnection({ ...settingsFor(fake), seatIdentity: principal,
     endpoint: { host: '127.0.0.1', port: fake.port, tokenFile: token.file } }, DEFAULT_LIMITS);
   try {
-    const enabled = parseHostConfig({ mode: 'connector', confirmationAllowlist: { 'aitable base create': true } }).confirmationAllowlist;
+    const enabled = parseHostConfig({ mode: 'connector', confirmationAllowlist: {
+      'chat message send': true, 'todo task delete': true, 'drive permission add': true,
+      'aitable base create': true, 'audit export': true, 'chat thread promote': true,
+      'doc create': false,
+    } }).confirmationAllowlist;
     const agent = { id: 'agent', session: { id: 'session-test' } }, execution = { agent, signal: new AbortController().signal };
     let actor = principal, prompts = 0;
-    const tool = dingtalkTool({ invoke: (input, options) => connection.invokeFor(actor, input, options) },
-      () => ({ approval: { request: async () => { prompts++; return 'rejected'; } } }), enabled);
+    const service = { invoke: (input, options) => connection.invokeFor(actor, input, options) };
+    const tool = dingtalkTool(service, () => ({ approval: { request: async () => { prompts++; return 'rejected'; } } }), enabled);
     const input = (command, parameters, rest = {}) => ({ operationId: 'dws.execute', args: { command, parameters, ...rest } });
-    const name = { name: '合成空表' }, simple = input('aitable base create', name);
-    for (const denied of [
-      input('aitable base create', { ...name, 'template-id': 'template' }),
-      input('aitable base create', { ...name, 'workspace-id': 'shared' }),
-      input('aitable base create', { ...name, 'folder-id': 'shared' }),
-      input('aitable base create', name, { background: true }),
-      input('chat message send', {}), input('todo task delete', {}), input('drive permission add', {}),
-    ]) assert.equal((await tool.execute(denied, execution)).reasonCode, 'confirmation_rejected');
-    assert.equal((await tool.execute(input('aitable base create', name, { confirmed: true }), execution)).reasonCode, 'invalid_request');
+    const calls = [
+      input('chat message send', { user: 'fixture-user', text: '合成消息' }),
+      input('todo task delete', { 'task-id': 'fixture-task' }),
+      input('drive permission add', { node: 'fixture-node', role: 'viewer' }),
+      input('aitable base create', { name: '合成表', 'template-id': 'fixture-template' }, { background: true }),
+    ];
+    assert.equal((await tool.execute(input('doc create', { name: '保持审批' }), execution)).reasonCode, 'confirmation_rejected');
+    assert.equal((await tool.execute(input('audit export', {}), execution)).reasonCode, 'host_managed_operation');
+    assert.equal((await tool.execute(input('chat thread promote', {}), execution)).reasonCode, 'command_unavailable');
+    assert.equal((await tool.execute(input('todo task delete', {}, { confirmed: true }), execution)).reasonCode, 'invalid_request');
     actor = { ...principal, userId: 'different-user' };
-    assert.equal((await tool.execute(simple, execution)).reasonCode, 'identity_mismatch');
+    assert.equal((await tool.execute(calls[0], execution)).reasonCode, 'identity_mismatch');
     actor = principal;
     assert.equal(fake.requests.filter(r => r.path === '/v1/invoke').length, 0);
-    assert.equal((await tool.execute(simple, execution)).status, 'ok');
-    assert.equal(prompts, 7);
-    assert.deepEqual(fake.requests.filter(r => r.path === '/v1/invoke').map(r => r.body), [{
-      ...simple, sessionId: 'session-test', confirmed: true, expectedProfile: 'test-corp:test-user',
-    }]);
+    for (const call of calls) assert.equal((await tool.execute(call, execution)).status, 'ok');
+    assert.equal(prompts, 1);
+    const noApprovalService = dingtalkTool(service, undefined, enabled);
+    assert.equal((await noApprovalService.execute(calls[0], execution)).status, 'ok');
+    assert.deepEqual(fake.requests.filter(r => r.path === '/v1/invoke').map(r => r.body),
+      [...calls, calls[0]].map(call => ({ ...call, sessionId: 'session-test', confirmed: true, expectedProfile: 'test-corp:test-user' })));
   } finally {
     await connection.backend.dispose();
     await fake.close();
