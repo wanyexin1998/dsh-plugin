@@ -79,6 +79,7 @@
     "scan:secrets": "node scripts/check-secrets.mjs",
     "ci": "pnpm run scan:secrets && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run test:web && pnpm run test:pack",
     "prepack": "pnpm run build",
+    "dws:confirmation-template": "node enhancements/scripts/confirmation-template.mjs",
     "test:web": "cd enhancements && node --test --test-concurrency=1 tests/*.test.mjs",
     "verify:bundle": "node enhancements/scripts/verify-bundle.mjs",
     "verify:dsh-web": "node enhancements/scripts/verify-dsh-web.mjs",

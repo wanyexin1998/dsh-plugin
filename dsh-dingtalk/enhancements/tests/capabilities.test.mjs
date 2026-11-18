@@ -11,6 +11,7 @@ import { createLocalBackend } from '../lib/adapters/local/index.js';
 import { createConnectionService } from '../lib/shared/service.js';
 import { parseInvokeInput, publicInvokeResult } from '../lib/shared/validation.js';
 import { DEFAULT_LIMITS } from '../lib/shared/config.js';
+import { parseHostConfig } from '../lib/host/confirmation.js';
 import { dingtalkTool } from '../lib/host/tool.js';
 import { fixture as officialFixture, officialFixtureSkip } from '../scripts/p0-fixture.mjs';
 
@@ -115,6 +116,40 @@ test('native approval is mandatory for writes; rejected or absent approval spawn
     const trace = await f.trace(); assert.ok(trace.some(x => x.stage === 'contact user get-self'));
     const sent = trace.find(x => x.stage === 'todo task create'); assert.ok(sent.args.includes('--yes'));
     assert.ok(!JSON.stringify(result).includes('test-private'));
+  } finally { await f.dispose(); }
+});
+
+test('local allowlist skips the prompt only for the configured foreground name-only write', async () => {
+  const f = await fixture();
+  try {
+    const signal = new AbortController().signal, agent = { id: 'agent-1', session: { id: 'session-1' } };
+    const execution = { agent, signal };
+    const input = (parameters, background) => ({ operationId: 'dws.execute', args: { command: 'doc create', parameters, background } });
+    const simple = input({ name: '合成空文档' });
+    let prompts = 0;
+    const host = () => ({ approval: { request: async () => { prompts++; return 'rejected'; } } });
+    const policy = flag => parseHostConfig({ confirmationAllowlist: { 'doc create': flag, 'todo tag create': flag } }).confirmationAllowlist;
+    for (const disabled of [undefined, policy(false)]) {
+      const tool = dingtalkTool(f.service, host, disabled);
+      assert.equal((await tool.execute(simple, execution)).reasonCode, 'confirmation_rejected');
+    }
+    const tool = dingtalkTool(f.service, host, policy(true));
+    for (const unsafe of [input({ name: '标记' }, true), input({ name: '内容', content: '正文' }),
+      input({ name: '目标', folder: 'shared-folder' }), input({ name: '外部文件', 'content-file': 'private.md' }), write]) {
+      const hasFile = 'content-file' in unsafe.args.parameters;
+      assert.equal((await tool.execute(unsafe, execution)).reasonCode, hasFile ? 'file_access_denied' : 'confirmation_rejected');
+    }
+    assert.equal(prompts, 6);
+    assert.equal((await f.trace()).length, 0);
+    assert.equal((await tool.execute(simple, execution)).status, 'ok');
+    assert.equal((await tool.execute({ operationId: 'dws.execute', args: {
+      command: 'todo tag create', parameters: { name: '合成待办标签' },
+    } }, execution)).status, 'ok');
+    assert.equal(prompts, 6);
+    const trace = await f.trace();
+    assert.equal(trace.filter(x => x.stage === 'doc create').length, 1);
+    assert.equal(trace.filter(x => x.stage === 'todo tag create').length, 1);
+    assert.ok(trace.some(x => x.stage === 'contact user get-self'));
   } finally { await f.dispose(); }
 });
 

@@ -1,6 +1,6 @@
 > 当前定制版在 `dsh-plugin/dsh-dingtalk` 维护；独立 fork 仅跟踪官方。不使用 GitHub Actions，不发布 NPM。构建及安装方式见 [仓库与维护](docs/REPOSITORY.md)。
 
-> Web 能力扩展：已接入锁定版 DWS 的完整功能目录与通用调用，使用与限制见 [能力说明](docs/DWS-CAPABILITIES.md)。
+> Web 能力扩展：已接入锁定版 DWS 的完整功能目录与通用调用，使用与限制见 [能力说明](docs/DWS-CAPABILITIES.md)，审批配置见 [免确认白名单](docs/DWS-CAPABILITIES.md#免确认白名单)。
 
 > 第二阶段：本人 Web、私聊和获准内部群聊共用授权，IM 工具逐次核对企业和用户。三个入口查询、断开同步及重连恢复已通过真实验收；范围与限制见 [阶段说明](docs/PHASE2.md)。下方保留的官方功能说明不代表定制版已开放全部 IM 工具。
 

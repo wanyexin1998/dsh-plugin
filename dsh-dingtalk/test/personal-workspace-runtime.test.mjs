@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, link, symlink, readFile, realpath, rm, writeFile } from
 import os from 'node:os'
 import path from 'node:path'
 import test, { mock } from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { imToolFactory } from './helpers/im-tool-factory.mjs'
 
@@ -111,11 +112,11 @@ mock.module('../lib/renderer.js', { namedExports: { Renderer } })
 const { apply, Config } = await import('../lib/index.js')
 
 async function waitUntil(check) {
-  for (let attempt = 0; attempt < 300; attempt++) {
-    if (check()) return
-    await new Promise((resolve) => setImmediate(resolve))
+  const deadline = performance.now() + 5_000
+  while (!check()) {
+    if (performance.now() >= deadline) assert.fail('personal runtime did not reach the expected state')
+    await delay(5)
   }
-  assert.fail('personal runtime did not reach the expected state')
 }
 async function flush() {
   for (let count = 0; count < 5; count++) await new Promise((resolve) => setImmediate(resolve))
