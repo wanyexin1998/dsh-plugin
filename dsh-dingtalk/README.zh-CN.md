@@ -29,7 +29,7 @@
 - **发送状态**：工具返回 `accepted` 只表示钉钉接口接受请求，不能作为客户端送达或已读证明。上传失败或发送结果未知时不会自动重试。
 - **本地文件**：接收内容不会自动解压或执行，也不会自动清理；不再需要时可自行删除 inbox 内的附件目录。
 
-启用员工工作区工具的企业机器人在私聊中使用 `send_file` 回传附件，须由该员工确认，且只发回原私聊。安装与验收见[企业机器人私聊回传附件](docs/WORKSPACE-TOOL-POLICY.md#企业机器人私聊回传附件)。
+启用员工工作区工具的企业机器人在私聊中使用 `send_file` 回传附件，无需再次确认，只发回原私聊。安装与验收见[企业机器人私聊回传附件](docs/WORKSPACE-TOOL-POLICY.md#企业机器人私聊回传附件)。
 
 接口与格式限制见钉钉官方文档：[接收文件下载](https://open.dingtalk.com/document/orgapp/download-the-file-content-of-the-robot-receiving-message.md)、[机器人消息类型](https://open.dingtalk.com/document/orgapp/types-of-messages-sent-by-robots.md)、[上传媒体文件](https://open.dingtalk.com/document/orgapp/upload-media-files.md)。
 

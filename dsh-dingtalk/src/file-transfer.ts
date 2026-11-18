@@ -2,14 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readlink, realpath, rm } from 'node:fs/promises'
 import path from 'node:path'
-import type {
-  HostAgent,
-  HostAgentContext,
-  HostApprovalRequest,
-  HostApprovalOutcome,
-  HostToolDefinition,
-  HostToolExecution,
-} from './host.js'
+import type { HostAgent, HostAgentContext, HostToolDefinition, HostToolExecution } from './host.js'
 import { FILE_TYPES, IMAGE_TYPES, MAX_MEDIA_BYTES } from './media.js'
 import { DeliveryOutcomeUnknown } from './errors.js'
 import type { MediaTarget, MediaReceipt, OutboundMedia, Outbound } from './outbound.js'
@@ -21,14 +14,12 @@ interface FileRoute {
   requestId?: string
 }
 
-interface ApprovedAttachment {
+interface EnterpriseAttachment {
   signal(agent: HostAgent): AbortSignal
-  approve(request: HostApprovalRequest): Promise<HostApprovalOutcome>
   send(requestId: string, media: OutboundMedia, signal: AbortSignal): Promise<MediaReceipt>
-  approvalTimeoutMs: number
 }
 
-// Read through the verified descriptor. No pathname is reopened after approval.
+// Read through the verified descriptor and send only the copied bytes.
 async function snapshot(root: string, file: string, signal: AbortSignal): Promise<Buffer> {
   const denied = () => new Error('file_outside_workspace: 只允许发送当前工作区内的普通文件，不支持链接。')
   const select = async () => {
@@ -56,7 +47,7 @@ async function snapshot(root: string, file: string, signal: AbortSignal): Promis
     for (let offset = 0; offset < data.length;) {
       signal.throwIfAborted()
       const { bytesRead } = await handle.read(data, offset, Math.min(64 * 1024, data.length - offset))
-      if (!bytesRead) throw new Error('file_changed: 附件在读取时发生变化，请保存后重新申请发送。')
+      if (!bytesRead) throw new Error('file_changed: 附件在读取时发生变化，请保存后重新发送。')
       offset += bytesRead
     }
     const after = await handle.stat({ bigint: true })
@@ -66,7 +57,7 @@ async function snapshot(root: string, file: string, signal: AbortSignal): Promis
       after.mtimeNs !== stat.mtimeNs ||
       after.ctimeNs !== stat.ctimeNs
     )
-      throw new Error('file_changed: 附件在读取时发生变化，请保存后重新申请发送。')
+      throw new Error('file_changed: 附件在读取时发生变化，请保存后重新发送。')
     return data
   } finally {
     await handle.close()
@@ -106,7 +97,7 @@ export class FileTransfer {
       accountId: string
       outbound: Pick<Outbound, 'sendMedia'>
       log(line: string): void
-      attachment?: ApprovedAttachment
+      attachment?: EnterpriseAttachment
     },
   ) {}
 
@@ -196,7 +187,7 @@ export class FileTransfer {
       name: kind === 'file' ? 'send_file' : 'send_image',
       description:
         kind === 'file' && this.opts.attachment
-          ? '将当前员工工作区内的文件（xlsx/pdf/zip/rar/doc/docx）以可下载附件发回原钉钉私聊。仅在用户要求回传时使用；必须通过本次审批。只提供工作区内路径，最大 20 MB。发送结果未知时先请用户检查聊天，不要自动重发。'
+          ? '将当前员工工作区内的文件（xlsx/pdf/zip/rar/doc/docx）以可下载附件发回原钉钉私聊。仅在用户要求回传时使用，无需再次确认。只提供工作区内路径，最大 20 MB。发送结果未知时先请用户检查聊天，不要自动重发。'
           : `仅在用户要求回传文件或图片时，将当前工作区中的${kind === 'file' ? '文件（xlsx/pdf/zip/rar/doc/docx）' : '图片（jpg/jpeg/png/gif/bmp）'}发回当前钉钉会话。最大 20 MB。path 是相对于工作区或工作区内的绝对路径。接口接受不代表客户端已送达；结果未知时不要自动重发。`,
       parameters: {
         type: 'object',
@@ -215,7 +206,7 @@ export class FileTransfer {
           { type: 'text', text: `钉钉接口已接受发送，客户端送达尚未验证：${JSON.stringify(value)}` },
         ],
       },
-      timeoutMs: kind === 'file' && this.opts.attachment ? this.opts.attachment.approvalTimeoutMs + 75_000 : 90_000,
+      timeoutMs: 90_000,
       execute: (args, exec) => {
         const task = this.send(kind, agent, args, exec)
         this.pending.add(task)
@@ -242,7 +233,7 @@ export class FileTransfer {
     if (this.opts.attachment) {
       if (kind !== 'file' || !this.canSendAttachment(agent) || !route.requestId)
         throw new Error('file_route_unavailable')
-      return this.sendApproved(this.opts.attachment, route, route.requestId, args.path, exec)
+      return this.sendEnterpriseAttachment(this.opts.attachment, route, route.requestId, args.path, exec)
     }
     const signal = AbortSignal.any([exec.signal, this.abort.signal])
     signal.throwIfAborted()
@@ -281,8 +272,8 @@ export class FileTransfer {
     signal.throwIfAborted()
     return this.opts.outbound.sendMedia(route.target, { kind, name, data }, signal)
   }
-  private async sendApproved(
-    attachment: ApprovedAttachment,
+  private async sendEnterpriseAttachment(
+    attachment: EnterpriseAttachment,
     route: FileRoute,
     requestId: string,
     input: string,
@@ -318,22 +309,11 @@ export class FileTransfer {
       )
         throw new Error('unsupported_file_type: 附件名称或格式不受支持。')
       const data = await snapshot(root, file, signal).catch((error: NodeJS.ErrnoException) => {
+        check()
         if (error.code) throw new Error('file_unavailable: 无法读取此附件，请检查路径和权限。')
         throw error
       })
       check()
-      const started = Date.now()
-      const choice = await attachment.approve({
-        agent: route.agent,
-        toolName: 'send_file',
-        callId: exec.callId,
-        applicationWrite: true,
-        reason: `发送附件：\`${name}\`（${data.length} 字节）\n接收方：发起请求的钉钉私聊`,
-        signal,
-      })
-      this.opts.log(`attachment approval settled (${Date.now() - started} ms)`)
-      check()
-      if (choice !== 'allowed-once') throw new Error('file_confirmation_rejected: 未获得发送批准，附件未发送。')
       const sending = Date.now()
       try {
         return await attachment.send(requestId, { kind: 'file', name, data }, signal)
