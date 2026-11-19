@@ -133,6 +133,15 @@ export class RobotConnection extends RelayClient {
       return binding?.identity.corpId === config.corpId && binding.signal === lease ? binding : undefined
     }
   }
+  /** Recheck the same reviewed read-only tools with a current scheduled execution binding. */
+  scheduledQuery(name: string, authority: WorkspaceAuthority): WorkspaceAuthority | undefined {
+    const binding = this.enterpriseAuthority()
+    return binding?.signal === authority.signal &&
+      binding.bindingId === authority.bindingId &&
+      this.enterprise?.queryTools?.includes(name)
+      ? binding
+      : undefined
+  }
   override status() {
     const transport = super.status()
     const enterpriseMode = this.options.enterprise !== undefined

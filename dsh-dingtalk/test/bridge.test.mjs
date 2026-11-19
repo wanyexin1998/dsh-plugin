@@ -3,6 +3,52 @@ import test from 'node:test'
 
 import { Bridge } from '../lib/bridge.js'
 
+test('a scheduled run restores its saved Session after the private chat selects another', async () => {
+  const route = 'employee-direct'
+  const bound = new Map([[route, 'new-chat-session']])
+  const agent = { id: 'saved-scheduled-session' }
+  let badResume = false
+  const bridge = new Bridge(
+    {
+      get: () => undefined,
+      async resume(options) {
+        assert.equal(options.resumeSessionId, agent.id)
+        if (badResume) throw new Error('saved_session_missing')
+        return { agent, dispose: async () => {} }
+      },
+      create: async () => assert.fail('schedule must never create a replacement Session'),
+    },
+    { onInbound: async () => assert.fail('schedule does not borrow an inbound reply') },
+    bound,
+    {
+      exclusiveOwnership: true,
+      recoverForeignSession: true,
+      cwd: '/workspace',
+      log() {},
+      modelOverrides: new Map(),
+      workspaceOverrides: new Map(),
+      modelSelection: () => undefined,
+      compose: async () => ({}),
+      onAgentMessage() {},
+    },
+  )
+  const admission = {
+    cwd: '/workspace',
+    check() {},
+    checkAgent: (actual) => assert.equal(actual, agent),
+    canResume: (id) => id === agent.id,
+  }
+  try {
+    assert.equal(await bridge.forSchedule(agent.id, route, admission), agent)
+    assert.equal(bound.get(route), 'new-chat-session')
+    badResume = true
+    await assert.rejects(bridge.forSchedule(agent.id, route, admission), /saved_session_missing/)
+    await assert.rejects(bridge.forSchedule('foreign', route, admission), /scheduled_session_changed/)
+  } finally {
+    await bridge.close()
+  }
+})
+
 async function bridgeWithOwnedHandle(handle) {
   const bridge = new Bridge(
     { get: () => undefined, create: async () => handle },

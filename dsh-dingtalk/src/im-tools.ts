@@ -47,6 +47,7 @@ type Scope = {
   grant?: Grant
   identity?: DingTalkIdentity
   audience?: Audience | null
+  scheduled?: Grant
   refresh(): boolean
 }
 type QueryHost = {
@@ -79,6 +80,7 @@ export class ImTools {
     private readonly workspace?: { allowed(agent: HostAgent): boolean },
     private readonly canSendAttachment?: (agent: HostAgent) => boolean,
     private readonly employeeTools?: EmployeeChannelTools,
+    private readonly canCreateSchedule?: (agent: HostAgent) => boolean,
   ) {}
 
   install(ctx: HostAgentContext, agent: HostAgent): void {
@@ -126,12 +128,28 @@ export class ImTools {
     }
     const prepared = new WeakMap<object, AbortSignal>()
     const bindingFor = (name: string) => {
+      if (scope.scheduled) return scope.scheduled(name)
       if (!canQuery || !scope.audience || !scope.identity) return undefined
       const binding = scope.grant?.(name)
       return binding && !binding.signal.aborted && sameIdentity(scope.identity, binding.identity) ? binding : undefined
     }
     const denial = (name: string, args?: unknown): string | undefined => {
       if (this.workspace && !this.workspace.allowed(agent)) return 'im_channel_authorization_changed'
+      if (name === 'schedule_create')
+        return !scope.scheduled && this.canCreateSchedule?.(agent) ? undefined : 'im_schedule_private_required'
+      if (
+        scope.scheduled &&
+        (mediaTools.has(name) ||
+          [
+            'dingtalk_call',
+            'ask_user_question',
+            'working_directory',
+            'exit_plan_mode',
+            'present',
+            'visualize',
+          ].includes(name))
+      )
+        return 'im_scheduled_live_reply_unavailable'
       if (employeeTools && employeeWorkspaceTool(name)) {
         const reason = employeeTools.workspace.reason({ name, agent, arguments: args })
         if (reason) return reason
@@ -180,6 +198,7 @@ export class ImTools {
         // A shadow inherited by another scope must never borrow this Agent's
         // identity, even if that scope does not execute our guard.
         if (exec.agent !== agent) return Promise.reject(new Error('im_agent_mismatch'))
+        if (scope.scheduled) return Promise.reject(new Error('im_scheduled_live_reply_unavailable'))
         if (this.workspace && !this.workspace.allowed(agent))
           return Promise.reject(new Error('im_channel_authorization_changed'))
         return tool.execute(args, exec)
@@ -196,7 +215,11 @@ export class ImTools {
         unregisterQuery = host.on(
           'tools/execute',
           async (exec, next) => {
-            if (employeeTools && employeeWorkspaceTool(exec.name)) {
+            if (
+              (employeeTools && employeeWorkspaceTool(exec.name)) ||
+              exec.name === 'schedule_create' ||
+              !!scope.scheduled
+            ) {
               const reason = exec.agent === agent ? denial(exec.name, exec.arguments) : 'im_agent_mismatch'
               if (reason) throw new Error(reason)
             }
@@ -258,5 +281,13 @@ export class ImTools {
     scope.identity = identity
     bindAttachment?.()
     return scope.refresh()
+  }
+
+  /** Refresh the model tool list for the exact Agent turn that claimed a native input. */
+  turn(agent: HostAgent, scheduled?: Grant): void {
+    const scope = this.scopes.get(agent.ctx)
+    if (!scope || scope.agent !== agent) return
+    scope.scheduled = scheduled
+    scope.refresh()
   }
 }
