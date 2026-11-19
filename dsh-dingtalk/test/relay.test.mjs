@@ -627,7 +627,9 @@ test('offline and restored device; binding persists, unbinding removes it', asyn
     a = await f.client('a')
   await f.pair(a, 'a')
   a.c.stop()
-  await new Promise((r) => setTimeout(r, 30))
+  const deadline = Date.now() + 2_000
+  while (f.gateway.status().onlineUsers !== 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10))
+  assert.equal(f.gateway.status().onlineUsers, 0)
   await f.gateway.receive(f.message('a'))
   assert.match(f.notices.at(-1).text, /离线/)
   await a.c.start({

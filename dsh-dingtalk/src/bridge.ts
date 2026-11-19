@@ -55,6 +55,8 @@ export interface BridgeOptions {
   compose(): Promise<{ agentPreset?: string; setup?: AgentSetup }>
   /** Refresh transport context for tools that wait on channel input. */
   onAgentMessage(agent: HostAgent, msg: InboundMessage, cwd: string): void | Promise<void>
+  onFollowup?(agent: HostAgent, msg: InboundMessage, id: string, cwd: string): void
+  extraContext?(msg: InboundMessage): TextBlock | undefined
   /** Apply trusted channel commands to the Agent before the user prompt starts. */
   prepareTurn?(agent: HostAgent, msg: InboundMessage): Promise<string | undefined>
   onTurnSettled?(agent: HostAgent, msg: InboundMessage, scopeKey: string, completed: boolean): Promise<void>
@@ -67,6 +69,7 @@ export interface BridgeOptions {
 export class Bridge {
   private closed = false
   private readonly owned = new Map<string, AgentHandle>()
+  private readonly opening = new Map<string, Promise<HostAgent>>()
 
   async close(): Promise<string[]> {
     this.closed = true
@@ -94,6 +97,16 @@ export class Bridge {
     if (this.closed) throw new Error('employee_stopping')
     authorization.check()
     const agent = await this.agentFor(scopeKey, authorization.cwd, authorization)
+    authorization.checkAgent(agent)
+    return agent
+  }
+
+  /** Restore exactly the saved conversation Session for native schedule delivery. */
+  async forSchedule(id: string, scopeKey: string, authorization: BridgeAuthorization): Promise<HostAgent> {
+    if (this.closed) throw new Error('employee_stopping')
+    authorization.check()
+    if (!authorization.canResume(id)) throw new Error('scheduled_session_changed')
+    const agent = await this.agentFor(scopeKey, authorization.cwd, authorization, id)
     authorization.checkAgent(agent)
     return agent
   }
@@ -137,8 +150,12 @@ export class Bridge {
     }
     if (content.length === 0) content.push({ type: 'text', text: '（用户发来一张图片）' })
     authorization?.checkAgent(agent)
+    const context = this.opts.extraContext?.(msg)
+    if (context) content.push(context)
+    const id = randomUUID()
+    this.opts.onFollowup?.(agent, msg, id, cwd)
     agent.followup({
-      id: randomUUID(),
+      id,
       role: 'user',
       content,
       source: { kind: 'user' },
@@ -148,7 +165,32 @@ export class Bridge {
     return agent.id
   }
 
-  private async agentFor(conversationId: string, cwd: string, authorization?: BridgeAuthorization): Promise<HostAgent> {
+  private agentFor(
+    conversationId: string,
+    cwd: string,
+    authorization?: BridgeAuthorization,
+    expected?: string,
+  ): Promise<HostAgent> {
+    const previous = this.opening.get(conversationId)
+    const next = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(() =>
+      this.openAgent(conversationId, cwd, authorization, expected),
+    )
+    this.opening.set(conversationId, next)
+    void next
+      .finally(() => {
+        if (this.opening.get(conversationId) === next) this.opening.delete(conversationId)
+      })
+      .catch(() => undefined)
+    return next
+  }
+
+  private async openAgent(
+    conversationId: string,
+    cwd: string,
+    authorization?: BridgeAuthorization,
+    expected?: string,
+  ): Promise<HostAgent> {
+    if (this.closed) throw new Error('employee_stopping')
     // Entry-point-created agents carry no session-local model selection, so the
     // route must be supplied here or prompt assembly fails ({{model}} unset).
     // Likewise the preset must be composed via setup, or the agent has no tools.
@@ -168,7 +210,7 @@ export class Bridge {
               },
             }
           }
-    const bound = this.bindings.get(conversationId)
+    const bound = expected ?? this.bindings.get(conversationId)
     if (bound) {
       const running = this.agents.get(sessionId(bound))
       let disposedOwned = false
@@ -188,6 +230,7 @@ export class Bridge {
           disposedOwned = true
         }
         if (!this.opts.recoverForeignSession) throw new Error('session_owned_by_another_runtime')
+        if (expected !== undefined && !disposedOwned) throw new Error('scheduled_session_in_use')
         this.opts.log('bound session active in another runtime; replacing it with a fresh channel session')
       }
       if ((!running || disposedOwned) && (!authorization || authorization.canResume(bound)))
@@ -200,9 +243,11 @@ export class Bridge {
           this.opts.log(`resumed session ${bound} for conversation ${conversationId}`)
           return this.own(handle)
         } catch (err) {
+          if (expected !== undefined) throw err
           this.opts.log(`resume ${bound} failed (${err instanceof Error ? err.message : err}); creating fresh`)
         }
     }
+    if (expected !== undefined) throw new Error('scheduled_session_changed')
     const id = sessionId(randomUUID())
     const handle = await this.agents.create({
       sessionId: id,

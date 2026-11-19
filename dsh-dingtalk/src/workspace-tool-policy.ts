@@ -32,6 +32,7 @@ interface Grant {
   readonly owner: WorkspaceSessionOwner
   readonly controller: AbortController
   readonly signal: AbortSignal
+  readonly scheduled: boolean
   ready: boolean
 }
 
@@ -102,11 +103,44 @@ export class WorkspaceToolPolicy {
     this.active.clear()
   }
 
+  ownsSchedule(id: string, scopeKey: string, directory: string, authority: WorkspaceAuthority): boolean {
+    const owner = this.options.owners.get(id)
+    return (
+      !!owner &&
+      owner.version === 1 &&
+      owner.scopeKey === scopeKey &&
+      owner.cwd === directory &&
+      owner.bindingId === authority.bindingId &&
+      owner.profile === authority.profile &&
+      sameIdentity(owner.identity, authority.identity)
+    )
+  }
+
+  /** Restore a task's saved Session without substituting the current chat Session or workspace. */
+  captureScheduled(
+    id: string,
+    scopeKey: string,
+    directory: string,
+    authority: WorkspaceAuthority,
+  ): BridgeAuthorization {
+    if (!this.ownsSchedule(id, scopeKey, directory, authority)) throw new Error('scheduled_session_changed')
+    return this.admit(authority, scopeKey, directory, true)
+  }
+
   capture(message: unknown, scopeKey: string, selected: string, captured?: WorkspaceAuthority): BridgeAuthorization {
     this.receipt(scopeKey)
     const authority = captured ?? this.options.authority()
     if (!authority || authority.signal.aborted || !sameIdentity(messageIdentity(message), authority.identity))
       throw new Error('im_channel_authorization_unavailable')
+    return this.admit(authority, scopeKey, selected, false)
+  }
+
+  private admit(
+    authority: WorkspaceAuthority,
+    scopeKey: string,
+    selected: string,
+    scheduled: boolean,
+  ): BridgeAuthorization {
     const cwd = this.checkWorkspace(selected)
     let selection = this.selections.get(scopeKey)
     if (!selection) this.selections.set(scopeKey, (selection = new AbortController()))
@@ -142,7 +176,7 @@ export class WorkspaceToolPolicy {
         throw new Error('im_channel_authorization_changed')
       if (
         this.checkWorkspace(selected) !== cwd ||
-        this.checkWorkspace(this.options.selectedWorkspace(scopeKey)) !== cwd
+        (!scheduled && this.checkWorkspace(this.options.selectedWorkspace(scopeKey)) !== cwd)
       )
         throw new Error('im_workspace_changed')
     }
@@ -167,7 +201,13 @@ export class WorkspaceToolPolicy {
       canReuse: (agent) => {
         const grant = this.grants.get(agent)
         return (
-          !!grant && grant.authority.signal === authority.signal && grant.selection === lease && this.allowed(agent)
+          !!grant &&
+          (scheduled || !grant.scheduled) &&
+          grant.owner.scopeKey === scopeKey &&
+          grant.owner.cwd === cwd &&
+          grant.authority.signal === authority.signal &&
+          grant.selection === lease &&
+          this.allowed(agent)
         )
       },
       canResume: (id) => {
@@ -191,6 +231,7 @@ export class WorkspaceToolPolicy {
           owner,
           controller,
           signal: AbortSignal.any([authority.signal, lease.signal, controller.signal]),
+          scheduled,
           ready: false,
         }
         this.grants.set(agent, grant)
@@ -248,7 +289,7 @@ export class WorkspaceToolPolicy {
         { get(session: object): string } | undefined
       const owner = this.options.owners.get(agent.id)
       return (
-        this.options.bindings.get(owner?.scopeKey ?? '') === agent.id &&
+        (grant.scheduled || this.options.bindings.get(owner?.scopeKey ?? '') === agent.id) &&
         !!owner &&
         owner.version === 1 &&
         owner.scopeKey === grant.owner.scopeKey &&

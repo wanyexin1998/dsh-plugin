@@ -12,6 +12,7 @@ import {
   type HostSchedule,
   type HostScheduleCommands,
 } from './scheduled-tasks.js'
+import { NativeSchedules, type NativeScheduleHost } from './native-schedules.js'
 import type { InboundMessage } from './stream.js'
 /**
  * dsh-dingtalk — DingTalk IM channel plugin for DeepSeek Harness.
@@ -523,13 +524,29 @@ async function startAccount(
         ? relay.enterpriseAuthority()
         : undefined
   let scheduled: EmployeeSchedules | undefined
+  let nativeSchedules: NativeSchedules | undefined
+  let nativeScheduleHost: NativeScheduleHost | undefined
+  const scheduleTimeZone = config.nativeScheduledTasks
+    ? new Intl.DateTimeFormat('zh-CN', {
+        dateStyle: 'full',
+        timeStyle: 'long',
+        timeZone: config.nativeScheduleTimeZone ?? 'Asia/Shanghai',
+      })
+    : undefined
   let removeScheduledProvider: (() => void) | undefined
+  let removeNativeProvider: (() => void) | undefined
   const refreshScheduledProvider = () => {
     if (scheduled && workspaceAuthority()) {
       removeScheduledProvider ??= scheduled.install()
     } else {
       removeScheduledProvider?.()
       removeScheduledProvider = undefined
+    }
+    if (nativeSchedules && nativeScheduleHost && workspaceAuthority()) {
+      removeNativeProvider ??= nativeSchedules.install(nativeScheduleHost)
+    } else {
+      removeNativeProvider?.()
+      removeNativeProvider = undefined
     }
   }
   if (config.scheduledTasks && !personal && relay instanceof RobotConnection && sharedRoots && employeeWorkspace) {
@@ -786,6 +803,7 @@ async function startAccount(
     workspacePolicy,
     enterpriseRoot ? (agent) => files.canSendAttachment(agent) : undefined,
     employeeTools,
+    (agent) => nativeSchedules?.canCreate(agent) === true,
   )
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
@@ -867,6 +885,20 @@ async function startAccount(
       files.install(agent.ctx, agent, offerAttachment)
       void workspace.attach(agent.id, sessionCwd)
     },
+    onFollowup: (agent, msg, id, sessionCwd) => {
+      if (!nativeSchedules || msg.conversationType !== 'direct' || !channelOwns(msg)) return
+      const authority = incomingAuthority.get(msg)
+      if (authority) nativeSchedules.inboundMessage(agent, id, msg.conversationId, sessionCwd, authority)
+    },
+    extraContext: (msg) => {
+      if (!nativeSchedules || !scheduleTimeZone || msg.conversationType !== 'direct' || !channelOwns(msg)) return
+      const localTime = scheduleTimeZone.format()
+      const zone = scheduleTimeZone.resolvedOptions().timeZone
+      return {
+        type: 'text',
+        text: `[钉钉私聊时间] 当前 ${localTime}。用户未另行指定时，用 ${zone} 解释时间。用户明确要求定时执行时，可用 schedule_create；在指令中保留每次执行的完整需求。`,
+      }
+    },
     prepareTurn: async (agent, msg) => {
       const task = employeeTools && requestedPlan(msg.text)
       if (!task || !workspacePolicy) return
@@ -915,6 +947,54 @@ async function startAccount(
       }
     },
   })
+  if (config.nativeScheduledTasks && !personal && relay instanceof RobotConnection && sharedRoots && workspacePolicy) {
+    const manager = new NativeSchedules({
+      state: stateDir,
+      authority: () => relay.enterpriseAuthority(),
+      ownsSession: (id, origin, binding) =>
+        workspacePolicy.ownsSchedule(id, origin.conversation, origin.directory, binding),
+      allowsAgent: (agent) => workspacePolicy.allowed(agent),
+      restore: (id, origin, binding) =>
+        bridge.forSchedule(
+          id,
+          origin.conversation,
+          workspacePolicy.captureScheduled(id, origin.conversation, origin.directory, binding),
+        ),
+      query: (name, binding) => relay.scheduledQuery(name, binding),
+      configure: (agent, grant) => imTools.turn(agent, grant),
+      send: (binding, text) => relay.sendScheduledReminder(binding, text),
+      log,
+    })
+    ctx.inject(['schedule'], (host) => {
+      const schedule = host.get('schedule') as NativeScheduleHost | undefined
+      if (typeof schedule?.createForAgent !== 'function') {
+        log('native scheduled tasks unavailable: compatible Host Schedule required')
+        return
+      }
+      nativeSchedules = manager
+      nativeScheduleHost = schedule
+      refreshScheduledProvider()
+      ;(host as any).on(
+        'agent/inbox/claimed',
+        ({
+          agent,
+          message,
+          turn,
+        }: {
+          agent: HostAgent
+          message: Parameters<NativeSchedules['claim']>[1]
+          turn: number
+        }) => manager.claim(agent, message, turn),
+      )
+      ;(host as any).on('agent/disposed', ({ agent }: { agent: HostAgent }) => manager.dispose(agent))
+      host.effect(() => () => {
+        nativeSchedules = undefined
+        nativeScheduleHost = undefined
+        refreshScheduledProvider()
+        return manager.drain()
+      })
+    })
+  }
   const commands = new Commands({
     agents,
     outbound: replySink,
@@ -981,10 +1061,10 @@ async function startAccount(
   })
 
   ;(ctx as any).on('session/event', (session: HostSession, event: HostSessionEvent) => {
-    renderer.onSessionEvent(session, event)
+    if (!nativeSchedules?.event(session.id, event)) renderer.onSessionEvent(session, event)
   })
   ;(ctx as any).on('agent/assistant-stream', ({ agent, frame }: any) => {
-    renderer.onAssistantStream(agent, frame)
+    if (!nativeSchedules?.rendersSeparately(agent.id)) renderer.onAssistantStream(agent, frame)
   })
 
   // Reject visibility (Feishu SDK's reject-with-reason lesson): tell the
