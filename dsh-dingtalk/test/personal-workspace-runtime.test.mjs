@@ -13,6 +13,18 @@ import { png } from './fixtures/workspace-image.mjs'
 // Bridge, Commands, ImTools, QuestionManager and WorkspaceToolPolicy.
 const connections = [],
   renderers = []
+const employeeWorkspace = await import('../lib/employee-workspace.js')
+const fixtureVolumes = new Set()
+mock.module('../lib/employee-workspace.js', {
+  namedExports: {
+    ...employeeWorkspace,
+    cellgentWorkspaceRoots(configured, ...args) {
+      return fixtureVolumes.has(configured)
+        ? { volume: [configured], selection: [configured] }
+        : employeeWorkspace.cellgentWorkspaceRoots(configured, ...args)
+    },
+  },
+})
 class RelayClient {}
 class RobotConnection extends RelayClient {
   constructor(options) {
@@ -138,11 +150,16 @@ async function fixture(
     resolveModelInfo,
     enterprise = false,
     outsideWorkspace = false,
+    schedules = false,
   } = {},
 ) {
   const container = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dsh-channel-workspace-')))
   const root = enterprise ? path.join(container, 'employee-a') : container
   await mkdir(root, { recursive: true })
+  if (schedules) {
+    fixtureVolumes.add(root)
+    t.after(() => fixtureVolumes.delete(root))
+  }
   const other = path.join(container, 'employee-b')
   await mkdir(other)
   const target = path.join(root, 'target')
@@ -166,6 +183,19 @@ async function fixture(
   const live = new Map(),
     headers = new Map(),
     workspaces = new Map()
+  const inboxClaims = new Set()
+  const providers = new Map()
+  const schedule = {
+    async createForAgent(agent, request) {
+      assert.ok(providers.get('dingtalk-native')?.select(agent), 'creation needs a native private route')
+      executed.push('schedule_create')
+      return request
+    },
+    registerManagedDelivery(name, provider) {
+      providers.set(name, provider)
+      return () => providers.delete(name)
+    },
+  }
   const foreignAgent = {
     id: 'legacy-session',
     marker: 'foreign',
@@ -217,6 +247,7 @@ async function fixture(
       'get_goal',
       'exit_plan_mode',
       'subagent',
+      ...(schedules ? ['schedule_create'] : []),
     ])
     const agentCtx = {
       tools: {
@@ -274,6 +305,7 @@ async function fixture(
       ...(missing === 'session' ? {} : { session: { id: options.sessionId, header: { ...options.meta } } }),
       followup(message) {
         followups.push({ agent, message })
+        for (const claim of inboxClaims) claim({ agent, message, turn: followups.length })
       },
       cancel() {
         renderer.release(this.id)
@@ -350,11 +382,21 @@ async function fixture(
           return prepare({ sessionId: options.resumeSessionId, meta: header, setup: options.setup })
         },
       },
-      on() {
+      on(name, listener) {
+        if (name === 'agent/inbox/claimed') {
+          inboxClaims.add(listener)
+          return () => inboxClaims.delete(listener)
+        }
         return () => {}
+      },
+      inject(names, apply) {
+        assert.ok(!names.includes('commands'), 'legacy delivery needs no command registration')
+        apply(this)
       },
       get(name) {
         if (name === 'dingtalkImTools') return noDwsIdentity
+        if (name === 'schedule' && schedules) return schedule
+        if (name === 'tools' && schedules) return { guard: () => () => {} }
         if (name === 'profileContext') return { dir: path.join(root, 'profiles', 'web') }
         if (name === 'sessionPersistence') return { list: async () => [] }
         if (name === 'workspaceRegistry')
@@ -367,6 +409,11 @@ async function fixture(
           return {
             resolve: async () => ({ id: 'fixture-preset' }),
             async mount(ctx) {
+              if (schedules)
+                ctx.tools.register({
+                  name: 'schedule_create',
+                  execute: (args, exec) => schedule.createForAgent(exec.agent, args),
+                })
               for (const name of ['read', 'write', 'bash', 'todo_write', 'get_goal', 'exit_plan_mode', 'present'])
                 ctx.tools.register({
                   name,
@@ -405,6 +452,8 @@ async function fixture(
       streaming: { enabled: false },
       emotionFirstResponse: false,
       rejectNotice: false,
+      nativeScheduledTasks: schedules,
+      scheduledTasks: schedules,
     }),
   )
   connection = connections.at(-1)
@@ -442,6 +491,7 @@ async function fixture(
     attempts,
     followups,
     executed,
+    providers,
     live,
     foreignAgent,
     get resumeCalls() {
@@ -449,6 +499,35 @@ async function fixture(
     },
   }
 }
+
+test('retired chat commands cannot start a model turn and confirmed one-time requests cannot create recurring tasks', async (t) => {
+  const h = await fixture(t, { enterprise: true, schedules: true })
+  assert.equal(typeof h.providers.get('dingtalk-private'), 'function', 'existing tasks keep their delivery provider')
+  await h.send('/dt-task remind daily 09:00 订单')
+  assert.match(h.connection.operations.at(-1).value.text, /旧定时任务命令已停用/)
+  assert.equal(h.followups.length, 0)
+  assert.deepEqual(h.executed, [])
+
+  const cases = [
+    ['帮我创建定时任务，创建成功后 3 分钟触发一次。到点提醒我「查看订单」。', 180],
+    ['建一个报告任务，创建成功后 7 分钟执行一次。到点查询最新数据。', 420],
+  ]
+  for (const [index, [text, seconds]] of cases.entries()) {
+    await h.send(text)
+    await waitUntil(() => h.followups.length === index + 1)
+    const { agent, message } = h.followups.at(-1)
+    assert.match(message.content.at(-1).text, /只执行一次用 after_seconds 或 at/)
+    for (const wrong of [{ every_seconds: seconds }, { daily: {} }, { weekly: {} }, { cron: {} }])
+      await assert.rejects(agent.invoke('schedule_create', wrong), /im_schedule_once_required.*after_seconds 或 at/)
+    assert.equal(h.executed.length, index, 'rejected model calls cannot write a task')
+    assert.deepEqual(await agent.invoke('schedule_create', { after_seconds: seconds }), { after_seconds: seconds })
+  }
+  await h.send('每 3 分钟检查一次订单')
+  await waitUntil(() => h.followups.length === 3)
+  assert.deepEqual(await h.followups.at(-1).agent.invoke('schedule_create', { every_seconds: 180 }), {
+    every_seconds: 180,
+  })
+})
 
 test('enterprise public apply creates a workbook only in its employee workspace and rejects foreign routes and cwd', async (t) => {
   const h = await fixture(t, { enterprise: true })

@@ -92,15 +92,6 @@ export class Bridge {
     private readonly opts: BridgeOptions,
   ) {}
 
-  /** Reserve a session for a trusted channel command without starting a model turn. */
-  async forCommand(scopeKey: string, authorization: BridgeAuthorization): Promise<HostAgent> {
-    if (this.closed) throw new Error('employee_stopping')
-    authorization.check()
-    const agent = await this.agentFor(scopeKey, authorization.cwd, authorization)
-    authorization.checkAgent(agent)
-    return agent
-  }
-
   /** Restore exactly the saved conversation Session for native schedule delivery. */
   async forSchedule(id: string, scopeKey: string, authorization: BridgeAuthorization): Promise<HostAgent> {
     if (this.closed) throw new Error('employee_stopping')

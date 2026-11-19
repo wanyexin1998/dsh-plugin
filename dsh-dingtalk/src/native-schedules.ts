@@ -36,17 +36,38 @@ interface Delivery {
   origin: ScheduledOrigin
 }
 
+interface InteractiveInput {
+  id: string
+  origin: ScheduledOrigin
+  once: boolean
+}
+
 interface Turn {
   agent: HostAgent
   number: number
   count: number
-  interactive?: ScheduledOrigin
+  interactive?: InteractiveInput
   scheduled?: { input: string; delivery?: Delivery }
   final: string[]
 }
 
 type Phase = 'started' | 'blocked' | 'failed' | 'sending' | 'accepted' | 'unknown'
 type Authority = (name: string) => WorkspaceAuthority | undefined
+export type ScheduleCreationTiming = 'once' | 'either'
+
+/** Read timing instructions outside quoted reminders and report content. */
+function requestsOneTimeSchedule(text: string): boolean {
+  const instruction = text.replace(/「[^」]*」|『[^』]*』|“[^”]*”|‘[^’]*’|"[^"\n]*"|`[^`]*`/gu, ' ')
+  const repeats =
+    /每(?:隔|日|天|个?工作日|周|星期|月|年|\s*[0-9一二两三四五六七八九十半]*\s*(?:秒|分钟|小时|天|日|周|星期|月|年))|定期|周期性|\b(?:every|daily|weekly|monthly)\b/iu
+  if (repeats.test(instruction)) return false
+  return (
+    /(?:触发|执行|运行|提醒(?:我)?|跑)\s*(?:一次|一遍)|(?:只|仅)\s*(?:一次|一遍)|一次性(?:的)?(?:定时任务|提醒)|不(?:要)?(?:重复|循环)|\b(?:only once|just once|run once|one[- ]time)\b/iu.test(
+      instruction,
+    ) ||
+    /[0-9一二两三四五六七八九十半]+\s*(?:秒钟?|分钟|小时|天)后\s*(?:再)?(?:提醒我|触发|执行|运行)/u.test(instruction)
+  )
+}
 
 function directoryIdentity(path: string): string {
   const info = statSync(path, { bigint: true })
@@ -102,7 +123,7 @@ export interface NativeScheduleHost {
 
 /** Connect one employee's native scheduled turns to that employee's original direct conversation. */
 export class NativeSchedules {
-  private readonly inbound = new WeakMap<HostAgent, { id: string; origin: ScheduledOrigin }>()
+  private readonly inbound = new WeakMap<HostAgent, InteractiveInput>()
   private readonly turns = new Map<string, Turn>()
   private readonly sending = new Set<Promise<void>>()
 
@@ -153,9 +174,11 @@ export class NativeSchedules {
     conversation: string,
     directory: string,
     live: WorkspaceAuthority,
+    text: string,
   ): void {
     this.inbound.set(agent, {
       id,
+      once: requestsOneTimeSchedule(text),
       origin: {
         identity: live.identity,
         binding: live.bindingId,
@@ -167,9 +190,12 @@ export class NativeSchedules {
     })
   }
 
-  canCreate(agent: HostAgent): boolean {
+  /** Return the timing allowed by the verified private input claimed for this turn. */
+  creationTiming(agent: HostAgent): ScheduleCreationTiming | undefined {
     const turn = this.turns.get(agent.id)
-    return turn?.agent === agent && turn.count === 1 && !!turn.interactive && !!this.live(agent, turn.interactive)
+    const input = turn?.interactive
+    if (!input || turn?.agent !== agent || turn.count !== 1 || !this.live(agent, input.origin)) return undefined
+    return input.once ? 'once' : 'either'
   }
 
   /** Observe actual inbox claims so scheduled output cannot attach to a different turn. */
@@ -195,7 +221,7 @@ export class NativeSchedules {
     } else if (input.source?.kind === 'user') {
       const arrived = this.inbound.get(agent)
       if (arrived?.id === input.id) {
-        turn.interactive = arrived.origin
+        turn.interactive = arrived
         this.inbound.delete(agent)
       }
     }
@@ -257,8 +283,8 @@ export class NativeSchedules {
   }
 
   private select(agent: HostAgent): string | undefined {
-    const origin = this.turns.get(agent.id)?.interactive
-    return origin && this.canCreate(agent) ? JSON.stringify(origin) : undefined
+    const input = this.turns.get(agent.id)?.interactive
+    return input && this.creationTiming(agent) ? JSON.stringify(input.origin) : undefined
   }
 
   private origin(task: ScheduledTask): ScheduledOrigin {
