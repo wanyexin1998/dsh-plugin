@@ -4,6 +4,7 @@ import { reviewedQueryTool } from './relay/connection-config.js'
 import type { ChannelBinding } from './relay/client.js'
 import { employeeWorkspaceTool } from './employee-workspace.js'
 import type { EmployeeChannelTools, EmployeeToolHost, ToolCall } from './employee-channel-tools.js'
+import type { ScheduleCreationTiming } from './native-schedules.js'
 
 // Reviewed ordinary tools in the pinned DSH 0.2.1-rc.5 profile. Unknown tools
 // may start Agents outside this scope (workflow/ralph/custom delegation names),
@@ -80,7 +81,7 @@ export class ImTools {
     private readonly workspace?: { allowed(agent: HostAgent): boolean },
     private readonly canSendAttachment?: (agent: HostAgent) => boolean,
     private readonly employeeTools?: EmployeeChannelTools,
-    private readonly canCreateSchedule?: (agent: HostAgent) => boolean,
+    private readonly scheduleCreationTiming?: (agent: HostAgent) => ScheduleCreationTiming | undefined,
   ) {}
 
   install(ctx: HostAgentContext, agent: HostAgent): void {
@@ -135,8 +136,18 @@ export class ImTools {
     }
     const denial = (name: string, args?: unknown): string | undefined => {
       if (this.workspace && !this.workspace.allowed(agent)) return 'im_channel_authorization_changed'
-      if (name === 'schedule_create')
-        return !scope.scheduled && this.canCreateSchedule?.(agent) ? undefined : 'im_schedule_private_required'
+      if (name === 'schedule_create') {
+        const timing = !scope.scheduled && this.scheduleCreationTiming?.(agent)
+        if (!timing) return 'im_schedule_private_required'
+        if (
+          timing === 'once' &&
+          args &&
+          typeof args === 'object' &&
+          ['every_seconds', 'daily', 'weekly', 'cron'].some((key) => key in args)
+        )
+          return 'im_schedule_once_required: 用户只要求执行一次。本次未创建任务，请改用 after_seconds 或 at 重试。'
+        return undefined
+      }
       if (
         scope.scheduled &&
         (mediaTools.has(name) ||

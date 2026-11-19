@@ -6,12 +6,7 @@ import { ImTools, type ImToolFactory } from './im-tools.js'
 import { WorkspaceToolPolicy, type WorkspaceAuthority, type WorkspaceSessionOwner } from './workspace-tool-policy.js'
 import { EmployeeWorkspace, cellgentWorkspaceRoots, installEmployeeWorkspace } from './employee-workspace.js'
 import { EmployeeChannelTools, requestedPlan, visualizationOrigin } from './employee-channel-tools.js'
-import {
-  EmployeeSchedules,
-  scheduledTaskCommand,
-  type HostSchedule,
-  type HostScheduleCommands,
-} from './scheduled-tasks.js'
+import { EmployeeSchedules, type HostSchedule } from './scheduled-tasks.js'
 import { NativeSchedules, type NativeScheduleHost } from './native-schedules.js'
 import type { InboundMessage } from './stream.js'
 /**
@@ -550,11 +545,10 @@ async function startAccount(
     }
   }
   if (config.scheduledTasks && !personal && relay instanceof RobotConnection && sharedRoots && employeeWorkspace) {
-    ctx.inject(['schedule', 'commands'], (host) => {
+    ctx.inject(['schedule'], (host) => {
       const schedule = host.get('schedule') as HostSchedule | undefined
-      const commands = host.get('commands') as HostScheduleCommands | undefined
-      if (!schedule || !commands || typeof schedule.registerManagedDelivery !== 'function') {
-        log('scheduled tasks unavailable: compatible Host Schedule and commands required')
+      if (typeof schedule?.registerManagedDelivery !== 'function') {
+        log('legacy scheduled tasks unavailable: compatible Host Schedule required')
         return
       }
       const manager = new EmployeeSchedules(
@@ -565,15 +559,6 @@ async function startAccount(
         (binding, text) => relay.sendScheduledReminder(binding, text),
         process.env.DSH_PRIMARY_RUNTIME &&
           path.join(process.env.DSH_PRIMARY_RUNTIME, 'dependencies', 'python', 'bin', 'python3'),
-      )
-      host.effect(() =>
-        commands.register({
-          name: 'dt-task',
-          description: '管理本人钉钉私聊提醒和工作区定时报表',
-          input: { hint: 'list、remind、report、pause、resume、move 或 delete' },
-          recordInput: false,
-          handler: ({ agent, rawInput, signal }) => manager.command(rawInput, async () => agent, signal),
-        }),
       )
       scheduled = manager
       refreshScheduledProvider()
@@ -803,7 +788,7 @@ async function startAccount(
     workspacePolicy,
     enterpriseRoot ? (agent) => files.canSendAttachment(agent) : undefined,
     employeeTools,
-    (agent) => nativeSchedules?.canCreate(agent) === true,
+    (agent) => nativeSchedules?.creationTiming(agent),
   )
   const installBotTools = (agentCtx: HostAgentContext, agent: HostAgent) => {
     imTools.install(agentCtx, agent)
@@ -888,7 +873,7 @@ async function startAccount(
     onFollowup: (agent, msg, id, sessionCwd) => {
       if (!nativeSchedules || msg.conversationType !== 'direct' || !channelOwns(msg)) return
       const authority = incomingAuthority.get(msg)
-      if (authority) nativeSchedules.inboundMessage(agent, id, msg.conversationId, sessionCwd, authority)
+      if (authority) nativeSchedules.inboundMessage(agent, id, msg.conversationId, sessionCwd, authority, msg.text)
     },
     extraContext: (msg) => {
       if (!nativeSchedules || !scheduleTimeZone || msg.conversationType !== 'direct' || !channelOwns(msg)) return
@@ -896,7 +881,7 @@ async function startAccount(
       const zone = scheduleTimeZone.resolvedOptions().timeZone
       return {
         type: 'text',
-        text: `[钉钉私聊时间] 当前 ${localTime}。用户未另行指定时，用 ${zone} 解释时间。用户明确要求定时执行时，可用 schedule_create；在指令中保留每次执行的完整需求。`,
+        text: `[钉钉私聊时间] 当前 ${localTime}。用户未另行指定时，用 ${zone} 解释时间。用户明确要求定时执行时，可用 schedule_create，在指令中保留到点要做的事。只执行一次用 after_seconds 或 at。例如「3 分钟后提醒我，只提醒一次」用 after_seconds: 180。只有用户明确要求重复时，才用 every_seconds、daily、weekly 或 cron。`,
       }
     },
     prepareTurn: async (agent, msg) => {
@@ -1177,27 +1162,9 @@ async function startAccount(
       if (!channelOwns(msg)) return
       log(`inbound message accepted (${msg.conversationType})`)
 
-      if (scheduled && workspacePolicy && scheduledTaskCommand.test(msg.text)) {
-        if (msg.conversationType !== 'direct') {
-          await replySink.sendText(msg, '请在本人企业机器人私聊中管理定时任务。')
-          return
-        }
-        const manager = scheduled
-        const signal = AbortSignal.any([incomingAuthority.get(msg)!.signal, incomingSelection.get(msg)!])
-        const outcome = await manager.command(
-          msg.text.slice('/dt-task'.length),
-          async () => {
-            const admission = workspacePolicy.capture(
-              msg,
-              scopeKey,
-              workspaceOverrides.get(scopeKey) ?? cwd,
-              incomingAuthority.get(msg),
-            )
-            return bridge.forCommand(scopeKey, admission)
-          },
-          signal,
-        )
-        if (channelOwns(msg)) await replySink.sendText(msg, outcome.text)
+      if (/^\/dt-task(?=$|\s)/u.test(msg.text.trimStart())) {
+        if (msg.conversationType === 'direct')
+          await replySink.sendText(msg, '旧定时任务命令已停用。请在 Cellgent 网页的「自动化任务」查看和管理任务。')
         return
       }
 

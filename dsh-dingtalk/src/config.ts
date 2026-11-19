@@ -94,7 +94,7 @@ const DigitalEmployeeConfigSchema: Schema<DigitalEmployeeConfig> = Schema.object
 export const Config: Schema<Config> = Schema.object({
   robotConnection: Schema.any().description('Enterprise robot connection'),
   relay: Schema.boolean().default(false).description('共享机器人模式；应用凭据只在网关配置'),
-  scheduledTasks: Schema.boolean().default(false).description('企业员工席位启用本人私聊定时任务'),
+  scheduledTasks: Schema.boolean().default(false).description('继续执行已保存的旧版钉钉定时任务'),
   nativeScheduledTasks: Schema.boolean().default(false).description('企业员工私聊可创建原生定时任务并接收结果'),
   nativeScheduleTimeZone: Schema.string().default('Asia/Shanghai').description('钉钉原生任务未指定时区时使用的时区'),
   interactionMode: Schema.union(['auto', 'text'])

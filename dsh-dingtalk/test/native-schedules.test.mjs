@@ -47,17 +47,17 @@ async function setup(t) {
   }
   const create = (instance) => {
     const input = { id: randomUUID(), source: { kind: 'user' } }
-    instance.inboundMessage(agent, input.id, route, state, authority)
+    instance.inboundMessage(agent, input.id, route, state, authority, '每天早上九点查订单')
     assert.equal(adapter.select(agent), undefined)
     instance.claim(agent, input, 1)
-    assert.equal(instance.canCreate(agent), true)
+    assert.equal(instance.creationTiming(agent), 'either')
     const task = {
       sessionId: id,
       record: { id: 'schedule-' + randomUUID() },
       managed: { provider: adapter.name, payload: adapter.select(agent) },
     }
     instance.event(id, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
-    assert.equal(instance.canCreate(agent), false)
+    assert.equal(instance.creationTiming(agent), undefined)
     return task
   }
   return {
@@ -147,4 +147,30 @@ test('mixed input, a different original chat, and a rebound device cannot inheri
   manager.event(agent.id, { type: 'turn/end', data: { turn: 3, reason: { kind: 'completed' } } })
   await manager.drain()
   assert.equal(f.sent.length, 0)
+})
+
+test('timing comes from the verified input and ignores quotes and per-run wording', async (t) => {
+  const f = await setup(t)
+  const manager = f.manager()
+  const inputs = [
+    ['创建成功后 3 分钟触发一次。到点只提醒我「请每天核对订单」', 'once'],
+    ['7 分钟后执行一次，到点查最新订单生成报告', 'once'],
+    ['三分钟后提醒我看订单', 'once'],
+    ['每隔 3 分钟检查一次订单', 'either'],
+    ['每两天检查一次订单', 'either'],
+    ['每分钟运行一次', 'either'],
+    ['每天早上 9 点查账，每次只发送一次', 'either'],
+    ['把「只执行一次」写进报告', 'either'],
+  ]
+  for (const [index, [text, timing]] of inputs.entries()) {
+    const input = { id: randomUUID(), source: { kind: 'user' } }
+    const { agent } = f
+    const turn = index + 1
+    manager.inboundMessage(agent, input.id, 'original-dm', f.state, f.authority(), text)
+    assert.equal(manager.creationTiming(agent), undefined)
+    manager.claim(agent, input, turn)
+    assert.equal(manager.creationTiming(agent), timing, text)
+    manager.event(agent.id, { type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })
+    assert.equal(manager.creationTiming(agent), undefined)
+  }
 })
