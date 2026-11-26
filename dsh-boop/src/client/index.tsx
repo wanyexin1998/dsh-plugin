@@ -44,6 +44,27 @@ export function apply(ctx: any): void {
 }
 
 function applyInner(ctx: any): void {
+  /**
+   * Read an optional client service without triggering Cordis 4's strict
+   * uninjected-property throw (`cannot get property "<name>" without inject`).
+   */
+  const optionalService = <T = any>(name: string): T | undefined => {
+    try {
+      if (typeof ctx.get === 'function') return ctx.get(name) as T | undefined
+      if (typeof ctx.reflect?.get === 'function') return ctx.reflect.get(name) as T | undefined
+      return name.split('.').reduce<any>((acc, key) => acc?.[key], ctx) as T | undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const optionalRemote = () => {
+    const permissionPresets = optionalService('remote.permissionPresets')
+    const agentPresets = optionalService('remote.agentPresets')
+    if (permissionPresets === undefined && agentPresets === undefined) return undefined
+    return { permissionPresets, agentPresets }
+  }
+
   /** Host call over the authenticated connection; folds carrier faults into ok:false. */
   const call: BoopCall = async (endpoint, args) => {
     try {
@@ -65,7 +86,7 @@ function applyInner(ctx: any): void {
       sessions: ctx.sessions,
       uiWorkspace: ctx.uiWorkspace,
       selectAgentPreset: async (sessionId, presetId) => {
-        const select = ctx.remote?.agentPresets?.select
+        const select = optionalService('remote.agentPresets')?.select
         if (typeof select !== 'function') return { ok: false }
         return select(sessionId, presetId)
       },
@@ -203,8 +224,8 @@ function applyInner(ctx: any): void {
             onOpenMain: () => void openMain(),
             sessionTools: {
               sessions: ctx.sessions,
-              remote: ctx.remote,
-              modelDirectories: ctx.modelDirectories,
+              remote: optionalRemote(),
+              modelDirectories: optionalService('modelDirectories'),
             },
           }),
         },
