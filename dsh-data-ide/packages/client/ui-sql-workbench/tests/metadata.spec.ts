@@ -34,7 +34,7 @@ function executorDouble(rows: unknown[][] = []) {
       calls.push({ sql, connId: statementId })
       return { fields: [], rows }
     }),
-    cancel: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => false),
   }
   return { executor, calls }
 }
@@ -177,7 +177,7 @@ describe('SHOW fallback', () => {
         }
         return { fields: [], rows: [] }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     return { executor, calls }
   }
@@ -214,7 +214,7 @@ describe('SHOW fallback', () => {
         if (sql.startsWith('SHOW')) throw new Error('denied')
         return { fields: [], rows: [] }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const broken = await createSchemaReader({ resolve, executor: failing }).schema('conn-1')
     expect(broken.note).toContain('SHOW 回退失败')
@@ -245,7 +245,7 @@ describe('SHOW fallback: sparse rows', () => {
         if (sql.startsWith('SHOW TABLES')) return { fields: [], rows: [['t']] }
         return { fields: [], rows: [['c1'], []] }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const reader = createSchemaReader({ resolve, executor })
 
@@ -273,7 +273,7 @@ describe('object kinds', () => {
         }
         return { fields: [], rows: options.columns }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     return { executor, calls }
   }
@@ -381,7 +381,7 @@ describe('object kinds: sparse rows', () => {
         if (sql.startsWith('SHOW FULL COLUMNS')) return { fields: [], rows: [['c', 'INT']] }
         return { fields: [], rows: [] }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const snapshot = await createSchemaReader({ resolve, executor }).schema('conn-1')
 

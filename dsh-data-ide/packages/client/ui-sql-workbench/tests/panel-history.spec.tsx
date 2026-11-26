@@ -109,6 +109,31 @@ describe('workspace persistence (SQL-201/202)', () => {
     expect(container.textContent).toContain('订单排查')
   })
 
+  it('keeps text typed before the saved workspace returns', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const api = apiDouble({
+      loadWorkspaceState: vi.fn(() => new Promise(resolve => {
+        release = resolve
+      })),
+    })
+    await act(async () => {
+      root.render(<SqlWorkbenchPanel sessionId="s1" api={api} />)
+    })
+    act(() => {
+      setSql(container, 'SELECT typed')
+    })
+    await act(async () => {
+      release({
+        schemaVersion: 1,
+        activeDocId: 'stored-1',
+        docs: [{ id: 'stored-1', title: '旧', connId, sql: 'SELECT stored', pageSize: 500, cursor: 0 }],
+      })
+      await Promise.resolve()
+    })
+
+    expect(readSql(container)).toBe('SELECT typed')
+  })
+
   it('saves the workspace after the debounce, never result sets', async () => {
     const saveWorkspaceState = vi.fn(async () => undefined)
     const api = apiDouble({ saveWorkspaceState })

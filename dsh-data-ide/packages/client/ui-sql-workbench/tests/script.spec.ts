@@ -80,7 +80,7 @@ function depsFor(fail: RegExp | undefined = undefined) {
       if (fail !== undefined && fail.test(sql)) throw new Error('boom')
       return { fields: [{ name: 'v', typeName: 'INT' }], rows: [[1]] }
     }),
-    cancel: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => false),
   }
   const deps: ExecutionDeps = {
     specs: async () => document,
@@ -149,7 +149,7 @@ describe('executeScript', () => {
         ids.push(statementId)
         return { fields: [{ name: 'v', typeName: 'INT' }], rows: [[1]] }
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const deps: ExecutionDeps = {
       specs: async () => document,
@@ -177,7 +177,7 @@ describe('executeScript: non-Error failures', () => {
       query: vi.fn(async () => {
         throw 'plain string failure'
       }),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const deps: ExecutionDeps = {
       specs: async () => document,
@@ -190,5 +190,27 @@ describe('executeScript: non-Error failures', () => {
     expect('refusal' in outcome).toBe(false)
     if ('refusal' in outcome) return
     expect(outcome.statements[0]).toMatchObject({ ok: false, error: { message: 'plain string failure' } })
+  })
+})
+
+describe('executeScript limits', () => {
+  it('refuses a script past the cap instead of dropping the tail', async () => {
+    const { deps, seen } = depsFor()
+    const sql = Array.from({ length: MAX_SCRIPT_STATEMENTS + 1 }, () => 'SELECT 1').join(';')
+
+    const outcome = await executeScript(deps, { connId: 'conn-1', sql })
+
+    expect(outcome).toMatchObject({ refusal: { code: 'TOO_MANY_STATEMENTS' } })
+    expect(seen).toEqual([])
+  })
+
+  it('runs SHOW as written inside a script and continues', async () => {
+    const { deps, seen } = depsFor()
+
+    const outcome = await executeScript(deps, { connId: 'conn-1', sql: 'SHOW TABLES; SELECT 1' })
+
+    expect('refusal' in outcome).toBe(false)
+    expect(seen[0]).toBe('SHOW TABLES')
+    expect(seen.some(sql => sql.includes('SELECT * FROM'))).toBe(true)
   })
 })

@@ -68,6 +68,15 @@ export function createDataSourceStore(store: KvStore): DataSourceStore {
     await store.put(ACTIVE_KEY, document.activeConnId)
   }
 
+  let queue: Promise<void> = Promise.resolve()
+
+  /** One mutation at a time, re-reading inside the lock so two saves cannot clobber each other. */
+  function enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const run = queue.then(work, work)
+    queue = run.then(() => undefined, () => undefined)
+    return run
+  }
+
   return {
     async list() {
       return (await read()).dataSources
@@ -78,26 +87,32 @@ export function createDataSourceStore(store: KvStore): DataSourceStore {
     },
 
     async save(dataSource) {
-      const document = await read()
-      const rest = document.dataSources.filter(entry => entry.id !== dataSource.id)
-      await write({ ...document, dataSources: [...rest, dataSource] })
+      await enqueue(async () => {
+        const document = await read()
+        const rest = document.dataSources.filter(entry => entry.id !== dataSource.id)
+        await write({ ...document, dataSources: [...rest, dataSource] })
+      })
     },
 
     async remove(connId) {
-      const document = await read()
-      const remaining = document.dataSources.filter(entry => entry.id !== connId)
-      if (remaining.length === document.dataSources.length) return false
-      await write({
-        ...document,
-        dataSources: remaining,
-        activeConnId: document.activeConnId === connId ? null : document.activeConnId,
+      return enqueue(async () => {
+        const document = await read()
+        const remaining = document.dataSources.filter(entry => entry.id !== connId)
+        if (remaining.length === document.dataSources.length) return false
+        await write({
+          ...document,
+          dataSources: remaining,
+          activeConnId: document.activeConnId === connId ? null : document.activeConnId,
+        })
+        return true
       })
-      return true
     },
 
     async setActive(connId) {
-      const document = await read()
-      await write({ ...document, activeConnId: connId })
+      await enqueue(async () => {
+        const document = await read()
+        await write({ ...document, activeConnId: connId })
+      })
     },
 
     async active() {
@@ -105,18 +120,20 @@ export function createDataSourceStore(store: KvStore): DataSourceStore {
     },
 
     async recordTestResult(connId, state, at, databaseInfo) {
-      const document = await read()
-      const dataSources = document.dataSources.map(entry =>
-        entry.id === connId
-          ? {
-              ...entry,
-              lastTestState: state,
-              lastTestedAt: at,
-              ...(databaseInfo === undefined ? {} : { databaseInfo }),
-            }
-          : entry,
-      )
-      await write({ ...document, dataSources })
+      await enqueue(async () => {
+        const document = await read()
+        const dataSources = document.dataSources.map(entry =>
+          entry.id === connId
+            ? {
+                ...entry,
+                lastTestState: state,
+                lastTestedAt: at,
+                ...(databaseInfo === undefined ? {} : { databaseInfo }),
+              }
+            : entry,
+        )
+        await write({ ...document, dataSources })
+      })
     },
   }
 }

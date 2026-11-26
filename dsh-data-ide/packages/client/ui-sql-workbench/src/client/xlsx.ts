@@ -128,9 +128,12 @@ export function zip(entries: readonly { readonly name: string; readonly bytes: U
   return out
 }
 
-/** Numeric-looking cell text becomes a number so Excel can sum it. */
+/** A number Excel can store without rounding or stripping a leading zero. */
 function isNumeric(text: string): boolean {
-  return /^-?\d+(\.\d+)?$/.test(text)
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text)) return false
+  const digits = (text.startsWith('-') ? text.slice(1) : text).replace('.', '')
+  if (digits.length > 15) return false
+  return String(Number(text)) === text
 }
 
 function cell(value: string, columnIndex: number, rowIndex: number): string {

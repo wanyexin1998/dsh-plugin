@@ -134,20 +134,30 @@ export function isAgentTab(tab: DocumentTab): boolean {
  * A script delivery carries one entry per statement (Q10: one result tab each);
  * a single delivery carries exactly one, so both shapes converge here.
  */
+/** A shrunk delivery kept fewer rows than the console page size. Page from there. */
+function previewSized(tabs: readonly ScriptTab[], delivery: AgentDelivery): readonly ScriptTab[] {
+  if (delivery.previewRows === undefined) return tabs
+  return tabs.map(tab => {
+    const shown = tab.result?.rows.length ?? 0
+    if (tab.result === null || !tab.result.hasNextPage || shown === 0) return tab
+    return { ...tab, pageSize: shown }
+  })
+}
+
 export function tabsForDelivery(delivery: AgentDelivery): readonly ScriptTab[] {
   if (delivery.kind === 'script' && delivery.script !== undefined) {
-    return delivery.script.map(statement => ({
+    return previewSized(delivery.script.map(statement => ({
       sql: statement.sql,
       result: statement.ok ? ((statement.response ?? null) as ExecuteResponse | null) : null,
       ...(statement.ok ? {} : { error: statement.error ?? { code: 'UNKNOWN', message: '执行失败' } }),
-    }))
+    })), delivery)
   }
   const single = delivery.single
   if (single === undefined) return [{ sql: delivery.sql, result: null }]
   if (!single.ok) {
     return [{ sql: delivery.sql, result: null, error: { code: single.error.code, message: single.error.message } }]
   }
-  return [{ sql: delivery.sql, result: single }]
+  return previewSized([{ sql: delivery.sql, result: single }], delivery)
 }
 
 /** `ai_<label>`, suffixed when the label already names a different batch. */

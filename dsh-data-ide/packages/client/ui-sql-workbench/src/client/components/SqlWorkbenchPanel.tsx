@@ -29,6 +29,7 @@ import {
   setPageSize,
   setSql,
   sortBy,
+  pagingTarget,
 } from '../state/query.ts'
 import type { ExecuteResponse, FilterSpec, SortSpec } from '../../execute/core.ts'
 import {
@@ -73,6 +74,7 @@ import { SchemaTree } from './SchemaTree.tsx'
 import { ScriptResults } from './ScriptResults.tsx'
 import type { ScriptTab } from './ScriptResults.tsx'
 import { splitStatements, statementAt } from '../../execute/split.ts'
+import { checkPermission } from '../../execute/core.ts'
 import { parseLayout } from '../state/layout.ts'
 import { expandStar } from '../expand-star.ts'
 import { formatSql } from '../sql-format.ts'
@@ -122,9 +124,6 @@ import { SqlEditor } from './SqlEditor.tsx'
 import { classes as styles, ensureStyles } from '../styles.ts'
 import css from './sqlWorkbench.css'
 
-/** Same prefix the execution gate refuses unless the connection is writable. */
-const WRITE_STATEMENT = /^\s*(insert|update|delete|replace|merge|truncate|create|alter|drop|rename|grant|revoke|call|do|load|set)\b/i
-
 /** What a click will run: the selection when it has text, otherwise the caret statement. */
 function aimedText(sql: string, cursor: number, from: number, to: number): string {
   if (from !== to) {
@@ -136,7 +135,8 @@ function aimedText(sql: string, cursor: number, from: number, to: number): strin
 
 /** Label for the single run control: 执行, or 执行写入 when the aimed text is a write. */
 function runControlLabel(sql: string, cursor: number, from: number, to: number): string {
-  return WRITE_STATEMENT.test(aimedText(sql, cursor, from, to)) ? '执行写入' : '执行'
+  const verdict = checkPermission(aimedText(sql, cursor, from, to), false)
+  return verdict?.code === 'WRITE_NOT_ALLOWED' || verdict?.code === 'DDL_FORBIDDEN' ? '执行写入' : '执行'
 }
 
 /**
@@ -209,8 +209,12 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   const setQueryAt = useCallback((docId: string, next: QueryState | ((current: QueryState) => QueryState)) => {
     writeDoc(docId, tab => ({ query: typeof next === 'function' ? next(tab.query) : next }))
   }, [writeDoc])
-  const setScriptAt = useCallback((docId: string, next: ScriptRun | null) => {
-    writeDoc(docId, { script: next })
+  const setScriptAt = useCallback((docId: string, next: ScriptRun | null | ((current: ScriptRun | null) => ScriptRun | null)) => {
+    if (typeof next !== 'function') {
+      writeDoc(docId, { script: next })
+      return
+    }
+    writeDoc(docId, tab => ({ script: next(tab.script) }))
   }, [writeDoc])
   const setQuery = useCallback((next: QueryState | ((current: QueryState) => QueryState)) => {
     setQueryAt(activeDocId, next)
@@ -258,6 +262,9 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
   const cursorByDocRef = useRef<Record<string, number>>({})
   /** Saves are ignored until the stored snapshot has been read (or found absent). */
   const restoreDoneRef = useRef(false)
+  /** True once the user typed into the placeholder console, so restore must not wipe it. */
+  const editedBeforeRestore = useRef(false)
+  const [workspaceReady, setWorkspaceReady] = useState(false)
 
   /**
    * Agent deliveries arrive asynchronously (docs/10 §13.1). The effect reads the
@@ -273,8 +280,6 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
    * request from overwriting the newest result or the "查询已取消" message.
    */
   const runSeq = useRef(0)
-  /** Last executed SQL text, for `Ctrl+Alt+Enter` (repeat) and filter reset. */
-  const lastRunRef = useRef<string | null>(null)
   const documentsRef = useRef(documents)
   useEffect(() => {
     activeDocIdRef.current = activeDocId
@@ -318,6 +323,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
    * keystroke, and only ids/owners/titles matter to the registry.
    */
   useEffect(() => {
+    if (!workspaceReady) return
     const timer = setTimeout(() => {
       void publishConsoles(
         documents.map(tab => ({
@@ -331,7 +337,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     return () => {
       clearTimeout(timer)
     }
-  }, [documents])
+  }, [documents, workspaceReady])
 
   // Clipboard failures have no call-site context (grid, dialog, tree all copy),
   // so the one notifier lives here and every copy path reports through it.
@@ -375,8 +381,15 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       return
     }
     if (previous === null || previous === state.activeId) return
+    runSeq.current += 1
+    const statementId = query.statementId
+    if (api !== undefined && statementId !== null) void api.cancel(statementId).catch(() => undefined)
+    for (const id of scriptIdsRef.current) {
+      if (api !== undefined) void api.cancel(id).catch(() => undefined)
+    }
+    scriptIdsRef.current = []
     setScript(null)
-    setQuery(current => ({ ...current, result: null, error: null, total: null, status: 'idle' }))
+    setQuery(current => ({ ...current, result: null, error: null, total: null, status: 'idle', statementId: null }))
   }, [state.activeId])
 
   useEffect(() => {
@@ -632,7 +645,10 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
         ? {}
         : { pageSize: patch.pageSize ?? current.pageSize }),
     }
-    setScriptAt(docId, { ...script, tabs: replaceScriptTab(script.tabs, index, intent), running: true })
+    setScriptAt(docId, latest => {
+      if (latest === null) return latest
+      return { ...latest, tabs: replaceScriptTab(latest.tabs, index, intent), running: true }
+    })
     try {
       const result = await api.fetchPage({
         connId,
@@ -647,17 +663,30 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
         result: result.ok ? result : intent.result,
         sort: intent.sort ?? null,
         filters: intent.filters ?? [],
-        total: result.ok ? result.total : intent.total ?? null,
+        // fetchPage does not re-count, so a null total must not wipe the one we have.
+        total: result.ok ? (result.total ?? intent.total ?? null) : intent.total ?? null,
         ...(intent.pageSize === undefined ? {} : { pageSize: intent.pageSize }),
         ...(result.ok ? {} : { error: result.error }),
       }
-      setScriptAt(docId, { ...script, tabs: replaceScriptTab(script.tabs, index, nextTab), running: false })
+      setScriptAt(docId, latest => {
+        if (latest === null) return latest
+        const live = latest.tabs[index]
+        const merged: ScriptTab = {
+          ...nextTab,
+          ...(live?.title === undefined ? {} : { title: live.title }),
+          ...(live?.pinned === undefined ? {} : { pinned: live.pinned }),
+        }
+        return { ...latest, tabs: replaceScriptTab(latest.tabs, index, merged), running: false }
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setScriptAt(docId, {
-        ...script,
-        tabs: replaceScriptTab(script.tabs, index, { ...intent, error: { code: 'PAGE_FAILED', message } }),
-        running: false,
+      setScriptAt(docId, latest => {
+        if (latest === null) return latest
+        return {
+          ...latest,
+          tabs: replaceScriptTab(latest.tabs, index, { ...intent, error: { code: 'PAGE_FAILED', message } }),
+          running: false,
+        }
       })
     }
   }
@@ -669,15 +698,9 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
 
   const pageScript = (index: number, offset: number): Promise<void> => refetchScript(index, { offset })
 
-  /** Remember the page size on the tab; the next page fetch uses it. */
+  /** A new page size re-reads from the first row, so the next offset does not skip. */
   const pageSizeScript = (index: number, size: number): void => {
-    if (script === null) return
-    const tab = script.tabs[index]
-    if (tab === undefined) return
-    setScriptAt(activeDocId, {
-      ...script,
-      tabs: replaceScriptTab(script.tabs, index, { ...tab, pageSize: size }),
-    })
+    void refetchScript(index, { offset: 0, pageSize: size })
   }
 
   const filterScript = (index: number, column: string, filter: FilterSpec | null): Promise<void> => {
@@ -704,13 +727,18 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
    * Switching tabs is not a connection change the user asked for, so the flag
    * tells the reset effect to keep the results that belong to that console.
    */
+  const followSeq = useRef(0)
   const followTab = (target: DocumentTab): void => {
     if (api === undefined || target.connId === null || target.connId === state.activeId) return
     switchingTab.current = true
+    const seq = (followSeq.current += 1)
     void api
       .setActive(target.connId)
       .then(() => load(api))
-      .then(setState)
+      .then(next => {
+        if (seq !== followSeq.current) return
+        setState(next)
+      })
       .catch(reportFailureToUser)
   }
 
@@ -795,7 +823,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     void (async () => {
       try {
         const restored = restoreConsoleDocuments(parseWorkspaceState(await api.loadWorkspaceState?.()))
-        if (!cancelled && restored !== null) {
+        if (!cancelled && restored !== null && !editedBeforeRestore.current) {
           setDocuments(restored.tabs)
           setActiveDocId(restored.activeId)
           cursorByDocRef.current = { ...restored.cursors }
@@ -807,7 +835,10 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       } catch (error) {
         reportFailureToUser(error)
       } finally {
-        if (!cancelled) restoreDoneRef.current = true
+        if (!cancelled) {
+          restoreDoneRef.current = true
+          setWorkspaceReady(true)
+        }
       }
     })()
     return () => {
@@ -949,8 +980,10 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       const docId = activeDocId
       const seq = (runSeq.current += 1)
       const write = (next: QueryState): void => {
-        // A cancelled or superseded run must not resurrect itself.
-        if (seq === runSeq.current) setQueryAt(docId, next)
+        // A cancelled or superseded run must not resurrect itself. Keep the
+        // editor text: the snapshot this run started with is not newer typing.
+        if (seq !== runSeq.current) return
+        setQueryAt(docId, current => ({ ...next, sql: current.sql }))
       }
       try {
         const next = await work(connId, write)
@@ -1020,12 +1053,15 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       query: setSql(INITIAL_QUERY, sql),
       lastRunSql: sql,
     }
+    const seq = (runSeq.current += 1)
+    const statementId = nextStatementId()
     setDocuments(current => [...current, doc])
     setActiveDocId(doc.id)
-    setQueryAt(doc.id, { ...INITIAL_QUERY, sql, status: 'running', statementId: nextStatementId() })
+    setQueryAt(doc.id, { ...INITIAL_QUERY, sql, status: 'running', statementId })
     void (async () => {
       try {
-        const outcome = await api.execute({ connId: tabConnId, sql, pageSize: 500, mode: 'direct' })
+        const outcome = await api.execute({ connId: tabConnId, sql, pageSize: 500, mode: 'direct', statementId })
+        if (seq !== runSeq.current) return
         setQueryAt(
           doc.id,
           outcome.ok
@@ -1038,6 +1074,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
               },
         )
       } catch (error) {
+        if (seq !== runSeq.current) return
         setQueryAt(doc.id, {
           ...INITIAL_QUERY,
           sql,
@@ -1121,18 +1158,20 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
     if (query.status === 'running' || (script?.running ?? false)) return
     if (requestParams(text, 'run')) return
     markRun(text)
-    const changed = lastRunRef.current !== text
-    lastRunRef.current = text
+    const changed = document.lastRunSql !== text
     // Old ordering/filters belong to the previous statement: keep them only when
     // the same text is re-run (refresh, paging), otherwise clear with a notice.
-    const staleFilters = changed && (query.sort !== null || query.filters.length > 0)
-    if (staleFilters) {
+    // The request must use the cleared state; a later setState would lose the race.
+    const base = changed && (query.sort !== null || query.filters.length > 0)
+      ? { ...query, sort: null, filters: [] }
+      : query
+    if (base !== query) {
       setNotice({ text: '已清除上一条语句的排序/筛选', kind: 'warn' })
-      setQueryAt(activeDocId, { ...query, sort: null, filters: [] })
+      setQueryAt(activeDocId, base)
     }
     if (splitStatements(text).length <= 1) {
       setScript(null)
-      void withConnection((connId, publish) => executeQuery(api, query, connId, publish, text), text)
+      void withConnection((connId, publish) => executeQuery(api, base, connId, publish, text), text)
       return
     }
     void runScript(text)
@@ -1160,12 +1199,15 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       query: setSql(INITIAL_QUERY, text),
       lastRunSql: text,
     }
+    const seq = (runSeq.current += 1)
+    const statementId = nextStatementId()
     setDocuments(current => [...current, doc])
     setActiveDocId(doc.id)
-    setQueryAt(doc.id, { ...INITIAL_QUERY, sql: text, status: 'running', statementId: nextStatementId() })
+    setQueryAt(doc.id, { ...INITIAL_QUERY, sql: text, status: 'running', statementId })
     void (async () => {
       try {
-        const outcome = await api.execute({ connId: tabConnId, sql: text, pageSize: 500, raw: true })
+        const outcome = await api.execute({ connId: tabConnId, sql: text, pageSize: 500, raw: true, statementId })
+        if (seq !== runSeq.current) return
         setQueryAt(
           doc.id,
           outcome.ok
@@ -1178,6 +1220,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
               },
         )
       } catch (error) {
+        if (seq !== runSeq.current) return
         setQueryAt(doc.id, {
           ...INITIAL_QUERY,
           sql: text,
@@ -1269,7 +1312,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
       title: '重跑上次',
       keywords: 'rerun Ctrl+Alt+Enter',
       run: () => {
-        if (lastRunRef.current !== null) runSource(lastRunRef.current)
+        if (document.lastRunSql !== '') runSource(document.lastRunSql)
       },
     },
     { id: 'format', title: '格式化 SQL', keywords: 'format Ctrl+Alt+L', run: () => { formatEditor(paletteTarget()) } },
@@ -1327,7 +1370,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
           setNotice({ text: '当前没有错误可发送', kind: 'warn' })
           return
         }
-        sendErrorToChat(error, lastRunRef.current ?? query.sql)
+        sendErrorToChat(error, document.lastRunSql || query.sql)
       },
     },
     {
@@ -1591,7 +1634,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                             aria-label="清空"
                             disabled={tabConnId === null || query.sql === ''}
                             onClick={() => {
-                              setQuery(setSql(query, ''))
+                              setQuery(current => setSql(current, ''))
                             }}
                           >
                             清空
@@ -1622,7 +1665,9 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                     shortcuts={shortcuts}
                     {...(schemaIndex === undefined ? {} : { schema: schemaIndex })}
                     onChange={sql => {
-                      setQuery(setSql(query, sql))
+                      // Typing before the saved workspace returns must not be overwritten by that restore.
+                      if (!restoreDoneRef.current) editedBeforeRestore.current = true
+                      setQuery(current => setSql(current, sql))
                     }}
                     onAim={aim => {
                       const label = runControlLabel(aim.doc, aim.cursor, aim.from, aim.to)
@@ -1640,7 +1685,7 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                       runSource(target.doc)
                     }}
                     onRerun={() => {
-                      if (lastRunRef.current !== null) runSource(lastRunRef.current)
+                      if (document.lastRunSql !== '') runSource(document.lastRunSql)
                     }}
                     onExplain={target => {
                       const current = statementAt(target.doc, target.cursor)
@@ -1697,10 +1742,14 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                         void withConnection((connId, publish) => sortBy(api, query, connId, column, publish))
                       }}
                       onPage={(_index, offset) => {
-                        void withConnection((connId, publish) => goPage(api, query, connId, offset, publish))
+                        const target = pagingTarget(query.sql, document.lastRunSql, offset)
+                        void withConnection((connId, publish) => goPage(api, { ...query, sql: target.sql }, connId, target.offset, publish))
                       }}
                       onPageSize={(_index, size) => {
-                        setQuery(setPageSize(query, size))
+                        const next = setPageSize(query, size)
+                        setQuery(next)
+                        const target = pagingTarget(next.sql, document.lastRunSql, 0)
+                        void withConnection((connId, publish) => goPage(api, { ...next, sql: target.sql }, connId, target.offset, publish))
                       }}
                       onRefresh={() => {
                         void withConnection((connId, publish) => executeQuery(api, query, connId, publish), query.sql)
@@ -1739,14 +1788,14 @@ export function SqlWorkbenchPanel({ sessionId, api }: SqlWorkbenchPanelProps): R
                           },
                           onExplain: () => {
                             // A failure implies a completed run, so the last SQL exists.
-                            explainStatement(lastRunRef.current as string)
+                            explainStatement(document.lastRunSql)
                           },
                         }
                       }}
                       onSendChat={() => {
                         const error = query.error as NonNullable<typeof query.error>
                         // A failure implies a completed run, so the last SQL exists.
-                        sendErrorToChat(error, lastRunRef.current as string)
+                        sendErrorToChat(error, document.lastRunSql)
                       }}
                     />
                   ) : (

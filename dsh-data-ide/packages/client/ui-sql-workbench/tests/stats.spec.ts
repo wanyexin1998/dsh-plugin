@@ -51,6 +51,13 @@ describe('numeric samples', () => {
   it('keeps numbers and numeric strings, drops NULL and junk', () => {
     // A blank or a label must not drag an average to zero.
     expect(numericSamples(rows, [0, 1, 2, 3, 4], 1)).toEqual([10.5, 7])
+    expect(numericSamples([['1234567890123456789']], [0], 0)).toEqual([])
+    expect(numericSamples([['1.10']], [0], 0)).toEqual([])
+    expect(numericSamples([[42]], [0], 0)).toEqual([42])
+    expect(numericSamples([[Number.NaN]], [0], 0)).toEqual([])
+    expect(numericSamples([[10n]], [0], 0)).toEqual([10])
+    expect(numericSamples([[true]], [0], 0)).toEqual([1])
+    expect(numericSamples([[9007199254740993n]], [0], 0)).toEqual([])
   })
 
   it('reads only the rows it is given, and tolerates out-of-range indexes', () => {

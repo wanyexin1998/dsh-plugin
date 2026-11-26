@@ -2,7 +2,7 @@ import * as React from 'react'
 
 import type { ReactElement, Ref } from 'react'
 
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
 import type { SchemaIndex } from '../completion.ts'
@@ -261,6 +261,9 @@ function SqlEditorImpl(
     instance.dispatch({
       changes: { from: 0, to: current.length, insert: sql },
       selection: { anchor: sql.length },
+      // A tab switch replaces the whole document. Recording that as an undo
+      // step makes Ctrl+Z paste the previous console's SQL into this one.
+      annotations: Transaction.addToHistory.of(false),
     })
   }, [sql])
 

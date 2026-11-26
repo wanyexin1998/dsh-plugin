@@ -35,7 +35,12 @@ export async function runFetchPage(deps: ExecutionDeps, request: ExecuteRequest)
  * @returns Whether a live statement was actually aborted.
  */
 export async function cancelStatement(deps: ExecutionDeps, statementId: string): Promise<{ readonly cancelled: boolean }> {
-  await deps.executor.cancel(statementId)
+  // The page and its COUNT ride on two sockets. Cancelling only the page id
+  // leaves `SELECT COUNT(*)` running on a large table.
+  const [page, count] = await Promise.all([
+    deps.executor.cancel(statementId),
+    deps.executor.cancel(`${statementId}-count`),
+  ])
   deps.registry.forget(statementId)
-  return { cancelled: true }
+  return { cancelled: page || count }
 }

@@ -23,7 +23,10 @@ describe('sqlLiteral', () => {
     expect(sqlLiteral(10n)).toBe('10')
     expect(sqlLiteral(true)).toBe('1')
     expect(sqlLiteral(false)).toBe('0')
-    expect(sqlLiteral(new Date('2026-10-01T08:12:33.000Z'))).toBe("'2026-10-01 08:12:33'")
+    const date = new Date('2026-10-01T08:12:33.000Z')
+    const pad = (part: number): string => String(part).padStart(2, '0')
+    const local = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    expect(sqlLiteral(date)).toBe(`'${local}'`)
     expect(sqlLiteral(new Uint8Array([0xde, 0xad]))).toBe("X'dead'")
     expect(sqlLiteral(null)).toBe('NULL')
     expect(sqlLiteral(undefined)).toBe('NULL')

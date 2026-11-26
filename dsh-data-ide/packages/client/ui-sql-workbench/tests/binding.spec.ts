@@ -380,7 +380,7 @@ describe('panel execution path', () => {
     driver.destroy.mockReset().mockResolvedValue(undefined)
     driver.createConnection.mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
     driver.query.mockImplementation(async (sql: string) =>
-      sql.includes('COUNT(*)') ? [[{ c: 2 }], [{ name: 'c', type: 8 }]] : [[{ a: 1 }], [{ name: 'a', type: 3 }]],
+      sql.includes('COUNT(*)') ? [[[2]], [{ name: 'c', type: 8 }]] : [[[1]], [{ name: 'a', type: 3 }]],
     )
     const { service, dispose } = await started()
 
@@ -394,7 +394,7 @@ describe('panel execution path', () => {
       statementId: 'ui-1',
     })
     expect(driver.createConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ host: 'doris.shcell.com', port: 9030, user: 'wanyexin', password: 'hunter2', database: 'dwd' }),
+      expect.objectContaining({ host: 'doris.shcell.com', port: 9030, user: 'wanyexin', password: 'hunter2', database: 'dwd', rowsAsArray: true }),
     )
     await dispose()
   })
@@ -405,13 +405,13 @@ describe('panel execution path', () => {
     driver.end.mockReset().mockResolvedValue(undefined)
     driver.destroy.mockReset().mockResolvedValue(undefined)
     driver.createConnection.mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
-    driver.query.mockResolvedValue([[{ a: 7 }], [{ name: 'a', type: 3 }]])
+    driver.query.mockResolvedValue([[[7]], [{ name: 'a', type: 3 }]])
     const { service, dispose } = await started()
 
     const page = await service.fetchPage({ connId, sql: 'SELECT a FROM t', offset: 500, statementId: 'ui-2' })
 
     expect(page).toMatchObject({ ok: true, offset: 500, total: null, statementId: 'ui-2' })
-    expect(await service.cancel('ui-2')).toEqual({ cancelled: true })
+    expect(await service.cancel('ui-2')).toEqual({ cancelled: false })
     await dispose()
   })
 

@@ -34,7 +34,7 @@ function recordingExecutor(): { port: QueryExecutor; seen: string[] } {
       if (sql.includes('COUNT(*)')) return { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: [[1]] }
       return { fields: [{ name: 'a', typeName: 'LONG' }], rows: [[1]] }
     },
-    cancel: async () => undefined,
+    cancel: async () => false,
   }
   return { port, seen }
 }

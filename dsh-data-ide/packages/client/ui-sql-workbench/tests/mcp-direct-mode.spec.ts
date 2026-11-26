@@ -26,7 +26,7 @@ function fakeExecutor(rows: unknown[][] = [[1, 'a']]) {
   const calls: string[] = []
   return {
     calls,
-    cancel: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => false),
     query: vi.fn(async (_spec: ConnectionSpec, sql: string) => {
       calls.push(sql)
       if (sql.includes('COUNT(*)')) return { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: [[10]] }

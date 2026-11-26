@@ -15,7 +15,11 @@ export function sqlLiteral(value: unknown): string {
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL'
   if (typeof value === 'bigint') return value.toString()
   if (typeof value === 'boolean') return value ? '1' : '0'
-  if (value instanceof Date) return `'${value.toISOString().slice(0, 19).replace('T', ' ')}'`
+  if (value instanceof Date) {
+    const pad = (part: number): string => String(part).padStart(2, '0')
+    const local = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+    return `'${local}'`
+  }
   if (value instanceof Uint8Array) {
     let hex = ''
     for (const byte of value) hex += byte.toString(16).padStart(2, '0')

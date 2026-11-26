@@ -30,7 +30,7 @@ function fakeExecutor(): QueryExecutor {
       if (sql.includes('COUNT(*)')) return { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: [[1]] }
       return { fields: [{ name: 'a', typeName: 'LONG' }], rows: [[1]] }
     },
-    cancel: async () => undefined,
+    cancel: async () => false,
   }
 }
 
@@ -53,7 +53,7 @@ function bigExecutor(): QueryExecutor {
         rows: Array.from({ length: 400 }, (_, index) => [index]),
       }
     },
-    cancel: async () => undefined,
+    cancel: async () => false,
   }
 }
 
@@ -140,11 +140,11 @@ describe('execute_script over MCP', () => {
   it('clamps maxStatements instead of letting the caller raise the cap', async () => {
     dir = await mkdtemp(join(tmpdir(), 'script-outbox-'))
     const { client, server } = await connect(dir)
-    const sql = Array.from({ length: 21 }, (_, index) => `SELECT ${index + 1}`).join('; ')
+    const sql = Array.from({ length: 51 }, (_, index) => `SELECT ${index + 1}`).join('; ')
 
     const payload = await callJson(client, 'execute_script', { connId, sql, maxStatements: 10_000 })
 
-    // 21 > MAX_SCRIPT_STATEMENTS, so the clamped cap still refuses it (§15 A5).
+    // More statements than MAX_SCRIPT_STATEMENTS, so the clamped cap still refuses it.
     expect(payload['ok']).toBe(false)
     expect((payload['error'] as { readonly code?: string }).code).toBe('TOO_MANY_STATEMENTS')
 
@@ -212,7 +212,7 @@ describe('execute_script over MCP', () => {
         seen.push(sql)
         return { fields: [], rows: [] }
       },
-      cancel: async () => undefined,
+      cancel: async () => false,
     }
     const { client, server } = await connect(dir, executor)
 

@@ -12,7 +12,7 @@
  */
 
 import { type ExecuteResponse, type ExecutionDeps, type Refusal, executeSql } from './core.ts'
-import { splitStatements } from './split.ts'
+import { MAX_SCRIPT_STATEMENTS, splitStatements } from './split.ts'
 
 export interface ScriptRequest {
   readonly connId: string
@@ -73,18 +73,20 @@ export async function executeScript(
 ): Promise<ScriptResponse | { readonly refusal: Refusal }> {
   const now = deps.now ?? Date.now
   const started = now()
-  const statements = splitStatements(request.sql)
+  // Split without the display cap. The default splitter keeps 50 and drops the
+  // rest silently; a script must either run every statement or say it refused.
+  const statements = splitStatements(request.sql, Number.POSITIVE_INFINITY)
+  const cap = request.maxStatements ?? MAX_SCRIPT_STATEMENTS
 
   if (statements.length === 0) {
     return { refusal: { code: 'EMPTY_SQL', message: '没有可执行的语句' } }
   }
 
-  if (request.maxStatements !== undefined && statements.length > request.maxStatements) {
-    // Reject rather than silently truncate: the agent must know it lost work.
+  if (statements.length > cap) {
     return {
       refusal: {
         code: 'TOO_MANY_STATEMENTS',
-        message: `脚本包含 ${statements.length} 条语句，超过上限 ${request.maxStatements} 条`,
+        message: `脚本包含 ${statements.length} 条语句，超过上限 ${cap} 条`,
       },
     }
   }

@@ -46,6 +46,16 @@ export function classifyProbeError(error: unknown): ProbeError {
   return { code: 'UNKNOWN', message }
 }
 
+/**
+ * Reachability failures are UNSURE: the server never answered, so the
+ * credentials were not proven wrong. Auth failures are NO.
+ */
+const UNSURE_CODES = new Set<ProbeError['code']>(['NETWORK_UNREACHABLE', 'TIMEOUT', 'DRIVER_MISSING'])
+
+export function probeVerdict(error: ProbeError): 'NO' | 'UNSURE' {
+  return UNSURE_CODES.has(error.code) ? 'UNSURE' : 'NO'
+}
+
 /** True when the probe proved the credentials and server both work. */
 export function isSuccess(outcome: ProbeOutcome): outcome is { readonly state: 'YES'; readonly info: DatabaseInfo } {
   return outcome.state === 'YES'

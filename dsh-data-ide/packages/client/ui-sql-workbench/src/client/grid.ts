@@ -81,16 +81,22 @@ export function selectionToTsv(
     const cells: string[] = []
     for (let column = box.fromColumn; column <= box.toColumn; column += 1) {
       const meta = columns[column]
-      cells.push(meta === undefined ? '' : cellText(source, meta, column))
+      cells.push(meta === undefined ? '' : neutralizeSpreadsheet(cellText(source, meta, column)))
     }
     lines.push(cells.join('\t'))
   }
   return lines.join('\n')
 }
 
+/** Stop Excel treating a cell as a formula when a CSV/TSV is opened. */
+function neutralizeSpreadsheet(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+}
+
 /** Quote a CSV field per RFC 4180 when it needs it. */
 function csvField(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+  const safe = neutralizeSpreadsheet(value)
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 /**

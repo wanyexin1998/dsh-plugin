@@ -54,9 +54,15 @@ export function apply(ctx: NodeHostContext): void {
       console.error('dsh-data-ide: 宿主未提供 webServer，面板无法与后端通信（该 composition 不支持外部路由）')
     } else {
       const connection = lookup<ConnectionService>(ctx, 'connection')
+      // No fence means "the host forgot the trust check", not "anyone on the
+      // machine may execute SQL". Routes still mount so the composition is
+      // visible; every request is rejected until `connection` is present.
+      if (connection === undefined) {
+        console.error('dsh-data-ide: 宿主未提供 connection，面板路由拒绝全部请求（缺少连接信任校验）')
+      }
       const fence =
         connection === undefined
-          ? undefined
+          ? (): number => 401
           : (req: IncomingMessage): number | undefined => connection.requestRejection(req)
       unmount = registerPanelRoutes(webServer, started.api, fence)
 

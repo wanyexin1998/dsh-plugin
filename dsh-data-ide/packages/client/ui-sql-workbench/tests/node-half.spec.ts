@@ -126,6 +126,23 @@ describe('node half', () => {
     expect(sorted(host.routes)).toEqual(ALL_ROUTES)
   })
 
+  it('rejects every caller when the host did not provide connection', async () => {
+    const host = fakeCtx({ webServer: true })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    apply(host.ctx)
+    await host.settled()
+
+    const res = { statusCode: 0, body: '', setHeader() {}, end(chunk: string) { this.body = chunk } }
+    await host.handlers.get(ROUTES.connections)!({ method: 'GET' }, res)
+
+    expect(sorted(host.routes)).toEqual(ALL_ROUTES)
+    expect(res.statusCode).toBe(401)
+    expect(res.body).toContain('UNTRUSTED')
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('connection'))
+    logged.mockRestore()
+  })
+
   it('refuses a caller the connection fence rejected', async () => {
     const host = fakeCtx({ webServer: true, connection: () => 401 })
     apply(host.ctx)

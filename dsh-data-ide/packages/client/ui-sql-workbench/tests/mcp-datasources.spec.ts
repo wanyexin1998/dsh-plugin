@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { type ConnectionProbe, classifyProbeError, isSuccess } from '../mcp/probe.ts'
+import { type ConnectionProbe, classifyProbeError, isSuccess, probeVerdict } from '../mcp/probe.ts'
 import { LIST_DATASOURCES, TEST_CONNECTION, listDatasources, testConnection } from '../mcp/tools-datasources.ts'
 import type { RuntimeSpecDocument } from '../src/host/runtime-specs.ts'
 
@@ -136,6 +136,9 @@ describe('error classification', () => {
   it('falls back to UNKNOWN with the original message', () => {
     expect(classifyProbeError({ code: 'WAT', message: 'boom' })).toEqual({ code: 'UNKNOWN', message: 'boom' })
     expect(classifyProbeError(undefined).message).toBe('undefined')
+    expect(probeVerdict(classifyProbeError({ code: 'ECONNREFUSED', message: 'x' }))).toBe('UNSURE')
+    expect(probeVerdict(classifyProbeError({ code: 'ER_ACCESS_DENIED_ERROR', message: 'denied' }))).toBe('NO')
+    expect(probeVerdict(classifyProbeError({ code: 'MODULE_NOT_FOUND', message: 'x' }))).toBe('UNSURE')
   })
 
   it('narrows a successful outcome', () => {

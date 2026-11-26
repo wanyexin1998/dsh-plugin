@@ -35,7 +35,7 @@ function fakeExecutor(page: { fields?: string[]; rows: unknown[][] }, count?: un
   const calls: string[] = []
   return {
     calls,
-    cancel: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => false),
     query: vi.fn(async (_spec: ConnectionSpec, sql: string) => {
       calls.push(sql)
       if (sql.includes('COUNT(*)')) return { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: count ?? [[0]] }
@@ -73,6 +73,18 @@ describe('permission gate', () => {
 
   it('refuses an empty statement', () => {
     expect(checkPermission('   ', true)).toMatchObject({ code: 'EMPTY_SQL' })
+    expect(checkPermission('-- only a comment', true)).toMatchObject({ code: 'EMPTY_SQL' })
+  })
+
+  it('sees writes and DDL hidden behind comments, parentheses or executable comments', () => {
+    expect(checkPermission('-- cleanup\nDELETE FROM users WHERE id = 1', false)).toMatchObject({ code: 'WRITE_NOT_ALLOWED' })
+    expect(checkPermission('/* x */ DROP TABLE users', true)).toMatchObject({ code: 'DDL_FORBIDDEN' })
+    expect(checkPermission('/*!50000 TRUNCATE TABLE users */', true)).toMatchObject({ code: 'DDL_FORBIDDEN' })
+    expect(checkPermission('(DELETE FROM t)', false)).toMatchObject({ code: 'WRITE_NOT_ALLOWED' })
+    expect(checkPermission('OPTIMIZE TABLE t', false)).toMatchObject({ code: 'WRITE_NOT_ALLOWED' })
+    expect(checkPermission('KILL 42', false)).toMatchObject({ code: 'WRITE_NOT_ALLOWED' })
+    expect(checkPermission('HANDLER t READ FIRST', false)).toMatchObject({ code: 'WRITE_NOT_ALLOWED' })
+    expect(checkPermission("SELECT '/*! DROP TABLE t */'", false)).toBeUndefined()
   })
 })
 
@@ -116,6 +128,16 @@ describe('paging sql', () => {
   it('runs only the first statement of a batch', () => {
     expect(firstStatement('SELECT 1; DROP TABLE t')).toBe('SELECT 1')
     expect(firstStatement('  ')).toBe('')
+    expect(firstStatement("SELECT * FROM orders WHERE status = 'paid' -- migrated; see ticket\nAND region = 'cn'")).toBe(
+      "SELECT * FROM orders WHERE status = 'paid' -- migrated; see ticket\nAND region = 'cn'",
+    )
+    expect(firstStatement('SELECT 1 /*! ; DROP TABLE t */')).toBe('SELECT 1')
+    expect(firstStatement("SELECT 'a\\';b'")).toBe("SELECT 'a\\';b'")
+    expect(firstStatement('SELECT 1 # keep; me\nAND 2')).toContain('AND 2')
+    expect(firstStatement('SELECT 1 /* keep */; SELECT 2')).toBe('SELECT 1 /* keep */')
+    expect(firstStatement("SELECT 'O''Brien;x'")).toBe("SELECT 'O''Brien;x'")
+    expect(firstStatement('SELECT /*! never')).toContain('never')
+    expect(firstStatement('SELECT 1 /* never')).toBe('SELECT 1 /* never')
   })
 
   it('clamps page sizes into the supported band', () => {
@@ -138,6 +160,16 @@ describe('value protection', () => {
 
     expect(clipped.truncated).toBe(1)
     expect(String(clipped.row[0])).toContain('值过大')
+    expect(String(clipped.row[0]).startsWith('x'.repeat(32 * 1024))).toBe(true)
+  })
+
+  it('does not split a multibyte character at the preview boundary', () => {
+    const huge = '你'.repeat(MAX_CELL_BYTES)
+
+    const clipped = truncateRow([huge], 0)
+
+    expect(String(clipped.row[0])).toContain('值过大')
+    expect(String(clipped.row[0]).endsWith('你…（值过大）')).toBe(true)
   })
 
   it('accumulates the count across rows', () => {
@@ -336,6 +368,29 @@ describe('fetch page', () => {
   })
 })
 
+describe('verbatim statements', () => {
+  it('runs metadata and writes verbatim when paging mode would wrap them', async () => {
+    const show = fakeExecutor({ rows: [['t']] })
+    const shown = await executeSql(deps(show), { connId, sql: 'SHOW TABLES' })
+    expect(show.calls).toEqual(['SHOW TABLES'])
+    expect('mode' in shown && shown.mode).toBe('direct')
+
+    const write = fakeExecutor({ rows: [[1]] })
+    const inserted = await executeSql(deps(write, true), { connId, sql: 'INSERT INTO t VALUES (1)' })
+    expect(write.calls).toEqual(['INSERT INTO t VALUES (1)'])
+    expect('refusal' in inserted).toBe(false)
+
+    const hidden = fakeExecutor({ rows: [] })
+    const refused = await executeSql(deps(hidden), { connId, sql: '-- note\nDELETE FROM t' })
+    expect(refused).toMatchObject({ refusal: { code: 'WRITE_NOT_ALLOWED' } })
+    expect(hidden.calls).toEqual([])
+
+    const wrapped = fakeExecutor({ rows: [[1]] })
+    await executeSql(deps(wrapped), { connId, sql: '(SELECT 1) UNION ALL (SELECT 2)', mode: 'direct' })
+    expect(wrapped.calls[0]).toContain('LIMIT 501')
+  })
+})
+
 describe('tool envelopes', () => {
   it('wraps a success and a refusal the same way', async () => {
     const ok = await runExecuteSql(deps(fakeExecutor({ rows: [[1]] })), { connId, sql: 'SELECT 1' })
@@ -348,8 +403,9 @@ describe('tool envelopes', () => {
   it('cancels through the transport and forgets the statement', async () => {
     const executor = fakeExecutor({ rows: [] })
 
-    expect(await cancelStatement(deps(executor), 'stmt-1')).toEqual({ cancelled: true })
+    expect(await cancelStatement(deps(executor), 'stmt-1')).toEqual({ cancelled: false })
     expect(executor.cancel).toHaveBeenCalledWith('stmt-1')
+    expect(executor.cancel).toHaveBeenCalledWith('stmt-1-count')
   })
 })
 
@@ -366,7 +422,7 @@ describe('statement registry', () => {
 describe('count timeout', () => {
   it('returns the page even when COUNT is slow', async () => {
     const executor = {
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
       query: vi.fn(async (_spec: ConnectionSpec, sql: string) => {
         if (sql.includes('COUNT(*)')) return new Promise<never>(() => undefined)
         return { fields: [{ name: 'a', typeName: 'LONG' }], rows: [[1]] }
@@ -381,6 +437,7 @@ describe('count timeout', () => {
     expect(Date.now() - started).toBeLessThan(1000)
     expect('columns' in result && result.rows).toEqual([[1]])
     expect('columns' in result && result.total).toBeNull()
+    expect(executor.cancel).toHaveBeenCalled()
   })
 
   it('keeps the total when COUNT answers in time', async () => {

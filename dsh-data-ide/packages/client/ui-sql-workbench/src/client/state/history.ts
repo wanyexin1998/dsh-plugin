@@ -284,7 +284,11 @@ export function toWorkspaceState(
   activeDocId: string,
   cursors: Readonly<Record<string, number>> = {},
 ): WorkspaceState {
-  const docs = tabs.slice(0, MAX_TABS).map(tab => toConsoleDocumentState(tab, cursors[tab.id] ?? 0))
+  const activeIndex = tabs.findIndex(tab => tab.id === activeDocId)
+  const kept = tabs.length <= MAX_TABS || activeIndex < MAX_TABS
+    ? tabs.slice(0, MAX_TABS)
+    : [...tabs.slice(0, MAX_TABS - 1), tabs[activeIndex] as DocumentTab]
+  const docs = kept.map(tab => toConsoleDocumentState(tab, cursors[tab.id] ?? 0))
   const active = docs.some(doc => doc.id === activeDocId) ? activeDocId : firstDocId(docs)
   return { schemaVersion: 1, activeDocId: active, docs }
 }

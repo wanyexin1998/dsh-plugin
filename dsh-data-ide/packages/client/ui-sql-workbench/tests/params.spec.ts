@@ -21,6 +21,11 @@ describe('findSqlParams', () => {
     expect(findSqlParams('SELECT a:b FROM t')).toEqual([])
   })
 
+  it('finds a placeholder after a MySQL backslash escape and ignores hash comments', () => {
+    expect(findSqlParams("SELECT * FROM t WHERE name = 'O\\'Brien' AND id = :id").map(param => param.name)).toEqual(['id'])
+    expect(findSqlParams('SELECT # :name\n:id').map(param => param.name)).toEqual(['id'])
+  })
+
   it('skips doubled quotes and unterminated comments', () => {
     expect(findSqlParams("SELECT 'it''s :x', :y").map(param => param.name)).toEqual(['y'])
     expect(findSqlParams('SELECT /* :x ')).toEqual([])

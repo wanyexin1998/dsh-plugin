@@ -36,7 +36,7 @@ function executor(): QueryExecutor {
       sql.includes('COUNT(*)')
         ? { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: [[1]] }
         : { fields: [{ name: 'a', typeName: 'LONG' }], rows: [[1]] },
-    cancel: async () => undefined,
+    cancel: async () => false,
   }
 }
 

@@ -91,4 +91,21 @@ describe('toXlsx', () => {
     const bytes = toXlsx({ name: '', columns: ['x'], rows: [] })
     expect(decode(bytes)).toContain('name="Sheet1"')
   })
+
+  it('keeps long digit strings and leading zeros as text', () => {
+    const bytes = toXlsx({
+      name: 'ids',
+      columns: ['id'],
+      rows: [['1234567890123456789'], ['00123'], ['12'], ['-3'], ['0.5'], ['1.10']],
+    })
+    const sheet = decode(bytes)
+    expect(sheet).toContain('<v>12</v>')
+    expect(sheet).toContain('<v>-3</v>')
+    expect(sheet).toContain('<v>0.5</v>')
+    expect(sheet).toContain('1234567890123456789')
+    expect(sheet).not.toContain('<v>00123</v>')
+    expect(sheet).not.toContain('<v>1234567890123456789</v>')
+    expect(sheet).not.toContain('<v>1.10</v>')
+    expect(sheet).toContain('1.10')
+  })
 })

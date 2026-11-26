@@ -195,17 +195,25 @@ export function SchemaTree({
     setMenu({ x: event.clientX, y: event.clientY, title, items: build() })
   }
 
-  const objectItems = (table: SchemaTable): readonly MenuItem[] => [
+  const fullTable = (table: SchemaTable): SchemaTable =>
+    tables.find(item => item.schema === table.schema && item.name === table.name && item.kind === table.kind) as SchemaTable
+
+  const objectItems = (table: SchemaTable): readonly MenuItem[] => {
+    // A column filter narrows what the tree draws. Menu actions that say
+    // "全部列" have to use the unfiltered table, or the generated SQL drops columns.
+    const source = fullTable(table)
+    return [
     { id: 'data', label: '打开数据', hint: 'F4', run: () => { onOpenData(openDataSql(table)) } },
     { id: 'insert', label: '插入名称', hint: 'Enter', run: () => { onInsert(table.name) } },
-    { id: 'generate', label: '生成 SELECT', run: () => { onInsertSql?.(selectFromTableSql(table)) } },
-    { id: 'columns', label: '添加全部列', run: () => { onInsertSql?.(columnListSql(table)) } },
-    { id: 'overview', label: '表概览', run: () => { onOverview?.(table) } },
-    { id: 'join', label: 'JOIN 另一张表…', run: () => { onJoin?.(table) } },
+    { id: 'generate', label: '生成 SELECT', run: () => { onInsertSql?.(selectFromTableSql(source)) } },
+    { id: 'columns', label: '添加全部列', run: () => { onInsertSql?.(columnListSql(source)) } },
+    { id: 'overview', label: '表概览', run: () => { onOverview?.(source) } },
+    { id: 'join', label: 'JOIN 另一张表…', run: () => { onJoin?.(source) } },
     { id: 'copy', label: '复制引用', run: () => { onCopy(qualifiedName(table)) } },
     { id: 'ddl', label: '查看 DDL', hint: 'Ctrl+B', run: () => { onShowDdl({ schema: table.schema ?? '', table: table.name, ...(table.kind === undefined ? {} : { kind: table.kind }) }) } },
     { id: 'refresh', label: '刷新表结构', run: onRefresh },
-  ]
+    ]
+  }
 
   const renderObject = (table: SchemaTable): ReactElement => {    const key = tableKey(table)
     const expanded = isOpen(key)

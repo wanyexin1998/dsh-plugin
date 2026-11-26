@@ -10,6 +10,7 @@ import {
   goPage,
   nextSort,
   nextStatementId,
+  pagingTarget,
   run,
   setPageSize,
   setSql,
@@ -201,6 +202,14 @@ describe('query state: sorting', () => {
     expect(state.sort).toEqual({ column: 'a', direction: 'ASC' })
     expect(api.fetchPage).not.toHaveBeenCalled()
     expect(seen).toHaveLength(0)
+  })
+})
+
+describe('paging target', () => {
+  it('keeps the current statement and restarts after an edit', () => {
+    expect(pagingTarget('SELECT 1', 'SELECT 1', 500)).toEqual({ sql: 'SELECT 1', offset: 500 })
+    expect(pagingTarget('SELECT 1', '', 500)).toEqual({ sql: 'SELECT 1', offset: 500 })
+    expect(pagingTarget('SELECT 2', 'SELECT 1', 500)).toEqual({ sql: 'SELECT 1', offset: 0 })
   })
 })
 

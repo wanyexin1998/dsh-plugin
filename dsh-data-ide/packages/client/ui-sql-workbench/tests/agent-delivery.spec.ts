@@ -265,6 +265,20 @@ describe('applyAgentDelivery', () => {
     expect(tabsForDelivery({ ...script, script: [{ index: 0, sql: 'select 2', ok: true }] })).toEqual([
       { sql: 'select 2', result: null },
     ])
+    const preview = { ...page([[1], [2]]), hasNextPage: true }
+    expect(tabsForDelivery(delivery({ single: { ok: true, ...preview }, previewRows: 100 }))[0]?.pageSize).toBe(2)
+    expect(tabsForDelivery(delivery({ single: { ok: true, ...page([[1]]) }, previewRows: 100 }))[0]?.pageSize).toBeUndefined()
+    const scriptPreview = delivery({
+      kind: 'script',
+      single: undefined,
+      previewRows: 100,
+      script: [
+        { index: 0, sql: 'select 1', ok: true, response: preview },
+        { index: 1, sql: 'bad', ok: false },
+      ],
+    })
+    expect(tabsForDelivery(scriptPreview)[0]?.pageSize).toBe(2)
+    expect(tabsForDelivery(scriptPreview)[1]?.pageSize).toBeUndefined()
   })
 
   it('uses the next free suffix when two different batches share a label', () => {
@@ -341,6 +355,39 @@ describe('agent relay', () => {
     await new Promise(resolve => setTimeout(resolve, 15))
     expect(relay.cursor).toBe(0)
     await relay.dispose()
+  })
+
+  it('keeps an envelope that unload reaches before delivery', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agent-outbox-dispose-'))
+    await writeFile(join(dir, 'a.json'), JSON.stringify(delivery({ id: 'a' })), 'utf8')
+    await writeFile(join(dir, 'b.json'), JSON.stringify(delivery({ id: 'b' })), 'utf8')
+    const box: { relay?: Awaited<ReturnType<typeof startAgentRelay>> } = {}
+    let pauses = 0
+    box.relay = await startAgentRelay({
+      dir,
+      pollMs: 60_000,
+      beforeDeliver: async () => {
+        pauses += 1
+        if (pauses < 2) return
+        while (box.relay === undefined) await new Promise(resolve => setTimeout(resolve, 1))
+        void box.relay.dispose()
+      },
+    })
+
+    const deadline = Date.now() + 2000
+    while (pauses < 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5))
+    await box.relay.dispose()
+
+    expect(pauses).toBe(2)
+    await expect(access(join(dir, 'a.json'))).rejects.toThrow()
+    await expect(access(join(dir, 'b.json'))).resolves.toBeUndefined()
+
+    const again = await startAgentRelay({ dir, pollMs: 10 })
+    const replayDeadline = Date.now() + 2000
+    while (again.cursor < 1 && Date.now() < replayDeadline) await new Promise(resolve => setTimeout(resolve, 5))
+    expect(again.since(0).map(event => event.delivery.id)).toEqual(['b'])
+    await again.dispose()
+    await rm(dir, { recursive: true, force: true })
   })
 
   it('skips a polling tick while the previous scan is still running', async () => {

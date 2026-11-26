@@ -48,6 +48,20 @@ export function numericSamples(
   for (const rowIndex of rowIndexes) {
     const value = rows[rowIndex]?.[column]
     if (value === null || value === undefined || value === '') continue
+    if (typeof value === 'string') {
+      const text = value.trim()
+      if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text)) continue
+      if (text.replace('-', '').replace('.', '').length > 15) continue
+      const numeric = Number(text)
+      if (String(numeric) !== text) continue
+      samples.push(numeric)
+      continue
+    }
+    if (typeof value === 'bigint') {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) continue
+      samples.push(Number(value))
+      continue
+    }
     const numeric = typeof value === 'number' ? value : Number(value)
     if (Number.isFinite(numeric)) samples.push(numeric)
   }

@@ -45,15 +45,16 @@ function storeDouble(options: { readonly saved?: DataSource; readonly active?: s
 /** Credential double with one optional secret. */
 function credentialsDouble(password: string | undefined) {
   const set = vi.fn(async () => undefined)
+  const remove = vi.fn(async () => undefined)
   const credentials: CredentialStore = {
     set,
     resolve: async () => password,
-    remove: async () => undefined,
+    remove,
     removeNormalized: async () => undefined,
     storedIds: async () => [],
     sessionCount: () => 0,
   }
-  return { credentials, set }
+  return { credentials, set, remove }
 }
 
 const yesProbe: ConnectionProbe = async () => ({ state: 'YES', info: stored.databaseInfo! })
@@ -70,12 +71,14 @@ const execution = {
 describe('panel api: connections', () => {
   it('passes the store calls straight through', async () => {
     const { store } = storeDouble({ saved: stored, active: connId })
-    const api = createPanelApi({ dataSources: store, credentials: credentialsDouble('p').credentials, execution, probe: yesProbe })
+    const { credentials, remove } = credentialsDouble('p')
+    const api = createPanelApi({ dataSources: store, credentials, execution, probe: yesProbe })
 
     expect(await api.list()).toEqual([stored])
     expect(await api.active()).toBe(connId)
     await api.setActive(null)
     expect(await api.remove(connId)).toBe(true)
+    expect(remove).toHaveBeenCalledWith(connId)
   })
 
   it('refuses an incomplete draft with the field the form should highlight', async () => {
@@ -264,7 +267,7 @@ describe('panel api: execution', () => {
   it('builds an execution face over the real engine deps', async () => {
     const executor: QueryExecutor = {
       query: vi.fn(async () => ({ fields: [{ name: 'a', typeName: 'LONG' }], rows: [[1]] })),
-      cancel: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => false),
     }
     const face = createExecution({
       specs: async () => ({ connections: {} }),
@@ -277,7 +280,7 @@ describe('panel api: execution', () => {
       ok: false,
       error: { code: 'CONN_NOT_FOUND' },
     })
-    expect(await face.cancel('ui-9')).toEqual({ cancelled: true })
+    expect(await face.cancel('ui-9')).toEqual({ cancelled: false })
   })
 
   it('is a PanelError so the route layer can map it', () => {
@@ -327,7 +330,7 @@ describe('panel api: script without ports', () => {
     const { store } = storeDouble()
     const scriptDeps = {
       specs: async () => ({ schemaVersion: 1, generatedAt: '', connections: {} }),
-      executor: { query: vi.fn(async () => ({ fields: [], rows: [] })), cancel: vi.fn(async () => undefined) },
+      executor: { query: vi.fn(async () => ({ fields: [], rows: [] })), cancel: vi.fn(async () => false) },
       registry: { next: () => 'st', forget: () => {}, register: () => {}, get: () => undefined },
     }
     const api = createPanelApi({

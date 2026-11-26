@@ -147,7 +147,11 @@ function thrownFailure(error: unknown, state: QueryState, overrideSql?: string):
   return { code: 'UNKNOWN', message: readableDbError({ message: raw }), ...(line === null ? {} : { line }) }
 }
 
-/** Jump to another page of the same statement; the cached total survives. */
+/** Page the statement that produced the grid. Editing the editor must not shift the offset. */
+export function pagingTarget(editorSql: string, lastRunSql: string, offset: number): { readonly sql: string; readonly offset: number } {
+  if (lastRunSql !== '' && lastRunSql !== editorSql) return { sql: lastRunSql, offset: 0 }
+  return { sql: editorSql, offset }
+}
 export async function goPage(
   api: WorkbenchApi,
   state: QueryState,

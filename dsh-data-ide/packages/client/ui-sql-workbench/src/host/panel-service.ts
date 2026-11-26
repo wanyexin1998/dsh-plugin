@@ -175,7 +175,12 @@ export function createPanelApi(deps: PanelApiDeps): PanelApi {
       return source
     },
 
-    remove: connId => deps.dataSources.remove(connId),
+    remove: async connId => {
+      const removed = await deps.dataSources.remove(connId)
+      // docs/04 §8: deleting a data source drops its credential record too.
+      if (removed) await deps.credentials.remove(connId)
+      return removed
+    },
 
     async test(connId) {
       const started = now()

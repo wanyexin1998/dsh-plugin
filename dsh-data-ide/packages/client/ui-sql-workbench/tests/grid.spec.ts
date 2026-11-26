@@ -76,6 +76,11 @@ describe('toCsv', () => {
   it('renders NULL as the grid does', () => {
     expect(toCsv(columns, [[3, null]])).toBe('order_id,customer\r\n3,NULL')
   })
+
+  it('neutralizes formula prefixes so Excel does not execute them', () => {
+    expect(toCsv(columns, [[1, '=HYPERLINK("http://x")']])).toContain("'=HYPERLINK")
+    expect(selectionToTsv([[1, '=1+1']], columns, { fromRow: 0, fromColumn: 1, toRow: 0, toColumn: 1 })).toBe("'=1+1")
+  })
 })
 
 describe('cellText', () => {

@@ -12,6 +12,7 @@
  */
 
 import type { ConnectionSpec } from '../host/runtime-specs.ts'
+import { splitStatements } from './split.ts'
 
 /** One result column: the label the grid shows plus the driver's type name. */
 export interface QueryField {
@@ -28,8 +29,12 @@ export interface QueryResult {
 /** Transport port; one call is one statement. */
 export interface QueryExecutor {
   query(spec: ConnectionSpec, sql: string, statementId: string): Promise<QueryResult>
-  /** Abort a running statement (driver-specific; a destroyed socket in practice). */
-  cancel(statementId: string): Promise<void>
+  /**
+   * Abort a running statement (driver-specific; a destroyed socket in practice).
+   *
+   * @returns Whether a live statement with this id was found.
+   */
+  cancel(statementId: string): Promise<boolean>
 }
 
 /** Server-side sort applied to the wrapped query. */
@@ -147,8 +152,17 @@ const PROBE_ROWS = 1
 /** Single-cell ceiling (docs/04 §6). */
 export const MAX_CELL_BYTES = 1024 * 1024
 
-/** Statements that change data or schema are refused unless writes are enabled. */
-const WRITE_PREFIX = /^\s*(insert|update|delete|replace|merge|truncate|create|alter|drop|rename|grant|revoke|call|do|load|set)\b/i
+/** How much of an oversized cell the grid and the agent still see (docs/01, 32KB). */
+export const PREVIEW_BYTES = 32 * 1024
+
+/**
+ * Statements that change data, schema, or another session.
+ *
+ * `OPTIMIZE` / `REPAIR` rewrite tables, `KILL` aborts someone else's statement,
+ * and `HANDLER` reads rows without being a SELECT. None of those are safe on a
+ * read-only connection.
+ */
+const WRITE_PREFIX = /^\s*(insert|update|delete|replace|merge|truncate|create|alter|drop|rename|grant|revoke|call|do|load|set|optimize|repair|kill|handler)\b/i
 
 /** Keywords whose statement can sit inside a derived table (`SELECT * FROM (…)`). */
 const WRAPPER_SAFE_KEYWORDS = new Set(['select', 'with', 'values', 'table'])
@@ -161,9 +175,75 @@ const LEADING_COMMENTS = /^(?:\s|--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*[\s\S]*?\*
  *
  * @param sql - One statement as written by the user.
  */
+/**
+ * Copy `sql`, turning MySQL executable comments into the text the server will run.
+ *
+ * Ordinary comments and string literals stay untouched: a semicolon or a
+ * write keyword inside a quoted executable-comment lookalike is data, not a statement.
+ */
+export function unwrapExecutableComments(sql: string): string {
+  let out = ''
+  let index = 0
+  while (index < sql.length) {
+    const char = sql.charAt(index)
+    const next = sql.charAt(index + 1)
+    if ((char === '-' && next === '-') || char === '#') {
+      const end = sql.indexOf('\n', index)
+      const stop = end === -1 ? sql.length : end
+      out += sql.slice(index, stop)
+      index = stop
+      continue
+    }
+    if (char === '/' && next === '*') {
+      const close = sql.indexOf('*/', index + 2)
+      const end = close === -1 ? sql.length : close + 2
+      const inner = sql.slice(index + 2, close === -1 ? sql.length : close)
+      if (inner.startsWith('!')) out += ` ${inner.replace(/^!\d*\s?/, '')} `
+      else out += sql.slice(index, end)
+      index = end
+      continue
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      out += char
+      index += 1
+      while (index < sql.length) {
+        if (sql[index] === '\\') {
+          out += sql.slice(index, index + 2)
+          index += 2
+          continue
+        }
+        out += sql[index]
+        if (sql[index] === char) {
+          if (sql[index + 1] === char) {
+            out += sql[index + 1]
+            index += 2
+            continue
+          }
+          index += 1
+          break
+        }
+        index += 1
+      }
+      continue
+    }
+    out += char
+    index += 1
+  }
+  return out
+}
+
+/**
+ * Statement text with leading comments and wrapping parentheses removed.
+ *
+ * Permission and "can this be a derived table?" both need the first keyword
+ * the server will see, not the first character the user typed.
+ */
+function keywordBody(sql: string): string {
+  return unwrapExecutableComments(sql).replace(LEADING_COMMENTS, '').trimStart().replace(/^(?:\(\s*)+/, '')
+}
+
 export function headKeyword(sql: string): string {
-  const stripped = sql.replace(LEADING_COMMENTS, '')
-  const match = /^[A-Za-z_]+/.exec(stripped)
+  const match = /^[A-Za-z_]+/.exec(keywordBody(sql))
   return (match?.[0] ?? '').toLowerCase()
 }
 
@@ -203,11 +283,22 @@ export interface Refusal {
  * @param writeEnabled - Connection-level switch a human flipped in the UI.
  */
 export function checkPermission(sql: string, writeEnabled: boolean): ExecutionRefusal | undefined {
-  if (sql.trim() === '') return { code: 'EMPTY_SQL', message: 'SQL 为空' }
-  if (DDL_BLACKLIST.test(sql)) return { code: 'DDL_FORBIDDEN', message: 'DDL 语句在默认策略下被拒绝（DROP/TRUNCATE/ALTER/GRANT/REVOKE）' }
-  if (!writeEnabled && WRITE_PREFIX.test(sql)) {
-    return { code: 'WRITE_NOT_ALLOWED', message: '该连接未开启 writeEnabled，只允许 SELECT；如需写入请在连接配置里显式开启' }
+  // Executable comments are real statements on MySQL. Unwrap them, then judge
+  // every piece: `SELECT 1 /*! ; DROP TABLE t */` is one comment to a naive
+  // scanner and two statements to the server.
+  const pieces = splitStatements(unwrapExecutableComments(sql), Number.POSITIVE_INFINITY)
+  if (pieces.length === 0) return { code: 'EMPTY_SQL', message: 'SQL 为空' }
+  let sawSql = false
+  for (const piece of pieces) {
+    const body = keywordBody(piece.text)
+    if (body.trim() === '') continue
+    sawSql = true
+    if (DDL_BLACKLIST.test(body)) return { code: 'DDL_FORBIDDEN', message: 'DDL 语句在默认策略下被拒绝（DROP/TRUNCATE/ALTER/GRANT/REVOKE）' }
+    if (!writeEnabled && WRITE_PREFIX.test(body)) {
+      return { code: 'WRITE_NOT_ALLOWED', message: '该连接未开启 writeEnabled，只允许 SELECT；如需写入请在连接配置里显式开启' }
+    }
   }
+  if (!sawSql) return { code: 'EMPTY_SQL', message: 'SQL 为空' }
   return undefined
 }
 
@@ -323,14 +414,32 @@ export function filterClause(filters: readonly FilterSpec[] | undefined): string
   return ` WHERE ${conditions.join(' AND ')}`
 }
 
-/** Everything before the first semicolon, which is the statement we run. */
+/**
+ * The statement we run.
+ *
+ * Semicolons inside comments and strings are not terminators — the script
+ * splitter already knows that. Executable comments are unwrapped first so a
+ * hidden `; DROP` cannot ride along with the statement we keep.
+ */
 export function firstStatement(sql: string): string {
-  // `split` always yields at least one element, so the head is never undefined.
-  const head = sql.split(';')[0] as string
-  return head.trim()
+  const first = splitStatements(unwrapExecutableComments(sql), 1)[0]
+  return first?.text ?? ''
 }
 
 /** Truncate one oversized cell, counting how many cells were clipped. */
+/** First `PREVIEW_BYTES` of UTF-8, without splitting a code point. */
+function previewText(text: string): string {
+  let bytes = 0
+  let end = 0
+  for (const char of text) {
+    const size = Buffer.byteLength(char, 'utf8')
+    if (bytes + size > PREVIEW_BYTES) break
+    bytes += size
+    end += char.length
+  }
+  return `${text.slice(0, end)}…（值过大）`
+}
+
 export function truncateRow(row: readonly unknown[], previous: number): { row: unknown[]; truncated: number } {
   let clipped = previous
   const cells = row.map(cell => {
@@ -338,7 +447,7 @@ export function truncateRow(row: readonly unknown[], previous: number): { row: u
     const text = Buffer.isBuffer(cell) ? cell.toString('base64') : cell
     if (Buffer.byteLength(text, 'utf8') <= MAX_CELL_BYTES) return cell
     clipped += 1
-    return `${text.slice(0, 32)}…（值过大）`
+    return previewText(text)
   })
   return { row: cells, truncated: clipped }
 }
@@ -436,37 +545,38 @@ export async function executeSql(deps: ExecutionDeps, request: ExecuteRequest): 
   const offset = Math.max(0, request.offset ?? 0)
   const statementId = request.statementId ?? deps.registry.next()
 
-  // Metadata statements (`SHOW CREATE TABLE`, `EXPLAIN`, …) cannot live inside
-  // the paging wrapper — Doris answers `SELECT * FROM (SHOW CREATE …)` with a
-  // syntax error — so `raw` runs them as written. Permissions still applied.
-  if (request.raw === true) {
+  // Metadata (`SHOW`, `EXPLAIN`) and DML are not derived tables. Wrapping them
+  // is a syntax error, so anything that cannot sit inside `SELECT * FROM (…)`
+  // runs as written — including the MCP/script path, which does not pass `mode`.
+  // Permissions already applied.
+  if (request.raw === true || !canWrapStatement(sql)) {
     const rawPage = await deps.executor.query(resolved.spec, sql, statementId)
     deps.registry.forget(statementId)
-    return { ...toPage(rawPage, pageSize, offset, now() - started, statementId, null), mode: 'paged', lineOffset: 0 }
+    return {
+      ...toPage(rawPage, pageSize, request.raw === true ? offset : 0, now() - started, statementId, null),
+      mode: request.raw === true ? 'paged' : 'direct',
+      lineOffset: 0,
+    }
   }
 
-  // Direct mode: run the authoring query as written. Result-set statements only
-  // get an outer probe limit (no COUNT, no sort/filter), so the first page comes
-  // back at the speed of the statement itself; metadata/DML run verbatim.
+  // Direct mode: probe limit only, no COUNT, so the first page comes back at
+  // the speed of the statement itself.
   if (request.mode === 'direct') {
-    const resultSet = canWrapStatement(sql)
-    const page = await deps.executor.query(
-      resolved.spec,
-      resultSet ? buildDirectQuery(sql, pageSize) : sql,
-      statementId,
-    )
+    const page = await deps.executor.query(resolved.spec, buildDirectQuery(sql, pageSize), statementId)
     deps.registry.forget(statementId)
     return {
       ...toPage(page, pageSize, 0, now() - started, statementId, null),
       mode: 'direct',
       // The wrapper adds one line above the user's SQL.
-      lineOffset: resultSet ? 1 : 0,
+      lineOffset: 1,
     }
   }
 
-  // The count runs alongside the page but must not hold it hostage.
+  // The count runs alongside the page but must not hold it hostage. When it
+  // loses the race, cancel it: a timed-out COUNT still holds a server thread.
+  const countId = `${statementId}-count`
   const counted = deps.executor
-    .query(resolved.spec, buildCountQuery(sql, request.filters), `${statementId}-count`)
+    .query(resolved.spec, buildCountQuery(sql, request.filters), countId)
     .then(result => Number((result.rows[0]?.[0] as number | undefined) ?? 0))
     .catch(() => null)
   const page = await deps.executor.query(
@@ -482,6 +592,7 @@ export async function executeSql(deps: ExecutionDeps, request: ExecuteRequest): 
   deps.registry.forget(statementId)
 
   const total = await withTimeout(counted, deps.countTimeoutMs ?? COUNT_TIMEOUT_MS, null)
+  if (total === null) await deps.executor.cancel(countId).catch(() => undefined)
   return { ...toPage(page, pageSize, offset, now() - started, statementId, total), mode: 'paged', lineOffset: 1 }
 }
 

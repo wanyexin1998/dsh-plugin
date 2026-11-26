@@ -345,7 +345,10 @@ describe('console workspace snapshot', () => {
     expect(toWorkspaceState([], 'anything')).toEqual({ schemaVersion: 1, activeDocId: '', docs: [] })
 
     const many = Array.from({ length: 12 }, (_, index) => tab(`t${String(index)}`))
-    expect(toWorkspaceState(many, 't11').docs).toHaveLength(8)
+    const snapshot = toWorkspaceState(many, 't11')
+    expect(snapshot.docs).toHaveLength(8)
+    expect(snapshot.activeDocId).toBe('t11')
+    expect(snapshot.docs.some(doc => doc.id === 't11')).toBe(true)
   })
 })
 

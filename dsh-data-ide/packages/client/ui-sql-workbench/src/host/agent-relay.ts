@@ -45,6 +45,12 @@ export interface AgentRelayOptions {
   readonly history?: number
   /** Envelopes older than this are dropped on startup (a host that never ran). */
   readonly staleAfterMs?: number
+  /**
+   * Awaited after an envelope is read and before it is delivered.
+   *
+   * Tests pause a scan here. Production leaves it unset.
+   */
+  readonly beforeDeliver?: () => Promise<void>
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -82,6 +88,8 @@ export async function startAgentRelay(options: AgentRelayOptions): Promise<Agent
   let seq = 0
   let scanning = false
   let disposed = false
+  /** The scan currently reading the spool; `dispose` waits for it. */
+  let inflight: Promise<void> = Promise.resolve()
 
   // Finish the startup sweep before the first scan. Running both concurrently
   // can fan out an expired envelope just before the sweep removes it.
@@ -90,42 +98,50 @@ export async function startAgentRelay(options: AgentRelayOptions): Promise<Agent
   async function scan(): Promise<void> {
     if (scanning || disposed) return
     scanning = true
-    try {
-      const names = (await readdir(dir)).filter(name => name.endsWith('.json')).sort()
-      for (const name of names) {
-        const path = join(dir, name)
-        let delivery: AgentDelivery | null = null
-        try {
-          delivery = parseDelivery(JSON.parse(await readFile(path, 'utf8')))
-        } catch {
-          delivery = null
-        }
-        if (delivery === null) {
-          // Corrupt or half-written: drop it rather than block the queue.
-          // `allSettled` preserves best-effort deletion without adding a branch
-          // whose failure requires a filesystem race to reproduce reliably.
-          await Promise.allSettled([unlink(path)])
-          continue
-        }
-        seq += 1
-        const event: AgentDeliveryEvent = { seq, delivery }
-        ring.push(event)
-        if (ring.length > limit) ring.shift()
-        for (const listener of listeners) {
+    inflight = (async () => {
+      try {
+        const names = (await readdir(dir)).filter(name => name.endsWith('.json')).sort()
+        for (const name of names) {
+          const path = join(dir, name)
+          let delivery: AgentDelivery | null = null
           try {
-            listener(event)
+            delivery = parseDelivery(JSON.parse(await readFile(path, 'utf8')))
           } catch {
-            // A broken subscriber must not stall the relay.
+            delivery = null
           }
+          // Unload can land while this file is being read. Leave it, and every
+          // file after it, for the next process. Listeners stay until this scan
+          // finishes, so a file already past this point is still delivered.
+          if (options.beforeDeliver !== undefined) await options.beforeDeliver()
+          if (disposed) return
+          if (delivery === null) {
+            // Corrupt or half-written: drop it rather than block the queue.
+            // `allSettled` preserves best-effort deletion without adding a branch
+            // whose failure requires a filesystem race to reproduce reliably.
+            await Promise.allSettled([unlink(path)])
+            continue
+          }
+          seq += 1
+          const event: AgentDeliveryEvent = { seq, delivery }
+          ring.push(event)
+          if (ring.length > limit) ring.shift()
+          for (const listener of listeners) {
+            try {
+              listener(event)
+            } catch {
+              // A broken subscriber must not stall the relay.
+            }
+          }
+          // Only now: a crash above replays this envelope instead of losing it.
+          await unlink(path).catch(() => undefined)
         }
-        // Only now: a crash above replays this envelope instead of losing it.
-        await unlink(path).catch(() => undefined)
+      } catch {
+        // Spool not created yet — the first labelled run creates it.
+      } finally {
+        scanning = false
       }
-    } catch {
-      // Spool not created yet — the first labelled run creates it.
-    } finally {
-      scanning = false
-    }
+    })()
+    await inflight
   }
 
   const timer = setInterval(() => void scan(), pollMs)
@@ -148,6 +164,9 @@ export async function startAgentRelay(options: AgentRelayOptions): Promise<Agent
     async dispose() {
       disposed = true
       clearInterval(timer)
+      // Let the scan that already opened a file finish delivering it. Files it
+      // has not reached stay on disk; the next start tails them again.
+      await inflight
       listeners.clear()
     },
   }

@@ -73,7 +73,7 @@ describe('test_connection over a real spec file', () => {
 
     expect(payload.state).toBe('YES')
     expect(payload.info).toMatchObject({ product: 'Doris', version: '5.7.99', identifierQuoteString: '`' })
-    expect(payload.info.caseSensitivity).toEqual({ plain: 'lower', quoted: 'exact' })
+    expect(payload.info.caseSensitivity).toEqual({ plain: 'exact', quoted: 'exact' })
     expect(driver.createConnection).toHaveBeenCalledWith(
       expect.objectContaining({ host: 'doris.shcell.com', port: 9030, user: 'wanyexin', password: 'hunter2' }),
     )
@@ -106,7 +106,20 @@ describe('test_connection over a real spec file', () => {
       ((await client.callTool({ name: 'test_connection', arguments: { connId } })).content as { text: string }[])[0]!.text,
     ).payload
 
-    expect(payload).toMatchObject({ state: 'NO', error: { code: 'NETWORK_UNREACHABLE' } })
+    expect(payload).toMatchObject({ state: 'UNSURE', error: { code: 'NETWORK_UNREACHABLE' } })
+    await client.close()
+  })
+
+  it('reports NO when the server rejects the credentials', async () => {
+    driver.createConnection.mockResolvedValue({ query: driver.query, end: driver.end })
+    driver.query.mockRejectedValue(Object.assign(new Error('Access denied'), { code: 'ER_ACCESS_DENIED_ERROR' }))
+    const client = await connectWithSpecFile()
+
+    const payload = JSON.parse(
+      ((await client.callTool({ name: 'test_connection', arguments: { connId } })).content as { text: string }[])[0]!.text,
+    ).payload
+
+    expect(payload).toMatchObject({ state: 'NO', error: { code: 'AUTH_FAILED' } })
     await client.close()
   })
 
@@ -118,7 +131,7 @@ describe('test_connection over a real spec file', () => {
       ((await client.callTool({ name: 'test_connection', arguments: { connId } })).content as { text: string }[])[0]!.text,
     ).payload
 
-    expect(payload.state).toBe('NO')
+    expect(payload.state).toBe('YES')
     expect(driver.end).toHaveBeenCalled()
     await client.close()
   })

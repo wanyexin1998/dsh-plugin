@@ -45,6 +45,11 @@ export function findSqlParams(sql: string): readonly SqlParam[] {
       // Skip the quoted run, honouring doubled quotes.
       index += 1
       while (index < sql.length) {
+        // MySQL's default sql_mode treats `\'` as one quote, not the end of the literal.
+        if (sql[index] === '\\') {
+          index += 2
+          continue
+        }
         if (sql[index] === char) {
           if (sql[index + 1] === char) {
             index += 2
@@ -57,7 +62,7 @@ export function findSqlParams(sql: string): readonly SqlParam[] {
       }
       continue
     }
-    if (char === '-' && next === '-') {
+    if ((char === '-' && next === '-') || char === '#') {
       const end = sql.indexOf('\n', index)
       index = end === -1 ? sql.length : end + 1
       continue

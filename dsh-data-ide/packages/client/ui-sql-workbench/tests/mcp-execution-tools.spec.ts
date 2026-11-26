@@ -34,7 +34,7 @@ function fakeExecutor(result: QueryResult = { fields: [{ name: 'a', typeName: 'L
       seen.push(sql)
       return sql.includes('COUNT(*)') ? { fields: [{ name: 'c', typeName: 'LONGLONG' }], rows: [[3]] } : result
     }),
-    cancel: vi.fn(async () => undefined),
+    cancel: vi.fn(async () => false),
   }
   return executor
 }
@@ -126,8 +126,9 @@ describe('execution tools over MCP', () => {
     const executor = fakeExecutor()
     const { client, server } = await connect(executor)
 
-    expect(await callJson(client, 'cancel_statement', { statementId: 'stmt-9' })).toEqual({ cancelled: true })
+    expect(await callJson(client, 'cancel_statement', { statementId: 'stmt-9' })).toEqual({ cancelled: false })
     expect(executor.cancel).toHaveBeenCalledWith('stmt-9')
+    expect(executor.cancel).toHaveBeenCalledWith('stmt-9-count')
     await client.close()
     await server.close()
   })
@@ -135,7 +136,7 @@ describe('execution tools over MCP', () => {
 
 describe('mysql executor', () => {
   it('opens a socket, maps fields and closes it', async () => {
-    driver.query.mockReset().mockResolvedValue([[{ a: 1 }], [{ name: 'a' }, { name: 'b' }]])
+    driver.query.mockReset().mockResolvedValue([[[1]], [{ name: 'a' }, { name: 'b' }]])
     driver.end.mockReset().mockResolvedValue(undefined)
     driver.destroy.mockReset().mockResolvedValue(undefined)
     driver.createConnection.mockReset().mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
@@ -143,7 +144,7 @@ describe('mysql executor', () => {
 
     // `type: 3` is LONG (INT) and `type: 0xfd` is VAR_STRING in the MySQL wire
     // protocol; the grid formats by these names (docs/03 §6.5).
-    driver.query.mockResolvedValue([[{ a: 1, b: 'x' }], [{ name: 'a', type: 3 }, { name: 'b', type: 0xfd }]])
+    driver.query.mockResolvedValue([[[1, 'x']], [{ name: 'a', type: 3 }, { name: 'b', type: 0xfd }]])
     driver.end.mockResolvedValue(undefined)
     driver.createConnection.mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
 
@@ -154,7 +155,7 @@ describe('mysql executor', () => {
 
     expect(result.fields).toEqual([{ name: 'a', typeName: 'LONG' }, { name: 'b', typeName: 'VAR_STRING' }])
     expect(result.rows).toEqual([[1, 'x']])
-    expect(driver.createConnection).toHaveBeenCalledWith(expect.objectContaining({ host: 'doris.shcell.com', port: 9030 }))
+    expect(driver.createConnection).toHaveBeenCalledWith(expect.objectContaining({ host: 'doris.shcell.com', port: 9030, rowsAsArray: true }))
     expect(driver.end).toHaveBeenCalled()
   })
 
@@ -167,7 +168,7 @@ describe('mysql executor', () => {
     driver.end.mockResolvedValue(undefined)
     let release: (() => void) | undefined
     driver.query.mockImplementation(() => new Promise(resolve => {
-      release = () => resolve([[{ a: 1 }], [{ name: 'a', type: 3 }]])
+      release = () => resolve([[[1]], [{ name: 'a', type: 3 }]])
     }))
     driver.createConnection.mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
 
@@ -182,7 +183,7 @@ describe('mysql executor', () => {
     release?.()
     await expect(running).resolves.toMatchObject({ rows: [[1]] })
 
-    await expect(executor.cancel('stmt-unknown')).resolves.toBeUndefined()
+    await expect(executor.cancel('stmt-unknown')).resolves.toBe(false)
   })
 
   it('survives a driver that refuses to close', async () => {
@@ -211,25 +212,96 @@ describe('mysql executor', () => {
     await expect(executor.query(spec, 'UPDATE t SET a = 1', 'stmt-3')).resolves.toEqual({ fields: [], rows: [] })
 
     // A field without a name or a wire type must still land in column order.
-    driver.query.mockResolvedValue([[{ '': null }], [{}]])
+    driver.query.mockResolvedValue([[[null]], [{}]])
     await expect(executor.query(spec, 'SELECT 1', 'stmt-4')).resolves.toEqual({
       fields: [{ name: '', typeName: 'UNKNOWN' }],
       rows: [[null]],
     })
 
     // A type code outside the table degrades to UNKNOWN rather than undefined.
-    driver.query.mockResolvedValue([[{ a: 1 }], [{ name: 'a', type: 0x99 }]])
+    driver.query.mockResolvedValue([[[1]], [{ name: 'a', type: 0x99 }]])
     await expect(executor.query(spec, 'SELECT a FROM t', 'stmt-6')).resolves.toEqual({
       fields: [{ name: 'a', typeName: 'UNKNOWN' }],
       rows: [[1]],
     })
 
     // A missing value for a known column reads as NULL, not as undefined.
-    driver.query.mockResolvedValue([[{}], [{ name: 'a', type: 3 }]])
+    driver.query.mockResolvedValue([[[]], [{ name: 'a', type: 3 }]])
     await expect(executor.query(spec, 'SELECT a FROM t', 'stmt-5')).resolves.toEqual({
       fields: [{ name: 'a', typeName: 'LONG' }],
       rows: [[null]],
     })
+  })
+
+  it('reports an OkPacket as affected rows instead of throwing after the write', async () => {
+    driver.destroy.mockReset().mockResolvedValue(undefined)
+    driver.end.mockReset().mockResolvedValue(undefined)
+    driver.createConnection.mockReset().mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
+    driver.query.mockResolvedValueOnce([{ affectedRows: 2, insertId: 9, warningStatus: 1 }, undefined])
+    driver.query.mockResolvedValueOnce([{}, undefined])
+    const { createMysqlExecutor } = await import('../src/execute/mysql.ts')
+    const executor = createMysqlExecutor()
+
+    await expect(executor.query(spec, 'INSERT INTO t VALUES (1)', 'stmt-ok')).resolves.toEqual({
+      fields: [
+        { name: 'affectedRows', typeName: 'LONGLONG' },
+        { name: 'insertId', typeName: 'LONGLONG' },
+        { name: 'warningStatus', typeName: 'LONG' },
+      ],
+      rows: [[2, 9, 1]],
+    })
+    await expect(executor.query(spec, 'UPDATE t SET a = 1', 'stmt-empty')).resolves.toMatchObject({ rows: [[0, 0, 0]] })
+  })
+
+  it('keeps duplicate column names in driver order', async () => {
+    driver.destroy.mockReset().mockResolvedValue(undefined)
+    driver.end.mockReset().mockResolvedValue(undefined)
+    driver.createConnection.mockReset().mockResolvedValue({ query: driver.query, end: driver.end, destroy: driver.destroy })
+    driver.query.mockResolvedValue([[[10, 20]], [{ name: 'id', type: 3 }, { name: 'id', type: 3 }]])
+    const { createMysqlExecutor } = await import('../src/execute/mysql.ts')
+
+    await expect(createMysqlExecutor().query(spec, 'SELECT a.id, b.id FROM a JOIN b', 'stmt-dup')).resolves.toMatchObject({
+      rows: [[10, 20]],
+    })
+  })
+
+  it('cancels a handshake that has not finished and refuses the query', async () => {
+    driver.destroy.mockReset().mockRejectedValue(new Error('gone'))
+    driver.end.mockReset().mockResolvedValue(undefined)
+    let open: ((value: unknown) => void) | undefined
+    driver.createConnection.mockReset().mockImplementation(() => new Promise(resolve => {
+      open = resolve
+    }))
+    const { createMysqlExecutor } = await import('../src/execute/mysql.ts')
+    const executor = createMysqlExecutor()
+    const running = executor.query(spec, 'SELECT 1', 'stmt-wait')
+
+    await vi.waitFor(() => {
+      expect(open).toBeTypeOf('function')
+    })
+    await expect(executor.cancel('stmt-wait')).resolves.toBe(true)
+    await expect(executor.cancel('stmt-wait')).resolves.toBe(true)
+    open?.({ query: driver.query, end: driver.end, destroy: driver.destroy })
+    await expect(running).rejects.toThrow('查询已取消')
+
+    driver.createConnection.mockReset().mockRejectedValue(new Error('down'))
+    await expect(executor.query(spec, 'SELECT 1', 'stmt-down')).rejects.toThrow('down')
+    await expect(executor.cancel('stmt-down')).resolves.toBe(false)
+
+    driver.destroy.mockReset().mockResolvedValue(undefined)
+    let reopen: ((value: unknown) => void) | undefined
+    driver.createConnection.mockReset().mockImplementation(() => new Promise(resolve => {
+      reopen = resolve
+    }))
+    const again = executor.query(spec, 'SELECT 1', 'stmt-again')
+    await vi.waitFor(() => {
+      expect(reopen).toBeTypeOf('function')
+    })
+    await executor.cancel('stmt-again')
+    const raced = executor.query(spec, 'SELECT 1', 'stmt-again')
+    await expect(raced).rejects.toThrow('查询已取消')
+    reopen?.({ query: driver.query, end: driver.end, destroy: driver.destroy })
+    await expect(again).rejects.toThrow('查询已取消')
   })
 })
 

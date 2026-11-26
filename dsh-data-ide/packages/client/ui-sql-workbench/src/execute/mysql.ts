@@ -61,33 +61,78 @@ interface RawField {
   readonly type?: unknown
 }
 
+/** A socket that is open, still connecting, or already asked to stop. */
+type LiveSocket = Connection | 'pending' | 'cancelled'
+
+/** OkPacket / ResultSetHeader: a write acknowledgement, not a row list. */
+function isResultHeader(value: unknown): value is { affectedRows?: number; insertId?: number; warningStatus?: number } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /** Open sockets keyed by statement id, so a cancel can destroy the right one. */
 export function createMysqlExecutor(): QueryExecutor {
-  const open = new Map<string, Connection>()
+  const open = new Map<string, LiveSocket>()
 
   return {
     async query(spec, sql, statementId): Promise<QueryResult> {
-      const connection = await createConnection({
-        host: spec.host,
-        port: spec.port,
-        user: spec.username,
-        password: spec.password,
-        database: spec.database,
-        connectTimeout: 10_000,
-        ...spec.driverProperties,
-      })
+      // Register before connect so a cancel during the handshake is not a lie.
+      if (open.get(statementId) === 'cancelled') throw new Error('查询已取消')
+      open.set(statementId, 'pending')
+      let connection: Connection
+      try {
+        connection = await createConnection({
+          host: spec.host,
+          port: spec.port,
+          user: spec.username,
+          password: spec.password,
+          database: spec.database,
+          connectTimeout: 10_000,
+          ...spec.driverProperties,
+          // Arrays keep duplicate column names (`a.id`, `b.id`) distinct.
+          // A row object would collapse them onto one key.
+          rowsAsArray: true,
+        })
+      } catch (error) {
+        open.delete(statementId)
+        throw error
+      }
+      if (open.get(statementId) === 'cancelled') {
+        open.delete(statementId)
+        try {
+          await connection.destroy()
+        } catch {
+          // The socket is already gone; the query still must not return rows.
+        }
+        throw new Error('查询已取消')
+      }
       open.set(statementId, connection)
       try {
         const [rawRows, rawFields] = await connection.query(sql)
-        // mysql2 hands back row objects keyed by column; the grid wants values
-        // in the column order the driver reported.
         const fields = ((rawFields as RawField[] | undefined) ?? []).map(field => ({
           name: String(field.name ?? ''),
           typeName: typeof field.type === 'number' ? (TYPE_NAMES[field.type] ?? 'UNKNOWN') : 'UNKNOWN',
         }))
+        // INSERT/UPDATE/DELETE resolve to an OkPacket after the server has
+        // committed. Mapping that object as rows throws, and the UI then
+        // reports a failure for a write that already landed.
+        if (isResultHeader(rawRows)) {
+          return {
+            fields: [
+              { name: 'affectedRows', typeName: 'LONGLONG' },
+              { name: 'insertId', typeName: 'LONGLONG' },
+              { name: 'warningStatus', typeName: 'LONG' },
+            ],
+            rows: [[
+              Number(rawRows.affectedRows ?? 0),
+              Number(rawRows.insertId ?? 0),
+              Number(rawRows.warningStatus ?? 0),
+            ]],
+          }
+        }
+        const table = rawRows as readonly (readonly unknown[])[]
         return {
           fields,
-          rows: (rawRows as Record<string, unknown>[]).map(row => fields.map(field => row[field.name] ?? null)),
+          rows: table.map(row => fields.map((_, index) => row[index] ?? null)),
         }
       } finally {
         open.delete(statementId)
@@ -95,11 +140,18 @@ export function createMysqlExecutor(): QueryExecutor {
       }
     },
 
-    async cancel(statementId): Promise<void> {
-      const connection = open.get(statementId)
-      if (connection === undefined) return
+    async cancel(statementId): Promise<boolean> {
+      const current = open.get(statementId)
+      if (current === undefined) return false
+      if (current === 'cancelled') return true
+      if (current === 'pending') {
+        open.set(statementId, 'cancelled')
+        return true
+      }
+      open.delete(statementId)
       // Destroy rather than end: an in-flight statement must stop now.
-      await connection.destroy()
+      await current.destroy()
+      return true
     },
   }
 }

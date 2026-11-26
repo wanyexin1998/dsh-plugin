@@ -201,4 +201,29 @@ describe('data source store', () => {
 
     expect(await store.active()).toBeNull()
   })
+
+  it('keeps both saves when they overlap, and still accepts a save after a failed write', async () => {
+    const store = createDataSourceStore(createMemoryKvStore())
+    const other = createDataSource({ id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', name: 'b', dbms: 'mysql', host: 'h', username: 'u', writeEnabled: true })
+    await Promise.all([store.save(source), store.save(other)])
+    expect((await store.list()).map(entry => entry.id).sort()).toEqual([connId, other.id].sort())
+
+    let fail = true
+    const backing = createMemoryKvStore()
+    const flaky = createDataSourceStore({
+      get: key => backing.get(key),
+      put: async (key, value) => {
+        if (fail) {
+          fail = false
+          throw new Error('disk')
+        }
+        await backing.put(key, value)
+      },
+      delete: key => backing.delete(key),
+      entries: () => backing.entries(),
+    })
+    await expect(flaky.save(source)).rejects.toThrow('disk')
+    await flaky.save(other)
+    expect(await flaky.list()).toEqual([other])
+  })
 })
