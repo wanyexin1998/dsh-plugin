@@ -1,0 +1,6 @@
+- insert:
+    - id: dsh-visualize-inline
+      name: 'dsh-visualize-inline'
+      config:
+        enabled: true
+        v2: true

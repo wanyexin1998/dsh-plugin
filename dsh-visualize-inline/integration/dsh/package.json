@@ -1,0 +1,11 @@
+{
+  "name": "dsh-visualize-inline-integration",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.3-alpha.2"
+  },
+  "devDependencies": {
+    "node": "^24.22.3"
+  }
+}
