@@ -38,7 +38,7 @@ test('raw ASAR identity, twelve pinned inputs, exact anchors, complete-bundle sy
 });
 
 test('native successful navigation emits every open, including the current Session, but not aborted work', () => {
-  const code = section(source('workspace'), 'var UiWorkspaceService = class extends', '\n\t\t/**\n\t\t* `error`');
+  const code = section(source('workspace'), 'var UiWorkspaceService=class extends', ';function sessionCreateErrorOf(');
   const Workspace = vm.runInNewContext(`${code}\n; UiWorkspaceService`, {
     _deepseek_ai_cordis: { Service: class { constructor(ctx) { this.ctx = ctx; } } },
     _deepseek_ai_dsh_client_store: { createSnapshotStore: snapshot }, AbortController, AbortSignal,
@@ -81,7 +81,7 @@ test('ASAR reader rejects truncated headers and missing files without executing 
 });
 
 test('native main host lease preserves global-panel navigation and returns native main on release', () => {
-  const code = section(source('layout'), 'var LayoutController = class {', '\n\t\t//#endregion');
+  const code = section(source('layout'), 'var LayoutController=class{', ';const zh=');
   const Layout = vm.runInNewContext(`${code}; LayoutController`, { AbortController });
   const state = { activePanelId: null, conversationHostId: null };
   const actions = { setConversationHost: key => state.conversationHostId = key, selectPanel: key => state.activePanelId = key };
@@ -101,7 +101,7 @@ test('native main host lease preserves global-panel navigation and returns nativ
 });
 
 test('native Sidebar view retains A and B independently; hide/release is not an explicit Tab close', () => {
-  const code = section(source('sidebar-right'), 'var SidebarSessionView = class {', '\n\t\t//#region ../../util/crypto');
+  const code = section(source('sidebar-right'), 'var SidebarSessionView=class{', ';function randomUUID(');
   const Views = vm.runInNewContext(`${code}\n; SidebarSessionViews`, { _deepseek_ai_dsh_client_store: { createSnapshotStore: snapshot }, console });
   const released = [];
   const sessions = { retain: id => ({ sessionId: id, ready: Promise.resolve(), release: () => released.push(id) }) };
@@ -127,7 +127,7 @@ test('native Sidebar view retains A and B independently; hide/release is not an 
 });
 
 test('explicit Sidebar operations capture session and stale adoption cannot fall back to active B', () => {
-  const code = section(source('sidebar-right'), 'var SidebarRightController = class {', '\n\t\t//#endregion');
+  const code = section(source('sidebar-right'), 'var SidebarRightController=class{', ';var require_constants=');
   const Controller = vm.runInNewContext(`${code}; SidebarRightController`, {
     TabDomain: class {}, document: { activeElement: null },
   });
@@ -149,9 +149,9 @@ test('explicit Sidebar operations capture session and stale adoption cannot fall
 
 test('the shipped Quote plugin activates on the patched Conversation service and admits only writable selections', () => {
   const text = source('conversation');
-  const registry = section(text, 'var ConversationDefinitionRegistry = class {', '\n\t\t//#endregion');
-  const interactions = section(text, 'var ConversationInteractionRegistry = class extends', '\n\t\t//#endregion');
-  const service = section(text, 'var UiConversation = class extends', '\n\t\t//#endregion');
+  const registry = section(text, 'var ConversationDefinitionRegistry=class{', ';var ConversationEventRegistry=');
+  const interactions = section(text, 'var ConversationInteractionRegistry=class extends', ';var UserTextTransformError=');
+  const service = section(text, 'var UiConversation=class extends', ';const css$9=');
   class UnusedRegistry { subscribe() { return () => {}; } register() { return () => {}; } }
   const Conversation = vm.runInNewContext(`${registry}\n${interactions}\n${service}; UiConversation`, {
     _deepseek_ai_cordis: { Service: class {} },
@@ -185,7 +185,7 @@ test('the shipped Quote plugin activates on the patched Conversation service and
 });
 
 test('document drop is accepted by exactly the editable target Session, and native directory data is preserved', () => {
-  const code = section(source('attachment'), 'function droppedDirectories(', '\n\t\t//#endregion\n\t\t//#region \\0dsh-css:');
+  const code = section(source('attachment'), 'function droppedDirectories(', 'const css$1=');
   const listeners = new Map();
   const windowListeners = new Map();
   const document = { body: {}, documentElement: {}, addEventListener(type, fn) { const list = listeners.get(type) ?? []; list.push(fn); listeners.set(type, list); }, removeEventListener(type, fn) { listeners.set(type, (listeners.get(type) ?? []).filter(item => item !== fn)); } };
@@ -215,17 +215,17 @@ test('document drop is accepted by exactly the editable target Session, and nati
 
 test('native content factories keep Header/View content and embedded Sidebar keeps native DockLayout', () => {
   assert.match(source('conversation'), /name: "conversation.surface", scope: "session-maybe"/);
-  assert.match(source('conversation'), /renderSlot\("conversation.header", \{ embedded: props.embedded \}\)/);
-  assert.match(source('conversation'), /renderFactorySlot\("conversation.content"/);
+  assert.match(source('conversation'), /renderSlot\(`conversation\.header`,\{embedded:props\.embedded\}\)/);
+  assert.match(source('conversation'), /renderFactorySlot\(`conversation\.content`/);
   assert.match(source('conversation'), /splitEditorOwners\.get\(editor\)/);
   assert.match(source('sidebar-right'), /name: "sidebar.right.surface", scope: "session"/);
-  assert.ok(source('sidebar-right').includes('chrome: (0, react_jsx_runtime.jsx)(PanelChrome,'), 'embedded Sidebar retains actual native chrome');
-  assert.match(source('sidebar-right'), /_deepseek_ai_dsh_client_ui_dockkit.DockLayout/);
-  assert.match(source('sidebar-right'), /sidebar.embeddedHostActive\(\) \|\| shortcuts.runtime/);
+  assert.ok(source('sidebar-right').includes('chrome:(0,react_jsx_runtime.jsx)(PanelChrome,'), 'embedded Sidebar retains actual native chrome');
+  assert.match(source('sidebar-right'), /_deepseek_ai_dsh_client_ui_dockkit\.DockLayout/);
+  assert.match(source('sidebar-right'), /sidebar\.embeddedHostActive\(\)\|\|shortcuts\.runtime/);
 });
 
 test('the native global Sidebar stays hidden for retained tabs while the conversation host owns its seat', () => {
-  const code = section(source('sidebar-right'), 'function RightbarRoot(', '\n\t\t//#endregion');
+  const code = section(source('sidebar-right'), 'function RightbarRoot(', 'var SidebarSessionView=class{');
   const render = vm.runInNewContext(`${code}\n; RightbarRoot`, { react_jsx_runtime: { Fragment: 'fragment', jsx: (type, props) => ({ type, props }) }, SessionView: 'native-session-view' });
   const props = { useViews: select => select([{ sessionId: 'A', selected: true, embedded: false }]), usePanelInfo: select => select({ activePanelId: null, conversationHostId: 'dsh-split.workbench' }) };
   assert.equal(render(props).props.children[0].props.visible, false);

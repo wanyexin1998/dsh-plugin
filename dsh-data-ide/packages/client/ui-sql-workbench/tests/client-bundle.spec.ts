@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import * as React from 'react'
+import * as ReactDOM from 'react-dom'
 import { describe, expect, it } from 'vitest'
 
 import type { ClientContext } from '../src/client/contract/host.ts'
@@ -37,24 +38,25 @@ describe('built client bundle', () => {
     expect(loadBundle().id).toBe('dsh-data-ide')
   })
 
-  it('materializes to apply/inject without pulling anything but react', () => {
+  it('materializes to apply/inject without pulling anything outside the shell module table', () => {
     const { factory } = loadBundle()
     const required: string[] = []
 
     const exports = factory(id => {
       required.push(id)
       if (id === 'react') return React
+      if (id === 'react-dom') return ReactDOM
       throw new Error(`unexpected module-table request: ${id}`)
     })
 
     expect(typeof exports['apply']).toBe('function')
     expect(exports['inject']).toEqual(['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'])
-    expect(new Set(required)).toEqual(new Set(['react']))
+    expect(new Set(required)).toEqual(new Set(['react', 'react-dom']))
   })
 
   it('registers the tab type and both keyed seats when applied', () => {
     const { factory } = loadBundle()
-    const exports = factory(() => React)
+    const exports = factory(id => (id === 'react-dom' ? ReactDOM : React))
     const effects: string[] = []
     const registrations: { name: string; key?: string }[] = []
     const ctx = {

@@ -40,13 +40,13 @@ test('actual native RightbarSeat → SidebarPanel → DockLayout keeps the selec
       construct: () => ({}),
       get: (t, key) => (key === Symbol.toPrimitive ? () => '' : (key in t ? t[key] : passThrough)),
     });
-    const explicit = { k: React, p: jsx, xe: classes,
+    const explicit = { x: React, m: jsx, $e: classes,
       document: dom.window.document, window: dom.window, HTMLElement: dom.window.HTMLElement, Node: dom.window.Node,
       getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
-      de: (...items) => items.filter(Boolean).join(' '),
-      Mn: ({ children }) => children, console,
+      pe: (...items) => items.filter(Boolean).join(' '),
+      Gn: ({ children }) => children, console,
       // 上游图标组件（SVG 包装），与断言无关，渲染为 null 即可
-      ry: () => null, x4: () => null,
+      $p: () => null, qw: () => null,
       ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
       MutationObserver: class { observe() {} disconnect() {} takeRecords() { return [] } },
       IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } },
@@ -70,7 +70,7 @@ test('actual native RightbarSeat → SidebarPanel → DockLayout keeps the selec
       dockPaneIds: dockkitModule.dockPaneIds,
       findPaneContentTab: dockkitModule.findPaneContentTab,
     };
-    const Seat = vm.runInNewContext(`${section(sidebar, 'function guideIn(', '\n\t\t//#endregion\n\t\t//#region lib/types/client/shell/close-focus.js')}\n; RightbarSeat`, {
+    const Seat = vm.runInNewContext(`${section(sidebar, 'function guideIn(', 'function openWithPaneFocus(')}\n; RightbarSeat`, {
       react: React, react_jsx_runtime: jsx, _deepseek_ai_dsh_client_ui_dockkit: kit,
       _deepseek_ai_dsh_client_ui_primitives: { Tooltip: ({children}) => children, IconPanelLeftOutlineRegular: () => null },
       SidebarRight_module_css_default: classes, document: dom.window.document,

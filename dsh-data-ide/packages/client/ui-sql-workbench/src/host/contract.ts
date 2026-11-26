@@ -79,5 +79,7 @@ export interface NodeHostContext {
    * activates in a composition without them (dsh-chat's precedent).
    */
   get?(name: string): unknown
+  inject?(deps: readonly string[], callback: (ctx: NodeHostContext) => void): { dispose?(): void | Promise<void> } | void
   readonly webServer?: WebServerService
+  readonly connection?: ConnectionService
 }

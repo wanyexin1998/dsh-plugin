@@ -155,6 +155,90 @@ describe('node half', () => {
     expect(res.body).toContain('UNTRUSTED')
   })
 
+  it('admits callers once connection mounts after apply()', async () => {
+    let lateConnection: { requestRejection: () => number | undefined } | undefined
+    const host = fakeCtx({ webServer: true })
+    const originalGet = host.ctx.get!
+    ;(host.ctx as { get: (name: string) => unknown }).get = (name: string) =>
+      name === 'connection' ? lateConnection : originalGet(name)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    apply(host.ctx)
+    await host.settled()
+
+    const beforeRes = { statusCode: 0, body: '', setHeader() {}, end(chunk: string) { this.body = chunk } }
+    await host.handlers.get(ROUTES.connections)!({ method: 'GET' }, beforeRes)
+    expect(beforeRes.statusCode).toBe(401)
+
+    lateConnection = { requestRejection: () => undefined }
+    const afterRes = { statusCode: 0, body: '', setHeader() {}, end(chunk: string) { this.body = chunk } }
+    await host.handlers.get(ROUTES.connections)!({ method: 'GET' }, afterRes)
+    expect(afterRes.statusCode).toBe(200)
+    logged.mockRestore()
+  })
+
+  it('mounts panel routes once webServer attaches after apply()', async () => {
+    const lateRoutes: string[] = []
+    const lateHandlers = new Map<string, (req: unknown, res: unknown) => Promise<void> | void>()
+    const latePending: Promise<unknown>[] = []
+    let onWebServer: ((webCtx: NodeHostContext) => void) | undefined
+    const host = fakeCtx()
+    ;(host.ctx as { inject?: (deps: readonly string[], cb: (webCtx: NodeHostContext) => void) => { dispose(): void } }).inject = (
+      deps,
+      cb,
+    ) => {
+      if (deps.includes('webServer')) onWebServer = cb
+      return { dispose() {} }
+    }
+
+    apply(host.ctx)
+    await host.settled()
+    expect(lateRoutes).toEqual([])
+    expect(onWebServer).toBeTypeOf('function')
+
+    const lateWebServer = {
+      register(route: { path: string; handler: (req: unknown, res: unknown) => Promise<void> | void }) {
+        lateRoutes.push(route.path)
+        lateHandlers.set(route.path, route.handler)
+        return () => {}
+      },
+    }
+    const lateConnection = { requestRejection: () => undefined }
+    onWebServer!({
+      ...host.ctx,
+      effect<T>(setup: () => T | Promise<T>): T | Promise<T> {
+        const outcome = setup()
+        latePending.push(Promise.resolve(outcome))
+        return outcome
+      },
+      get: (name: string) => (name === 'webServer' ? lateWebServer : name === 'connection' ? lateConnection : undefined),
+    } as unknown as NodeHostContext)
+    await Promise.all(latePending)
+
+    expect(sorted(lateRoutes)).toEqual(ALL_ROUTES)
+    const res = { statusCode: 0, body: '', setHeader() {}, end(chunk: string) { this.body = chunk } }
+    await lateHandlers.get(ROUTES.connections)!({ method: 'GET' }, res)
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('never reads uninjected properties directly when ctx.get is present (Cordis 4 strict proxy)', async () => {
+    const host = fakeCtx({ webServer: true })
+    Object.defineProperty(host.ctx, 'connection', {
+      get() {
+        throw new Error('cannot get property "connection" without inject')
+      },
+    })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    apply(host.ctx)
+    await host.settled()
+
+    const res = { statusCode: 0, body: '', setHeader() {}, end(chunk: string) { this.body = chunk } }
+    await host.handlers.get(ROUTES.connections)!({ method: 'GET' }, res)
+    expect(res.statusCode).toBe(401)
+    logged.mockRestore()
+  })
+
   it('works on a context without a service lookup', async () => {
     // Older compositions expose the service as a plain property only.
     const registered: string[] = []

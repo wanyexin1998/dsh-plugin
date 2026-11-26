@@ -42,17 +42,17 @@ test('layout namespace survives desktop and loopback reconnects, while remote ho
 // Run the shipped pure SlotCore and Cordis registry classes, not a guessed registry.
 const slotsModule = vm.runInNewContext(readSlotsModuleSource(archive), { queueMicrotask });
 const renderer = original('renderer');
-const Registry = vm.runInNewContext(`${section(renderer, 'const ROOT_INSTANCE_KEY =', '\n\t\t//#endregion')}\n; SlotRegistry`, {
+const Registry = vm.runInNewContext(`${section(renderer, 'const ROOT_INSTANCE_KEY=', ';function requireScopeKey(')}\n; SlotRegistry`, {
   _deepseek_ai_cordis: { Service: class { constructor(ctx) { this.ctx = ctx; } } }, _deepseek_ai_dsh_client_ui_slots: slotsModule, queueMicrotask,
 });
 const sessionController = archive.text('dsh/node_modules/@deepseek-ai/dsh-api-session-controller/lib/client.js');
-const Reference = vm.runInNewContext(`${section(sessionController, 'var ClientSessionReference = class {', '\n\t\t/** Host catalog')}\n; ClientSessionReference`, { AbortController, AbortSignal });
-const bindingMethod = vm.runInNewContext(`({${section(original('session'), 'bindingSource(reference) {', '\n\t\t\t/**')}}).bindingSource`);
-const Workspace = vm.runInNewContext(`${section(transformNative('workspace', original('workspace')).source, 'var UiWorkspaceService = class extends', '\n\t\t/**\n\t\t* \x60error\x60')}\n; UiWorkspaceService`, {
+const Reference = vm.runInNewContext(`${section(sessionController, 'var ClientSessionReference=class{', ';var ClientSessions=class{')}\n; ClientSessionReference`, { AbortController, AbortSignal });
+const bindingMethod = vm.runInNewContext(`({${section(original('session'), 'bindingSource(reference){', 'whenAccess(sessionId,action,callback){')}}).bindingSource`);
+const Workspace = vm.runInNewContext(`${section(transformNative('workspace', original('workspace')).source, 'var UiWorkspaceService=class extends', ';function sessionCreateErrorOf(')}\n; UiWorkspaceService`, {
   _deepseek_ai_cordis: { Service: class { constructor(ctx) { this.ctx = ctx; } } },
   _deepseek_ai_dsh_client_store: { createSnapshotStore: snapshot }, AbortController, AbortSignal,
 });
-const Layout = vm.runInNewContext(`${section(transformNative('layout', original('layout')).source, 'var LayoutController = class {', '\n\t\t//#endregion')}\n; LayoutController`, { AbortController });
+const Layout = vm.runInNewContext(`${section(transformNative('layout', original('layout')).source, 'var LayoutController=class{', ';const zh=')}\n; LayoutController`, { AbortController });
 
 function harness({ omitFactory = false } = {}) {
   const lifecycle = [], sideEvents = [], records = new Map(), retained = [];
@@ -112,7 +112,7 @@ test('host.ts registers against the native SlotCore/Registry and native SessionP
   const reference = bridge.retain('A');
   assert.equal(reference, h.retained.at(-1));
   assert.equal(reference.binding, h.ctx.sessions.binding('A'));
-  const getKit = vm.runInNewContext(`${section(renderer, 'function scopeAreaProvider(adapter)', '\n\t\t/**\n\t\t* One rendered entry')}\n; standardKit`, {
+  const getKit = vm.runInNewContext(`${section(renderer, 'function scopeAreaProvider(adapter)', 'function ContextualEntry(')}\n; standardKit`, {
     scopeAreaCache: new WeakMap(), SlotAssemblyError: Error, react: React, react_jsx_runtime: jsx,
     useScopeBinding: () => ({ key: 'wrong-inherited-B' }), ScopeBindingProvider: ({ binding, children }) => React.createElement('section', { 'data-bound-session': binding.key }, children),
     standardProps: () => ({}), boundRenderFactorySlot: () => () => null, boundRenderSlot: () => () => null,
