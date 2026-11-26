@@ -341,15 +341,20 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
   }
   const workspaces = workspaceOptions(allTasks)
   const capabilityFacts = capabilities.kind === 'ready' ? normalizeCapabilities(capabilities.facts) : null
-  const blockedBy = capabilityFacts?.blockedBy ?? []
-  const listWriteMode = load.kind === 'ready' ? load.writeMode : null
-  const writeModeEnabled = capabilityFacts?.writeMode?.enabled ?? listWriteMode?.enabled ?? null
-  const listTotal = load.kind === 'ready' ? load.total : 0
-  const groupedCount = filtered.length
+
+  const showBoard = load.kind === 'ready' && view === 'board'
+  const showList = load.kind === 'ready' && view === 'list'
+  const readOnly =
+    capabilityFacts !== null && capabilityFacts.available !== false && capabilityFacts.canCommit !== true
+  const capabilityGap =
+    capabilities.kind === 'error'
+      ? capabilities.message
+      : capabilityFacts !== null && capabilityFacts.available === false
+        ? (capabilityFacts.reason ?? '未给出原因')
+        : null
 
   return (
-    <section className="boop-card">
-      <h2>任务看板</h2>
+    <section data-boop-taskboard-surface="">
       <div data-boop-taskboard="" data-boop-taskboard-view={view}>
         <div data-boop-taskboard-toolbar="">
           <div data-boop-taskboard-view-switch="" role="group" aria-label="看板或列表视图">
@@ -370,18 +375,14 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
               列表
             </button>
           </div>
+          <input
+            type="search"
+            aria-label="搜索任务名、任务ID、工作区或会话"
+            placeholder="搜索任务"
+            value={filters.search}
+            onChange={(event) => patchFilters({ search: event.target.value })}
+          />
           <label>
-            搜索
-            <input
-              type="search"
-              aria-label="搜索任务名、任务ID、工作区或会话"
-              placeholder="任务名 / ID / 工作区 / 会话"
-              value={filters.search}
-              onChange={(event) => patchFilters({ search: event.target.value })}
-            />
-          </label>
-          <label>
-            工作区
             <select
               aria-label="按工作区筛选"
               value={filters.workspaceId ?? ''}
@@ -422,29 +423,21 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
           </button>
         </div>
 
-        <p data-boop-taskboard-note="" data-boop-taskboard-capabilities="">
-          任务能力：
-          {capabilities.kind === 'loading'
-            ? '能力读取中'
-            : capabilityFacts === null
-              ? `不可用（${capabilities.kind === 'error' ? capabilities.message : '未知原因'}）`
-              : capabilityFacts.available === false
-                ? `不可用（${capabilityFacts.reason ?? '未给出原因'}）`
-                : '可读'}
-          ；本地排序：{capabilityFacts === null ? '能力未知' : capabilityFacts.canSortLocal ? '可用' : '不可用'}；
-          写回优先级：
-          {capabilities.kind === 'loading'
-            ? '能力读取中'
-            : capabilityFacts === null
-              ? `能力不可用（${capabilities.kind === 'error' ? capabilities.message : '未知原因'}）`
-              : capabilityFacts.canCommit
-                ? `服务端允许提交（写模式 ${writeModeEnabled === true ? '开启' : '关闭'}）`
-                : `服务端拒绝（canCommit=false；写模式 ${writeModeEnabled === true ? '开启' : '关闭'}${
-                    blockedBy.length > 0 ? `；blockedBy: ${blockedBy.join(', ')}` : ''
-                  }）`}
-          。四组由任务/执行/验收三轴派生；跨列拖拽首版关闭；卡片文本按纯文本渲染（未启用 Markdown）；
-          验收与审批不可由此界面修改。
-        </p>
+        {capabilityGap !== null && (
+          <p data-boop-taskboard-note="" data-boop-taskboard-capabilities="">
+            任务能力：不可用（{capabilityGap}）。没有把它当成可以修改。
+          </p>
+        )}
+        {readOnly && (
+          <p data-boop-taskboard-note="" data-boop-taskboard-capabilities="">
+            只读看板。验收和审批不能在这里修改。
+          </p>
+        )}
+        {load.kind === 'ready' && filtersActive && filtered.length === 0 && (
+          <p data-boop-taskboard-empty="" role="status">
+            当前筛选下没有匹配任务。筛选只影响本地视图。
+          </p>
+        )}
 
         {load.kind === 'loading' && <p data-boop-taskboard-note="">正在从宿主读取任务投影…</p>}
 
@@ -488,19 +481,7 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
           </p>
         )}
 
-        {load.kind === 'ready' && allTasks.length === 0 && !filtersActive && (
-          <p data-boop-taskboard-empty="" role="status">
-            宿主可读：当前没有任务（真实空状态，不是读取失败）。
-          </p>
-        )}
-
-        {load.kind === 'ready' && allTasks.length > 0 && groupedCount === 0 && (
-          <p data-boop-taskboard-empty="" role="status">
-            当前筛选下没有匹配任务（宿主可读任务 {allTasks.length} 张；筛选只影响本地视图）。
-          </p>
-        )}
-
-        {load.kind === 'ready' && groupedCount > 0 && view === 'board' && (
+        {showBoard && (
           <div data-boop-taskboard-board="">
             {GROUP_ORDER.map((group) => (
               <BoardColumn
@@ -519,7 +500,7 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
           </div>
         )}
 
-        {load.kind === 'ready' && groupedCount > 0 && view === 'list' && (
+        {showList && (
           <IssueListView
             groups={grouped}
             filtersActive={filtersActive}
@@ -539,11 +520,6 @@ export function TaskboardPanel({ call, onOpenSession }: TaskboardPanelProps): Re
             onOpenSession={onOpenSession}
           />
         )}
-        <p data-boop-taskboard-note="" data-boop-taskboard-listtotal="">
-          最近一次读取：宿主报告总数 {listTotal}
-          {load.kind === 'ready' ? `，本页 ${load.tasks.length} 张` : ''}
-          {load.kind === 'ready' && load.hidden > 0 ? `，未包含 ${load.hidden} 张（见上方部分覆盖说明）` : ''}。
-        </p>
       </div>
     </section>
   )

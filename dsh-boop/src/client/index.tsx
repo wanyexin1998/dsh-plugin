@@ -2,18 +2,13 @@
  * BOOP client half.
  *
  * E04-01 batch 2 (main chat / initialization / sources):
- *  - the fixed BOOP entry (`sidebar.footer.action`) locates or creates exactly
- *    one native DSH Session and opens it through the native Conversation
- *    (`ctx.uiWorkspace.openSession`). BOOP owns no chat editor and no split view
- *    (FE-01/FE-02/FE-03); repeated clicks resolve to the same Session;
- *  - the initialization card lives in the additive `conversation.input.dock`
- *    seat and renders ONLY for the BOOP main Session; ordinary Sessions get no
- *    BOOP DOM at all;
- *  - the main-Session header identity chip is another additive session slot;
- *  - one additive BOOP row in the native Settings → General section (status +
- *    navigation only; native settings pages are never replaced);
- *  - `boop.tasks` stays the one root-scoped global panel (task board), with a
- *    `sidebar.panellist` icon entry — never the reserved `conversation` key;
+ *  - the BOOP entry is a `sidebar.panellist` row above the workspaces. The
+ *    host selects the `boop.tasks` panel; that panel immediately returns to the
+ *    Conversation, opens the one BOOP main Session, and opens the native right
+ *    Sidebar tab. It does not keep a second page on screen;
+ *  - memory, tasks and settings live in that native right Sidebar as one tab
+ *    type (`sidebarRightTabs`, kind `boop`). The initialization card is not
+ *    mounted on the Conversation;
  *  - the host is reached through the authenticated connection RPC plane; the
  *    main-Session identity and source coverage endpoints are read-only/idempotent
  *    and never dispatch writes into a Session;
@@ -21,12 +16,11 @@
  *  - activation is fully guarded: a throw here must never block web boot.
  */
 import React from 'react'
-import { BoopBoard } from './board.tsx'
 import { BOOP_CSS } from './styles.ts'
 import { BOOP_INTERACTION_CSS } from './interaction-styles.ts'
-import { BoopInitDock } from './init.tsx'
-import { BoopEntryButton, BoopMainHeader, BoopPanelIcon } from './header.tsx'
-import { BoopSettingsRow } from './settings.tsx'
+import { BOOP_CHAT_CSS } from './chat-styles.ts'
+import { BoopMainHeader, BoopPanelIcon, watchMainSessionChatSkin, watchMainSessionSidebarHide } from './header.tsx'
+import { BoopSideTab } from './side-tab.tsx'
 import {
   createMainSessionStore,
   openMainSession,
@@ -36,8 +30,10 @@ import {
 } from './main-session.ts'
 
 export const MAIN_KEY = 'boop.tasks'
+export const BOOP_TAB_ID = 'dsh-boop'
+export const BOOP_TAB_KIND = 'boop'
 /** Additive client services this plugin needs; a missing one parks the row. */
-export const inject = ['slots', 'layout', 'connection', 'sessions', 'uiWorkspace']
+export const inject = ['slots', 'layout', 'connection', 'sessions', 'uiWorkspace', 'sidebarRight', 'sidebarRightTabs']
 
 export function apply(ctx: any): void {
   try {
@@ -68,6 +64,11 @@ function applyInner(ctx: any): void {
       store: mainStore,
       sessions: ctx.sessions,
       uiWorkspace: ctx.uiWorkspace,
+      selectAgentPreset: async (sessionId, presetId) => {
+        const select = ctx.remote?.agentPresets?.select
+        if (typeof select !== 'function') return { ok: false }
+        return select(sessionId, presetId)
+      },
     })
     if (!outcome.ok) {
       console.warn(`[boop] main session navigation failed (${outcome.reason}): ${outcome.message}`)
@@ -85,17 +86,24 @@ function applyInner(ctx: any): void {
     }
   }
 
-  const openBoard = (): void => {
-    try {
-      ctx.layout.selectPanel(MAIN_KEY)
-    } catch (error) {
-      console.error('[boop] could not open the board panel', error)
-    }
+  const Panel = (): React.ReactElement => {
+    React.useEffect(() => {
+      try {
+        ctx.layout.selectPanel(null)
+      } catch (error) {
+        console.error('[boop] could not return to the conversation', error)
+      }
+      void openMain().then((outcome) => {
+        if (!outcome.ok) return
+        try {
+          ctx.sidebarRight?.openTab?.(BOOP_TAB_KIND)
+        } catch (error) {
+          console.error('[boop] could not open the right sidebar tab', error)
+        }
+      })
+    }, [])
+    return <></>
   }
-
-  const Panel = (): React.ReactElement => (
-    <BoopBoard call={call} onOpenSession={openSession} onOpenMain={() => void openMain()} />
-  )
 
   // Scoped styles; removed together with the plugin (FE-12).
   ctx.effect(() => {
@@ -114,6 +122,23 @@ function applyInner(ctx: any): void {
     document.head.appendChild(style)
     return () => style.remove()
   }, 'boop: interaction styles')
+
+  // Main-Session conversation skin. The header stamps `[data-boop-chat]` on
+  // the native content root and `[data-boop-session]` on the phase frame so
+  // the native AgentPresetLabel (a header sibling) can be hidden. Ordinary
+  // Sessions never receive these marks.
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.setAttribute('data-plugin-css', 'boop/chat')
+    style.textContent = BOOP_CHAT_CSS
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, 'boop: main session chat styles')
+
+  // Blank/hero chrome hides `conversation.session.header.actions`, so the chip
+  // cannot be the only stamper. Match the Host-bound main Session id.
+  ctx.effect(() => watchMainSessionChatSkin(mainStore), 'boop: main session chat skin mark')
+  ctx.effect(() => watchMainSessionSidebarHide(mainStore), 'boop: hide main session from the workspace list')
 
   // Resolve the BOOP main-Session identity once on activation. This is a
   // read-mostly host call: it never navigates, creates a Session or changes the
@@ -150,25 +175,60 @@ function applyInner(ctx: any): void {
     'boop: board panel',
   )
 
-  // Fixed BOOP entry: native navigation into the one BOOP main Session.
-  ctx.effect(
-    () =>
-      ctx.slots.inject('sidebar.footer.action', () =>
-        ctx.slots.register(
-          {
-            name: 'sidebar.footer.action',
-            id: 'boop-main',
-            order: 50,
-            label: 'BOOP 主聊天',
-            inject: () => ({ observer: mainStore, onOpen: openMain }),
-          },
-          BoopEntryButton,
-        ),
+  // Native right Sidebar tab: memory, tasks, settings. The host draws the column.
+  ctx.effect(() => {
+    const disposeType = typeof ctx.sidebarRightTabs?.register === 'function'
+      ? ctx.sidebarRightTabs.register({
+          id: BOOP_TAB_ID,
+          kind: BOOP_TAB_KIND,
+          priority: 'extension',
+          title: () => '波波',
+          guide: [{
+            id: 'boop',
+            order: 40,
+            title: () => '波波',
+            description: () => '任务、记忆和设置',
+          }],
+        })
+      : undefined
+    const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.pane.tab',
+          key: BOOP_TAB_ID,
+          inject: () => ({
+            observer: mainStore,
+            call,
+            onOpenSession: openSession,
+            onOpenMain: () => void openMain(),
+            sessionTools: {
+              sessions: ctx.sessions,
+              remote: ctx.remote,
+              modelDirectories: ctx.modelDirectories,
+            },
+          }),
+        },
+        BoopSideTab,
       ),
-    'boop: fixed entry',
-  )
+    )
+    const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+      ctx.slots.register(
+        {
+          name: 'sidebar.right.pane.tab.title',
+          key: BOOP_TAB_ID,
+        },
+        () => <span>波波</span>,
+      ),
+    )
+    return () => {
+      if (typeof disposeType === 'function') disposeType()
+      if (typeof disposeBody === 'function') disposeBody()
+      if (typeof disposeTitle === 'function') disposeTitle()
+    }
+  }, 'boop: side tab')
 
-  // Global panel icon seating the board's `main` key (additive, root-scoped).
+  // Entry above the workspaces. The host row selects `boop.tasks`; the panel
+  // hands the page back to the Conversation and opens this tab.
   ctx.effect(
     () =>
       ctx.slots.inject('sidebar.panellist', () =>
@@ -176,36 +236,16 @@ function applyInner(ctx: any): void {
           {
             name: 'sidebar.panellist',
             id: MAIN_KEY,
-            order: 50,
-            label: 'BOOP 任务板',
+            order: 20,
+            label: 'BOOP · 波波',
           },
           BoopPanelIcon,
         ),
       ),
-    'boop: board icon',
+    'boop: workspace entry',
   )
 
-  // Initialization card: additive dock above the native composer, BOOP main
-  // Session only. It never replaces the native input root (FE-03).
-  ctx.effect(
-    () =>
-      ctx.slots.inject('conversation.input.dock', () =>
-        ctx.slots.register(
-          {
-            name: 'conversation.input.dock',
-            id: 'boop-init',
-            order: -100,
-            label: 'BOOP 初始化',
-            inject: () => ({ observer: mainStore, call, onOpenBoard: openBoard }),
-          },
-          BoopInitDock,
-        ),
-      ),
-    'boop: init dock',
-  )
-
-  // Main-Session identity chip + task entry; renders nothing on ordinary
-  // Sessions (additive list slot, so no native header is replaced).
+  // Main-Session identity chip; renders nothing on ordinary Sessions.
   ctx.effect(
     () =>
       ctx.slots.inject('conversation.session.header.actions', () =>
@@ -215,34 +255,11 @@ function applyInner(ctx: any): void {
             id: 'boop-main',
             order: 900,
             label: 'BOOP',
-            inject: () => ({ observer: mainStore, call, onOpenBoard: openBoard }),
+            inject: () => ({ observer: mainStore, call }),
           },
           BoopMainHeader,
         ),
       ),
     'boop: main header identity',
-  )
-
-  // One additive row in the native Settings → General section. It shows real
-  // facts and navigates; it writes no setting and replaces no native page.
-  ctx.effect(
-    () =>
-      ctx.slots.inject('settings.general.item', () =>
-        ctx.slots.register(
-          {
-            name: 'settings.general.item',
-            id: 'boop',
-            order: 120,
-            inject: () => ({
-              observer: mainStore,
-              call,
-              onOpenMain: () => void openMain(),
-              onOpenBoard: openBoard,
-            }),
-          },
-          BoopSettingsRow,
-        ),
-      ),
-    'boop: settings row',
   )
 }

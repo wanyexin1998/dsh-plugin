@@ -11,9 +11,9 @@ import { readHostIdentity } from '../../src/host/host-identity.ts'
 
 const root = path.resolve(import.meta.dirname, '../..')
 
-test('engines.dsh names rc.2 and rc.3 and no compatibility exemption is shipped', () => {
+test('engines.dsh names the checked hosts and no compatibility exemption is shipped', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  assert.equal(manifest.engines.dsh, '0.2.1-rc.2 || 0.2.1-rc.3')
+  assert.equal(manifest.engines.dsh, '0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.2-rc.1')
   assert.equal(fs.existsSync(path.join(root, 'compatibility.json')), false)
 })
 

@@ -21,6 +21,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   MAIN_SESSION_ID,
+  BOOP_AGENT_PRESET_ID,
   createMainSessionStore,
   isMainSession,
   mainSessionReasonText,
@@ -86,7 +87,7 @@ test('E04-01 first click opens the named Session through native navigation and c
   assert.equal(outcome.ok, true, JSON.stringify(outcome))
   assert.equal(outcome.sessionId, MAIN_SESSION_ID)
   assert.equal(outcome.created, true)
-  assert.deepEqual(services.created, [{ sessionId: MAIN_SESSION_ID }], 'one native create, by the exact id')
+  assert.deepEqual(services.created, [{ sessionId: MAIN_SESSION_ID, agentPreset: BOOP_AGENT_PRESET_ID }], 'one native create, by the exact id, on the BOOP preset')
   assert.deepEqual(services.opened, [MAIN_SESSION_ID], 'opened by the native Conversation navigation')
   assert.deepEqual(calls.map((entry) => entry.endpoint), ['boop/mainSession'])
   const state = store.getSnapshot()
@@ -222,6 +223,147 @@ test('E04-01 only the exact main Session is decorated; ordinary Sessions are unt
   assert.equal(isMainSession(MAIN_SESSION_ID, 'session-ordinary'), false)
   assert.equal(isMainSession(null, MAIN_SESSION_ID), false)
   assert.equal(isMainSession(undefined, undefined), false)
+})
+
+test('E04-01 a reported BOOP directory is passed as cwd, not as a listed workspace', async () => {
+  const services = makeServices()
+  const facts = { ...BOUND, workspacePath: 'E:/dsh-plugin/dsh-boop/server/workspace' }
+  const { call, calls } = hostCall(facts)
+  const store = createMainSessionStore()
+  const outcome = await openMainSession({ call, store, sessions: services.sessions, uiWorkspace: services.uiWorkspace })
+  assert.equal(outcome.ok, true)
+  assert.deepEqual(services.created, [{ sessionId: MAIN_SESSION_ID, cwd: facts.workspacePath, agentPreset: BOOP_AGENT_PRESET_ID }])
+  assert.equal(calls.some((entry) => entry.endpoint === 'boop/bindMainWorkspace'), false, 'an unlisted directory is not attached as a workspace')
+
+  const placed = makeServices()
+  placed.catalog.set(MAIN_SESSION_ID, { id: MAIN_SESSION_ID, blank: true, cwd: facts.workspacePath })
+  const placedHost = hostCall(facts)
+  const reuse = await openMainSession({
+    call: placedHost.call,
+    store: createMainSessionStore(),
+    sessions: placed.sessions,
+    uiWorkspace: placed.uiWorkspace,
+  })
+  assert.equal(reuse.ok, true)
+  assert.equal(reuse.sessionId, MAIN_SESSION_ID)
+  assert.deepEqual(placed.created, [], 'a Session already inside the BOOP directory is not created again')
+  assert.equal(placedHost.calls.some((entry) => entry.endpoint === 'boop/bindMainWorkspace'), false)
+})
+
+test('E04-01 a blank main Session whose directory is the desktop profile is left behind', async () => {
+  const facts = { ...BOUND, workspacePath: 'E:/dsh-plugin/dsh-boop/server/workspace' }
+  const services = makeServices()
+  services.catalog.set(MAIN_SESSION_ID, {
+    id: MAIN_SESSION_ID,
+    blank: true,
+    cwd: 'C:/Users/wanyexin/.dsh/profiles/desktop',
+  })
+  services.sessions.create = async (request) => {
+    services.created.push(request)
+    const id = 'boop-placed'
+    services.catalog.set(id, { id, blank: true, cwd: facts.workspacePath })
+    return id
+  }
+  const { call } = hostCall(facts)
+  const outcome = await openMainSession({
+    call,
+    store: createMainSessionStore(),
+    sessions: services.sessions,
+    uiWorkspace: services.uiWorkspace,
+  })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome))
+  assert.equal(outcome.sessionId, 'boop-placed')
+  assert.deepEqual(services.created, [{ cwd: facts.workspacePath, agentPreset: BOOP_AGENT_PRESET_ID }])
+  assert.deepEqual(services.opened, ['boop-placed'])
+})
+
+test('E04-01 a main Session that already has history stays on its own directory', async () => {
+  const facts = { ...BOUND, workspacePath: 'E:/dsh-plugin/dsh-boop/server/workspace' }
+  const services = makeServices()
+  services.catalog.set(MAIN_SESSION_ID, {
+    id: MAIN_SESSION_ID,
+    blank: false,
+    cwd: 'E:/dsh-plugin',
+  })
+  const outcome = await openMainSession({
+    call: hostCall(facts).call,
+    store: createMainSessionStore(),
+    sessions: services.sessions,
+    uiWorkspace: services.uiWorkspace,
+  })
+  assert.equal(outcome.ok, true)
+  assert.equal(outcome.sessionId, MAIN_SESSION_ID)
+  assert.deepEqual(services.created, [])
+  assert.deepEqual(services.opened, [MAIN_SESSION_ID])
+})
+
+test('E04-01 a blank main Session with no directory is left behind and a Session is opened inside the BOOP workspace', async () => {
+  const facts = { ...BOUND, workspacePath: 'E:/dsh-plugin/dsh-boop/server/workspace' }
+  const services = makeServices({ rows: [MAIN_SESSION_ID] })
+  services.sessions.create = async (request) => {
+    services.created.push(request)
+    const id = 'boop-placed'
+    services.catalog.set(id, { id, blank: true, cwd: facts.workspacePath })
+    return id
+  }
+  const { call, calls } = hostCall(facts)
+  const store = createMainSessionStore()
+  const outcome = await openMainSession({ call, store, sessions: services.sessions, uiWorkspace: services.uiWorkspace })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome))
+  assert.equal(outcome.sessionId, 'boop-placed')
+  assert.equal(outcome.identityConflict, false, 'replacing a blank with no directory is not an identity conflict')
+  assert.deepEqual(services.created, [{ cwd: facts.workspacePath, agentPreset: BOOP_AGENT_PRESET_ID }], 'the stuck id is not sent back to session create')
+  assert.equal(calls.some((entry) => entry.endpoint === 'boop/adoptPlacedMainSession' && entry.args.sessionId === 'boop-placed'), true)
+  assert.deepEqual(services.opened, ['boop-placed'])
+
+  const second = hostCall(facts)
+  const repeat = await openMainSession({
+    call: second.call,
+    store: createMainSessionStore(),
+    sessions: services.sessions,
+    uiWorkspace: services.uiWorkspace,
+  })
+  assert.equal(repeat.ok, true)
+  assert.equal(repeat.created, false, 'the Session already in the BOOP directory is reused')
+  assert.equal(repeat.sessionId, 'boop-placed')
+  assert.equal(services.created.length, 1)
+})
+
+test('E04-01 a still-blank main Session is switched onto the BOOP preset', async () => {
+  const services = makeServices({ rows: [MAIN_SESSION_ID] })
+  services.catalog.set(MAIN_SESSION_ID, {
+    id: MAIN_SESSION_ID,
+    blank: true,
+    projectionValues: { agentPreset: 'standard' },
+  })
+  const selected = []
+  const outcome = await openMainSession({
+    call: hostCall(BOUND).call,
+    store: createMainSessionStore(),
+    sessions: services.sessions,
+    uiWorkspace: services.uiWorkspace,
+    selectAgentPreset: async (sessionId, presetId) => {
+      selected.push({ sessionId, presetId })
+      return { ok: true, value: presetId }
+    },
+  })
+  assert.equal(outcome.ok, true)
+  assert.deepEqual(selected, [{ sessionId: MAIN_SESSION_ID, presetId: BOOP_AGENT_PRESET_ID }])
+})
+
+test('E04-01 a locked Agent preset does not block opening the main Session', async () => {
+  const services = makeServices({ rows: [MAIN_SESSION_ID] })
+  const outcome = await openMainSession({
+    call: hostCall(BOUND).call,
+    store: createMainSessionStore(),
+    sessions: services.sessions,
+    uiWorkspace: services.uiWorkspace,
+    selectAgentPreset: async () => {
+      throw new Error('agent-preset/locked')
+    },
+  })
+  assert.equal(outcome.ok, true)
+  assert.deepEqual(services.opened, [MAIN_SESSION_ID])
 })
 
 test('E04-01 the decoration hint cache round-trips and tolerates a throwing storage', () => {

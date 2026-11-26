@@ -22,7 +22,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BoopInitDock } from '../../lib/init.test.bundle.cjs'
 import { BoopSourceCard } from '../../lib/source.test.bundle.cjs'
-import { BoopEntryButton, BoopMainHeader } from '../../lib/header.test.bundle.cjs'
+import { BoopEntryButton, BoopMainHeader, markComposerMultiline } from '../../lib/header.test.bundle.cjs'
 import { BoopSettingsRow } from '../../lib/settings.test.bundle.cjs'
 import { MAIN_SESSION_ID, createMainSessionStore } from '../../lib/main-session.test.bundle.cjs'
 
@@ -161,6 +161,85 @@ test('E04-01 the card shows a retryable error when the host call fails', async (
   view.cleanup()
 })
 
+test('E04-01 the main-Session header stamps the conversation skin only on its own content root', async () => {
+  const content = document.createElement('div')
+  content.setAttribute('data-conversation-content', '')
+  content.setAttribute('data-conversation-session', MAIN_SESSION_ID)
+  const host = document.createElement('div')
+  content.appendChild(host)
+  document.body.appendChild(content)
+  const root = createRoot(host)
+  root.render(React.createElement(BoopMainHeader, {
+    sessionId: MAIN_SESSION_ID,
+    observer: makeStore(),
+  }))
+  await tick(80)
+  assert.equal(content.getAttribute('data-boop-chat'), '', 'the native conversation content is marked for the BOOP skin')
+  root.unmount()
+  await tick()
+  assert.equal(content.getAttribute('data-boop-chat'), null, 'leaving the main Session removes the skin mark')
+  content.remove()
+
+  const other = document.createElement('div')
+  other.setAttribute('data-conversation-content', '')
+  const otherHost = document.createElement('div')
+  other.appendChild(otherHost)
+  document.body.appendChild(other)
+  const ordinary = createRoot(otherHost)
+  ordinary.render(React.createElement(BoopMainHeader, {
+    sessionId: 'session-ordinary',
+    observer: makeStore(),
+  }))
+  await tick(80)
+  assert.equal(other.getAttribute('data-boop-chat'), null, 'an ordinary Session keeps the native conversation')
+  ordinary.unmount()
+  other.remove()
+})
+
+test('E04-01 the skin stamp reaches the native conversation body when the header is a sibling', async () => {
+  const frame = document.createElement('div')
+  frame.setAttribute('data-phase', 'active')
+  const header = document.createElement('header')
+  const preset = document.createElement('span')
+  preset.setAttribute('data-slot', 'conversation.session.header.actions')
+  preset.textContent = '标准模式'
+  const host = document.createElement('div')
+  host.setAttribute('data-slot', 'conversation.session.header.actions')
+  header.appendChild(preset)
+  header.appendChild(host)
+  const content = document.createElement('div')
+  content.setAttribute('data-conversation-content', '')
+  content.setAttribute('data-conversation-session', MAIN_SESSION_ID)
+  frame.appendChild(header)
+  frame.appendChild(content)
+  document.body.appendChild(frame)
+  const root = createRoot(host)
+  root.render(React.createElement(BoopMainHeader, {
+    sessionId: MAIN_SESSION_ID,
+    observer: makeStore(),
+  }))
+  await tick(80)
+  assert.equal(content.getAttribute('data-boop-chat'), '', 'the sibling conversation body is marked')
+  assert.equal(header.getAttribute('data-boop-chat'), null, 'the native header is not the skin root')
+  assert.equal(frame.getAttribute('data-boop-session'), '', 'the phase frame is marked for header chrome')
+  assert.equal(preset.getAttribute('data-boop-hide-preset'), '', 'the native 标准模式 chip is hidden on the main Session')
+
+  const replacement = document.createElement('div')
+  replacement.setAttribute('data-conversation-content', '')
+  replacement.setAttribute('data-conversation-session', MAIN_SESSION_ID)
+  content.replaceWith(replacement)
+  await tick(80)
+  assert.equal(replacement.getAttribute('data-boop-chat'), '', 'a remounted conversation body is re-marked')
+  assert.equal(content.getAttribute('data-boop-chat'), null, 'the detached body does not keep the mark')
+
+  root.unmount()
+  await tick()
+  assert.equal(replacement.getAttribute('data-boop-chat'), null, 'leaving the main Session clears the remounted mark')
+  assert.equal(frame.getAttribute('data-boop-session'), null, 'leaving the main Session clears the phase mark')
+  assert.equal(preset.getAttribute('data-boop-hide-preset'), null, 'the native preset chip is restored when the BOOP header unmounts')
+  frame.remove()
+})
+
 test('E04-01 the main-Session header identity renders only on the exact main Session', async () => {
   const ordinary = await render(BoopMainHeader, {
     sessionId: 'session-ordinary',
@@ -170,19 +249,28 @@ test('E04-01 the main-Session header identity renders only on the exact main Ses
   assert.equal(ordinary.html(), '', 'an ordinary Conversation header is untouched')
   ordinary.cleanup()
 
-  const opened = []
   const main = await render(BoopMainHeader, {
     sessionId: MAIN_SESSION_ID,
     observer: makeStore(),
-    onOpenBoard: () => opened.push('board'),
+    onOpenBoard: () => undefined,
   })
   const header = main.host.querySelector('[data-boop-header]')
   assert.ok(header)
   assert.match(header.textContent, /BOOP · 波波/)
+  assert.match(header.textContent, /BOOP 模式/)
   assert.match(header.textContent, /已连接/)
-  header.querySelector('.boop-header-action').click()
-  assert.deepEqual(opened, ['board'])
+  assert.equal(header.querySelector('.boop-header-action'), null, 'the header does not open a separate task panel')
   main.cleanup()
+})
+
+test('E04-01 a tall draft marks the composer for the stacked ChatGPT card', () => {
+  const card = document.createElement('div')
+  assert.equal(markComposerMultiline(card, 36), false, 'one line stays a capsule')
+  assert.equal(card.getAttribute('data-boop-multiline'), null)
+  assert.equal(markComposerMultiline(card, 80), true, 'two lines stack the toolbar under the text')
+  assert.equal(card.getAttribute('data-boop-multiline'), '')
+  assert.equal(markComposerMultiline(card, 40), false, 'deleting back to one line restores the capsule')
+  assert.equal(card.getAttribute('data-boop-multiline'), null)
 })
 
 test('E04-01 a degraded identity never reads as connected in the header', async () => {

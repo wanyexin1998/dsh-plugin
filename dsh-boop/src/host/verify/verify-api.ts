@@ -326,7 +326,7 @@ export interface VerifyStatusResponse {
   }
   tool: { name: string; registered: boolean }
   /** The other read-only model-facing tools this row's host half backs. */
-  relatedTools: { boop_catalog: boolean }
+  relatedTools: { boop_catalog: boolean; boop_context: boolean; boop_dispatch: boolean }
   endpoints: readonly string[]
 }
 
@@ -420,7 +420,11 @@ class BoopVerifyApi extends TypertRemoteService {
         readsArbitraryFiles: false,
       },
       tool: { name: VERIFY_TOOL_NAME, registered: toolRegistered(this.ctx) },
-      relatedTools: { boop_catalog: toolRegistered(this.ctx, 'boop_catalog') },
+      relatedTools: {
+        boop_catalog: toolRegistered(this.ctx, 'boop_catalog'),
+        boop_context: toolRegistered(this.ctx, 'boop_context'),
+        boop_dispatch: toolRegistered(this.ctx, 'boop_dispatch'),
+      },
       endpoints: VERIFY_ENDPOINTS,
     }
   }

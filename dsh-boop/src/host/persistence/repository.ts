@@ -312,6 +312,22 @@ export class BoopRepository {
     return this.getScope(scopeId)!
   }
 
+  /**
+   * Point the one main Session at a Session that already lives in BOOP's
+   * workspace. The previous id must still be the bound one; a binding that
+   * already moved is left as it is.
+   */
+  replaceMainSession(scopeId: string, fromId: string, toId: string): ScopeRow | null {
+    const current = this.getScope(scopeId)
+    if (!current || current.mainSessionId !== fromId || fromId === '' || toId === '') return null
+    if (fromId === toId) return current
+    this.store.db
+      .prepare('UPDATE scopes SET main_session_id = ? WHERE scope_id = ? AND main_session_id = ?')
+      .run(toId, scopeId, fromId)
+    const next = this.getScope(scopeId)
+    return next?.mainSessionId === toId ? next : null
+  }
+
   bumpPolicyEpoch(scopeId: string): number {
     const scope = this.getScope(scopeId)
     if (!scope) throw new Error(`boop: unknown scope ${scopeId}`)
@@ -598,6 +614,123 @@ export class BoopRepository {
     return this.getAction(scopeId, actionId)!
   }
 
+  /**
+   * The one delegation that currently owns the global slot.
+   * A prepared action, a busy wait, and a recorded delivery receipt do not
+   * count. An in-flight send, a running turn, or an unknown outcome does.
+   * `boop_dispatch` marks a delivered followup `running` until that session's
+   * turn ends. The receipt itself stays `accepted` and does not occupy the slot.
+   */
+  slotHolder(scopeId: string): { actionId: string; state: ActionState } | null {
+    const row = this.store.db
+      .prepare(
+        `SELECT a.id AS id, a.state AS state
+           FROM action a
+           LEFT JOIN command_outbox o ON o.scope_id = a.scope_id AND o.action_id = a.id
+          WHERE a.scope_id = ?
+            AND (
+              a.state IN ('running', 'outcome_unknown')
+              OR o.state = 'sending'
+            )
+          ORDER BY a.created_at, a.id
+          LIMIT 1`,
+      )
+      .get(scopeId) as { id: string; state: string } | undefined
+    if (!row) return null
+    return { actionId: String(row.id), state: String(row.state) as ActionState }
+  }
+
+  taskByIntent(scopeId: string, intentRef: string): TaskRow | null {
+    const row = this.store.db
+      .prepare('SELECT id FROM task WHERE scope_id = ? AND intent_ref = ? ORDER BY created_at, id LIMIT 1')
+      .get(scopeId, intentRef) as { id?: string } | undefined
+    if (!row?.id) return null
+    return this.getTask(scopeId, String(row.id))
+  }
+
+  latestActionForTask(scopeId: string, taskId: string): ActionRow | null {
+    const row = this.store.db
+      .prepare('SELECT id FROM action WHERE scope_id = ? AND task_id = ? ORDER BY created_at DESC, id DESC LIMIT 1')
+      .get(scopeId, taskId) as { id?: string } | undefined
+    if (!row?.id) return null
+    return this.getAction(scopeId, String(row.id))
+  }
+
+  runningActionForSession(scopeId: string, sessionId: string): ActionRow | null {
+    const row = this.store.db
+      .prepare(
+        `SELECT id FROM action
+          WHERE scope_id = ? AND target_session_id = ? AND state = 'running'
+          ORDER BY created_at, id LIMIT 1`,
+      )
+      .get(scopeId, sessionId) as { id?: string } | undefined
+    if (!row?.id) return null
+    return this.getAction(scopeId, String(row.id))
+  }
+
+  outboxState(scopeId: string, actionId: string): string | null {
+    const row = this.store.db
+      .prepare('SELECT state FROM command_outbox WHERE scope_id = ? AND action_id = ?')
+      .get(scopeId, actionId) as { state?: string } | undefined
+    return typeof row?.state === 'string' ? row.state : null
+  }
+
+  actionCreatedAt(scopeId: string, actionId: string): string | null {
+    const row = this.store.db
+      .prepare('SELECT created_at FROM action WHERE scope_id = ? AND id = ?')
+      .get(scopeId, actionId) as { created_at?: string } | undefined
+    return typeof row?.created_at === 'string' ? row.created_at : null
+  }
+
+  actionInstruction(scopeId: string, actionId: string): string | null {
+    const row = this.store.db
+      .prepare('SELECT payload_json FROM action WHERE scope_id = ? AND id = ?')
+      .get(scopeId, actionId) as { payload_json?: string } | undefined
+    if (typeof row?.payload_json !== 'string') return null
+    try {
+      const payload = JSON.parse(row.payload_json) as { instruction?: unknown }
+      return typeof payload.instruction === 'string' ? payload.instruction : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Claim one outbox row. Other prepared rows stay prepared.
+   * Returns SLOT_HELD when a different action already owns the global slot,
+   * without changing this row.
+   */
+  claimAction(
+    scopeId: string,
+    actionId: string,
+    leaseMs: number,
+  ): { ok: true; attempt: number } | { ok: false; reason: 'SLOT_HELD' | 'OUTBOX_NOT_CLAIMED' } {
+    return this.store.writeSync(() => {
+      const holder = this.slotHolder(scopeId)
+      if (holder && holder.actionId !== actionId) return { ok: false, reason: 'SLOT_HELD' }
+      const now = this.now()
+      const until = new Date(Date.parse(now) + leaseMs).toISOString()
+      const row = this.store.db
+        .prepare(
+          `SELECT attempt FROM command_outbox
+            WHERE scope_id = ? AND action_id = ?
+              AND state IN ('prepared','blocked')
+              AND (lease_until IS NULL OR lease_until <= ?)`,
+        )
+        .get(scopeId, actionId, now) as { attempt: number } | undefined
+      if (!row) return { ok: false, reason: 'OUTBOX_NOT_CLAIMED' }
+      this.store.db
+        .prepare(
+          `UPDATE command_outbox
+              SET state = 'sending', attempt = attempt + 1, lease_until = ?
+            WHERE scope_id = ? AND action_id = ?
+              AND state IN ('prepared','blocked')`,
+        )
+        .run(until, scopeId, actionId)
+      return { ok: true, attempt: Number(row.attempt) + 1 }
+    })
+  }
+
   /** Outbox claims are short leases: a stuck sender never blocks the queue. */
   claimOutbox(scopeId: string, leaseMs: number): Array<{ actionId: string; attempt: number }> {
     const now = this.now()
@@ -627,25 +760,34 @@ export class BoopRepository {
   }
 
   /**
-   * Reconciliation on boot: a `sending` row with no matching action outcome is
-   * `unknown`, and an unknown command is never retried automatically
-   * (02§09: unknown 不重试).
+   * Reconciliation on boot: a `sending` row, or a `running` turn whose process
+   * is gone, becomes `outcome_unknown`. An unknown command is never retried
+   * automatically (02§09: unknown 不重试).
    */
   reconcileOutbox(scopeId: string): { unknown: string[]; retryable: number } {
     const stuck = this.store.db
       .prepare("SELECT action_id FROM command_outbox WHERE scope_id = ? AND state = 'sending'")
       .all(scopeId) as Array<{ action_id: string }>
+    const ids: string[] = []
     for (const row of stuck) {
       const action = this.getAction(scopeId, row.action_id)
       if (action && action.state === 'dispatching') {
         this.markActionState(scopeId, row.action_id, 'outcome_unknown')
       }
       this.settleOutbox(scopeId, row.action_id, 'unknown')
+      ids.push(row.action_id)
+    }
+    const running = this.store.db
+      .prepare("SELECT id FROM action WHERE scope_id = ? AND state = 'running' ORDER BY created_at, id")
+      .all(scopeId) as Array<{ id: string }>
+    for (const row of running) {
+      this.markActionState(scopeId, row.id, 'outcome_unknown')
+      ids.push(row.id)
     }
     const prepared = this.store.db
       .prepare("SELECT count(*) c FROM command_outbox WHERE scope_id = ? AND state IN ('prepared','blocked')")
       .get(scopeId) as { c: number }
-    return { unknown: stuck.map((row) => row.action_id), retryable: Number(prepared.c) }
+    return { unknown: [...new Set(ids)], retryable: Number(prepared.c) }
   }
 
   /* ── approvals ─────────────────────────────────────────────────────── */

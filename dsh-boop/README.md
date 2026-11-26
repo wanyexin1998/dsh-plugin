@@ -10,7 +10,7 @@ BOOP 是一个运行在 **DeepSeek Harness (DSH)** 里的本地插件：一个�
 
 | 项 | 要求 |
 |---|---|
-| DSH | **`0.2.1-rc.2` 或 `0.2.1-rc.3`**（`engines.dsh` 声明这两个已核对的版本；其他宿主会拒绝加载。不使用 `compatibility.json` 豁免） |
+| DSH | **`0.2.1-rc.2`、`0.2.1-rc.3` 或 `0.2.2-rc.1`**（`engines.dsh` 只声明已核对的版本；其他宿主会拒绝加载。不使用 `compatibility.json` 豁免） |
 | Node | `^22.19.0 \|\| >=24.0.0`（由 DSH 自带运行时提供） |
 | 平台 | **仅 Windows 已验证**；macOS / Linux 为 `NOT_RUN`，未宣称支持（见支持矩阵） |
 | 模型服务 | 用户自有的 OpenAI 兼容服务（如自托管 vLLM/Qwen）。BOOP 不内置、不索取、不保存任何模型密钥 |

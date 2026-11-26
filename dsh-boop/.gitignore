@@ -19,5 +19,10 @@
 !.env.example
 .work/
 
+# BOOP's own default workspace. The directory stays; files the session writes do not.
+/server/workspace/*
+!/server/workspace/.gitkeep
+!/server/workspace/AGENTS.md
+
 # Local host reference extraction (rc.2.1, regenerable from the installed app)
 /host-rc21/

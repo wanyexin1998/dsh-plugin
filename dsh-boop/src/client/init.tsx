@@ -1,12 +1,9 @@
 /**
  * BOOP initialization card (E04-01 batch 2, deliverable 2).
  *
- * Where: the native Conversation's additive `conversation.input.dock` seat
- * (scope `session`, declared by client-ui-conversation; see the rc.2.1 Slot
- * catalog). It is a dock above the native composer — NOT a replacement of the
- * input root and NOT a full-screen onboarding (FE-03), and it renders ONLY for
- * the exact BOOP main Session, so ordinary Sessions stay byte-for-byte native
- * (FE-01).
+ * Where: the BOOP tab in the native right Sidebar. The card still renders only
+ * when it is given the BOOP main Session id, so it is not shown for an
+ * ordinary Session (FE-01). It is not mounted above the composer.
  *
  * What the three E03-03 modes do here: the card collects the choice, then asks
  * `boop/initApply`. That call writes only when write mode and the writer lease

@@ -1,10 +1,10 @@
 /**
  * Isolated DSH test host harness (E00-01 and later host-side gates).
  *
- * Boots the INSTALLED rc.2.1 payload (`@deepseek-ai/dsh` CLI) with a private
+ * Boots an extracted DSH payload (`@deepseek-ai/dsh` CLI) with a private
  * `$DSH_HOME`, so the user's real `~/.dsh` is never read or modified. The
- * payload root defaults to the extracted copy under
- * `.work/test-host/payload-0.2.1/dsh` (produced by
+ * payload root defaults to the 0.2.2-rc.1 copy under
+ * `.work/test-host/payload-0.2.2/dsh` (produced by
  * `tools/build-test-payload.mjs`) and can be overridden with DSH_PAYLOAD.
  *
  * The same installed payload was rc.2.0 when E00–E04 evidence was recorded;
@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url'
 
 export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const PAYLOAD_ROOT =
-  process.env.DSH_PAYLOAD ?? path.join(PROJECT_ROOT, '.work/test-host/payload-0.2.1/dsh')
+  process.env.DSH_PAYLOAD ?? path.join(PROJECT_ROOT, '.work/test-host/payload-0.2.2/dsh')
+export const PINNED_COMMIT = 'c59d10aff167ad7eefead4b3a9082fb57c8fbfe8'
 export const NODE_BIN =
   process.env.DSH_NODE ??
   'C:/Users/wanyexin/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe'
@@ -37,7 +38,7 @@ export function hostFacts() {
     dshVersion: version,
     // Declared desktop build commit (app.asar root package.json `dshBuildCommit`);
     // the installed artifact carries no independent commit metadata.
-    pinnedCommit: '332895e0f7c9d4dbfb29729f5eb367fa263ff986',
+    pinnedCommit: PINNED_COMMIT,
     node: process.version,
     platform: process.platform,
     arch: process.arch,

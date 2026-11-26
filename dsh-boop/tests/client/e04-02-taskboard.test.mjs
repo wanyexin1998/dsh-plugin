@@ -510,11 +510,9 @@ test('E04-02 renders the four Host-projected groups with honest counts and statu
   assert.equal(view.card('b_fixture_10').querySelector('[data-boop-task-status]').textContent, '等待你批准')
   assert.match(view.card('b_fixture_10').textContent, /待决原因：等待你批准/, 'the pending decision is shown on the card')
 
-  assert.match(view.text(), /本地排序：可用/, 'local sorting is advertised as available')
-  assert.match(view.text(), /canCommit=false/, 'the write gate is stated honestly')
-  assert.match(view.text(), /blockedBy: G02, G05/)
-  assert.match(view.text(), /未启用 Markdown/, 'plain-text rendering is stated')
-  assert.match(view.text(), /验收与审批不可由此界面修改/)
+  assert.match(view.text(), /只读看板/, 'a refused write stays visible as read-only')
+  assert.match(view.text(), /验收和审批不能在这里修改/)
+  assert.doesNotMatch(view.text(), /canCommit=false|blockedBy:|未启用 Markdown/, 'the board does not dump the implementation note')
   view.cleanup()
 })
 
@@ -738,7 +736,9 @@ test('E04-02 unreadable is never rendered as empty; error and partial coverage a
     'boopTasks/list': () => ({ ok: true, value: listFacts([], { projectionSeq: 8 }) }),
   })
   const emptyView = await renderPanel(empty.call)
-  assert.match(emptyView.text(), /当前没有任务（真实空状态/)
+  assert.equal(emptyView.host.querySelectorAll('[data-boop-column]').length, 4, 'an empty ledger still shows the four lanes')
+  assert.match(emptyView.text(), /没有任务/)
+  assert.doesNotMatch(emptyView.text(), /读取失败/)
   emptyView.cleanup()
 
   // (d) Partial coverage: Host paged/truncated its projection.

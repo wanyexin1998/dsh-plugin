@@ -12,6 +12,13 @@
  * application-level schema validation is layered on top, never instead.
  */
 
+/**
+ * Version that `CORE_DDL` itself creates. `bootstrap()` may record this once
+ * on an empty ledger. It must not write {@link SCHEMA_VERSION} when that
+ * constant moves ahead: only `migrate()` advances `meta.schema_version`.
+ */
+export const BASELINE_SCHEMA_VERSION = 1
+
 export const SCHEMA_VERSION = 1
 
 /** Core tables + indexes, in dependency order. Never includes FTS5. */

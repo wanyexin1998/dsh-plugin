@@ -46,6 +46,12 @@ after(() => {
 function makeDispatcher() {
   deliveries = []
   failureMode = null
+  // Cases share one ledger. A previous case's delivery receipt or unknown
+  // result still owns the global slot; settle it so this case tests its own send.
+  const held = db.db
+    .prepare("SELECT id FROM action WHERE scope_id = ? AND state IN ('accepted','running','outcome_unknown')")
+    .all(SCOPE)
+  for (const row of held) repo.markActionState(SCOPE, row.id, 'settled')
   return new Dispatcher({
     repo,
     scopeId: SCOPE,

@@ -45,16 +45,41 @@ body[data-ds-dark-theme] [data-boop-panel] {
   padding: 8px 4px 4px;
 }
 [data-boop-panel] .boop-hero-text h1 {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 650;
   letter-spacing: 0.01em;
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   color: var(--boop-ink);
 }
 [data-boop-panel] .boop-hero-text p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 13px;
   opacity: 0.72;
+}
+[data-boop-panel] .boop-more {
+  border: 1px solid var(--boop-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+[data-boop-panel] .boop-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-boop-panel] .boop-more[open] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+[data-boop-panel] .boop-more > summary,
+[data-boop-panel] .boop-more > .boop-card:has([data-boop-control]) {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  [data-boop-panel] .boop-more[open] {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 [data-boop-panel] .boop-chips {
   display: flex;
@@ -88,7 +113,8 @@ body[data-ds-dark-theme] [data-boop-panel] .boop-chip.warn { color: #D9A45B; }
   border-radius: 16px;
   padding: 14px 16px;
   background: var(--boop-soft);
-  max-width: 720px;
+  min-width: 0;
+  max-width: none;
 }
 [data-boop-panel] .boop-card h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; opacity: 0.72; }
 [data-boop-panel] .boop-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 2px 0; }

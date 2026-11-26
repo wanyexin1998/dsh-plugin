@@ -20,8 +20,15 @@ import {
 import { DshAdapter } from './transport/dsh-adapter.ts'
 import { PROXY_SOURCE_KIND, type CommandEnvelope } from './transport/command-envelope.ts'
 import { Dispatcher, type DispatchOutcome, type ReconcileReport } from './dispatch/dispatcher.ts'
+import { dispatchFollowup, type FollowupReceipt, type FollowupRequest } from './dispatch/followup.ts'
 import { GATE_LEDGER, type GateEntry, type GateState, type WriteModeStatus } from './gates.ts'
 import { applyInitialization, collectInitHeads } from './memory/host-init.ts'
+import {
+  bindMainSessionWorkspace,
+  ensureBoopWorkspace,
+  sameWorkspaceDir,
+  sessionCwdOf,
+} from './boop-workspace-dir.ts'
 import { pocRequested } from './poc-switch.ts'
 
 /* ── PoC-only raw ledger reads for reconciliation (no writes here) ────── */
@@ -45,7 +52,13 @@ interface PocReconcileFacts {
   ledgerWritable: boolean
   cleanRestart: boolean
   boot:
-    | { unknown: string[]; blockedByGate: string[]; readyToRetry: number }
+    | {
+        unknown: string[]
+        blockedByGate: string[]
+        readyToRetry: number
+        /** Ids already moved to outcome_unknown when this process took the lease. */
+        reconciledAtBoot: string[]
+      }
     | null
   dispatch: DispatchOutcome | null
   report: ReconcileReport | null
@@ -361,8 +374,67 @@ export class BoopApi extends TypertRemoteService {
    * Session and never dispatches anything into a Session — the browser opens
    * the identity through the native Session surface.
    */
-  mainSession(): MainSessionFacts {
-    return mainSessionFacts(this.ctx)
+  async mainSession(): Promise<MainSessionFacts> {
+    const facts = mainSessionFacts(this.ctx)
+    try {
+      const workspace = await ensureBoopWorkspace(this.ctx)
+      return {
+        ...facts,
+        workspacePath: workspace.path,
+        workspaceId: workspace.workspaceId,
+        detail: workspace.reason ?? facts.detail,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.ctx.logger?.warn?.('[boop] workspace registration failed', error)
+      return {
+        ...facts,
+        workspacePath: null,
+        workspaceId: null,
+        detail: message,
+      }
+    }
+  }
+
+  /**
+   * Attach the BOOP main Session to BOOP's own workspace. Other Sessions are
+   * refused. A Session that already belongs to a different directory is not moved.
+   */
+  async bindMainWorkspace(sessionId: string): Promise<{ ok: boolean; path: string; workspaceId: string | null; attached: boolean; reason: string | null }> {
+    const facts = mainSessionFacts(this.ctx)
+    const id = typeof sessionId === 'string' ? sessionId.trim() : ''
+    if (id === '' || id !== facts.mainSessionId) {
+      return { ok: false, path: '', workspaceId: null, attached: false, reason: 'not-main-session' }
+    }
+    return bindMainSessionWorkspace(this.ctx, id)
+  }
+
+  /**
+   * Point BOOP's ledger at a Session the host already created inside BOOP's
+   * workspace. The previous main Session is left in place when it already
+   * belongs to a workspace. Other Sessions are never moved.
+   */
+  async adoptPlacedMainSession(sessionId: string): Promise<{ ok: boolean; mainSessionId: string | null; reason: string | null }> {
+    const facts = mainSessionFacts(this.ctx)
+    const id = typeof sessionId === 'string' ? sessionId.trim() : ''
+    if (id === '') return { ok: false, mainSessionId: facts.mainSessionId, reason: 'missing-session' }
+    if (id === facts.mainSessionId) return { ok: true, mainSessionId: id, reason: null }
+    if (!facts.writable || !facts.durable || !facts.scopeId) {
+      return { ok: false, mainSessionId: facts.mainSessionId, reason: facts.reason ?? 'ledger-unavailable' }
+    }
+    const workspace = await ensureBoopWorkspace(this.ctx)
+    if (!sameWorkspaceDir(sessionCwdOf(this.ctx, id), workspace.path)) {
+      return { ok: false, mainSessionId: facts.mainSessionId, reason: 'session-not-in-boop-workspace' }
+    }
+    if (sameWorkspaceDir(sessionCwdOf(this.ctx, facts.mainSessionId), workspace.path)) {
+      return { ok: false, mainSessionId: facts.mainSessionId, reason: 'main-session-already-placed' }
+    }
+    const storage = this.ctx.boop?.storage?.()
+    const replaced = storage?.repo?.replaceMainSession?.(facts.scopeId, facts.mainSessionId, id) ?? null
+    if (!replaced || replaced.mainSessionId !== id) {
+      return { ok: false, mainSessionId: facts.mainSessionId, reason: 'bind-failed' }
+    }
+    return { ok: true, mainSessionId: id, reason: null }
   }
 
   /**
@@ -672,7 +744,15 @@ export class BoopApi extends TypertRemoteService {
       })
 
       // 1) Boot window: sending -> unknown, never a re-send.
-      const boot = dispatcher.reconcile()
+      // start() already did this when it took the lease, so this call's own
+      // list is often empty. The response still names the ids from that pass.
+      const fresh = dispatcher.reconcile()
+      const reconciledAtBoot = storage.bootReconcile?.unknown ?? []
+      const boot = {
+        ...fresh,
+        unknown: [...new Set([...reconciledAtBoot, ...fresh.unknown])],
+        reconciledAtBoot,
+      }
 
       // 2) Optional EXPLICIT retry of one existing action (same action/message id).
       const actionId = typeof raw.actionId === 'string' && raw.actionId !== '' ? raw.actionId : null
@@ -754,6 +834,17 @@ export class BoopApi extends TypertRemoteService {
     } catch (error) {
       return { ...blank, available: true, ledgerWritable: true, error: errorText(error) }
     }
+  }
+
+  /**
+   * PoC driver for the same followup `boop_dispatch` runs. A normal install
+   * never registers this method. It exists so a host test can send one
+   * followup when the model is unreachable and therefore cannot choose the tool.
+   */
+  async pocDispatchFollowup(request?: unknown): Promise<FollowupReceipt> {
+    this.assertPocEnabled()
+    const body = (typeof request === 'object' && request !== null ? request : {}) as FollowupRequest
+    return dispatchFollowup(this.ctx, body)
   }
 
   /**
@@ -1053,6 +1144,8 @@ function summarizeEvent(event: Record<string, unknown>): DurableEventFacts {
 export const PRODUCTION_API_METHODS = [
   'bootstrap',
   'mainSession',
+  'bindMainWorkspace',
+  'adoptPlacedMainSession',
   'sources',
   'initPlan',
   'initApply',
@@ -1067,6 +1160,7 @@ export const POC_API_METHODS = [
   'pocRelease',
   'pocResolveAgent',
   'pocDispatch',
+  'pocDispatchFollowup',
   'pocReconcile',
   'pocSessionRecord',
   'pocClaimFeed',

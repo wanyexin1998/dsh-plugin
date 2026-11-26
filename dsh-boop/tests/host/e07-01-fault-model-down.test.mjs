@@ -31,6 +31,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { test, before, after } from 'node:test'
 import {
   PROJECT_ROOT,
@@ -206,6 +207,76 @@ test('E07-01 deterministic Stop still works when the model is offline, and fails
   assert.equal(controlUser.accepted, true)
   assert.deepEqual(controlUser.stopped, [], 'a user Session is never stopped')
   assert.equal(controlUser.policy.foreignTurns, 'not-inspected-never-stopped')
+})
+
+function ledgerAction(actionId) {
+  const db = new DatabaseSync(path.join(HOME, 'boop', 'boop.sqlite'), { readOnly: true })
+  try {
+    return db.prepare('SELECT state, message_id FROM action WHERE id = ?').get(actionId)
+  } finally {
+    db.close()
+  }
+}
+
+test('E07-01 boop_dispatch holds the one slot until the unreachable model ends the turn', async () => {
+  const status = await ok('boopVerify/status')
+  assert.equal(status.relatedTools.boop_dispatch, true, 'the formal followup tool is registered')
+  const first = await ok('boop/pocDispatchFollowup', {
+    request: {
+      requestId: 'e07-slot-1',
+      targetSessionId: sessionId,
+      instruction: 'E07 slot: the model service is unreachable; do not invent a reply.',
+    },
+  })
+  assert.equal(first.ok, true, JSON.stringify(first))
+  assert.equal(first.kind, 'accepted', JSON.stringify(first))
+  assert.equal(first.slotHeld, true)
+  assert.equal(ledgerAction(first.actionId).state, 'running', 'an accepted followup occupies the slot')
+
+  const blocked = await ok('boop/pocDispatchFollowup', {
+    request: {
+      requestId: 'e07-slot-2',
+      targetSessionId: sessionId,
+      instruction: 'this second delegation must wait',
+    },
+  })
+  assert.equal(blocked.ok, false, JSON.stringify(blocked))
+  assert.equal(blocked.reason, 'SLOT_HELD')
+
+  const started = Date.now()
+  let released = null
+  while (Date.now() - started < TURN_DEADLINE_MS) {
+    released = ledgerAction(first.actionId)
+    if (released && released.state !== 'running') break
+    await sleep(750)
+  }
+  assert.equal(released?.state, 'accepted', 'an error turn/end frees the slot and is not recorded as finished')
+  const recordAfter = await ok('boop/pocSessionRecord', { sessionId, tailEvents: 400 })
+  const ends = recordAfter.turnEnds ?? []
+  assert.ok(ends.length >= 2, 'the followup opened its own failing turn')
+  assert.match(String(ends.at(-1).turnEnd), /^error:/u, `the new turn ends in the host error taxonomy (${ends.at(-1)?.turnEnd})`)
+
+  const replay = await ok('boop/pocDispatchFollowup', {
+    request: {
+      requestId: 'e07-slot-1',
+      targetSessionId: sessionId,
+      instruction: 'E07 slot: the model service is unreachable; do not invent a reply.',
+    },
+  })
+  assert.equal(replay.kind, 'duplicate', JSON.stringify(replay))
+  assert.equal(replay.actionId, first.actionId)
+  assert.equal(replay.slotHeld, false)
+
+  const again = await ok('boop/pocDispatchFollowup', {
+    request: {
+      requestId: 'e07-slot-3',
+      targetSessionId: sessionId,
+      instruction: 'the slot is free for one more followup',
+    },
+  })
+  assert.notEqual(again.reason, 'SLOT_HELD', JSON.stringify(again))
+  if (again.ok) assert.equal(again.slotHeld, true)
+  else assert.equal(again.reason, 'TARGET_BUSY')
 })
 
 test('E07-01 the failing model turn touches no user Session/turn', async () => {

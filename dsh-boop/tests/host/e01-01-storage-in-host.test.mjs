@@ -114,6 +114,9 @@ test('E01-02 the scope id is stable across a restart of the same installation', 
 })
 
 test('E01-02 a second live Host shares the ledger but never enables write management', async () => {
+  // The previous test stopped its Host. 0.2.2-rc.1 can exit before the dispose
+  // effect releases the lease, so wait out the TTL before expecting a sole writer.
+  await new Promise((resolve) => setTimeout(resolve, 16_000))
   const second = await bootWeb({ home, profile: 'boop-ledger', port: await freePort() })
   try {
     const cookie2 = await authorize(second.base, second.token)

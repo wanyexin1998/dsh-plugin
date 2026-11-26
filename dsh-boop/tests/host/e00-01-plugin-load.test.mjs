@@ -55,8 +55,9 @@ after(async () => {
   await host?.stop()
 })
 
-test('E00-01 host facts record the pinned rc.2 payload', () => {
-  assert.equal(facts.dshVersion, '0.2.1-rc.2', `unexpected payload version: ${facts.dshVersion}`)
+test('E00-01 host facts record the pinned payload', () => {
+  assert.equal(facts.dshVersion, '0.2.2-rc.1', `unexpected payload version: ${facts.dshVersion}`)
+  assert.equal(facts.pinnedCommit, 'c59d10aff167ad7eefead4b3a9082fb57c8fbfe8')
   console.log('  payload:', facts.payload)
   console.log('  dsh version:', facts.dshVersion, '| node:', facts.node)
 })
@@ -90,7 +91,8 @@ test('G01 authenticated BOOP bootstrap returns the read-only scope facts', async
   assert.equal(body.result.ok, true, JSON.stringify(body))
   const value = body.result.value
   assert.equal(value.product, 'BOOP')
-  assert.equal(value.scope.dshProfileVersion, '0.2.1-rc.2')
+  assert.equal(value.scope.dshProfileVersion, '0.2.2-rc.1')
+  assert.equal(value.scope.dshCommit, 'c59d10aff167ad7eefead4b3a9082fb57c8fbfe8')
   assert.equal(value.scope.writeModeEnabled, true, 'write mode follows the gate ledger once every required gate is PASS')
   assert.equal(value.scope.recoveryGateArmed, true)
   assert.deepEqual(

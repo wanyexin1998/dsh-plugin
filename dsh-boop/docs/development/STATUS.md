@@ -8,17 +8,27 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 当前桌面宿主 | Desktop **`0.2.1-rc.3`**（`E:\deepseek-harness\resources\app.asar` 根 `package.json`，包名 `@deepseek-ai/dsh-desktop`） | `dshBuildCommit = be72761ee1a6736ebcdf4f3739363b083ae53c98`，`dshBuildDirty=false`。副本在 `.work/desktop-package.json` |
-| Web 测试载荷 | **`0.2.1-rc.2`**（`.work/test-host/payload-0.2.1/dsh`） | 宿主套件仍对着这份载荷；提交常量 `332895e0f7c9d4dbfb29729f5eb367fa263ff986` |
-| 插件兼容声明 | `engines.dsh = "0.2.1-rc.2 \|\| 0.2.1-rc.3"` | 宿主 `semver.satisfies(..., { includePrerelease: true })` 对这两版为真，对 `rc.1` / `rc.4` / `0.2.1` 为假。没有 `compatibility.json` |
-| 宿主运行时 Node | `v24.21.0`（`~/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe`） | 本机探测 |
-| 宿主 React | `18.3.1`（web shell 静态模块表内联） | `dsh-web-frontend/dist/assets` 字符串 |
-| 测试用宿主副本 | `.work/test-host/payload-0.2.1/dsh`（`tools/build-test-payload.mjs` 从 asar 只读提取 405.60 MiB / 17,262 文件 + `app.asar.unpacked` 原生模块；旧 rc.2 副本仍在 `.work/test-host/payload/dsh` 作差异对照） | 本仓库工具 + `payload.json` |
-| 用户真实 `~/.dsh` | **未读写其 DSH_HOME 数据**：所有测试用 `.work/test-runs/**` 独立 DSH_HOME（`.work/test-host/payload*` 仅作只读 payload）；测试会复用 `~/.dsh/dsh-runtimes` 下的 node/pnpm 可执行文件，但不读写 profiles/sessions/storages | 测试代码路径可见 + qa-verify 前后 mtime 抽查（`docs/development/evidence/rc21-alignment-verification.md`） |
-| 自有模型服务（IN-01/02/03） | vLLM `http://172.26.0.49:8000/v1`；模型 id `qwen3.8-27b`（另有别名）；`max_model_len = 196608`；root `Qwen3.8-27B-AWQ-INT4`（4bit）；**无凭证**（内网 HTTP） | `/v1/models` + 真实金标实测（`docs/development/evidence/e05-00/qwen-gold-report.md`） |
+| 当前桌面宿主 | Desktop **`0.2.2-rc.1`**（`E:\deepseek-harness`，包名 `@deepseek-ai/dsh-desktop`） | `dshBuildCommit = c59d10aff167ad7eefead4b3a9082fb57c8fbfe8`。2026-11-10 隔离窗口任务板自报同一版本与提交前缀 `c59d10aff167…` |
+| Web 测试载荷 | **`0.2.2-rc.1`**（`.work/test-host/payload-0.2.2/dsh`） | 宿主套件默认载荷。旧副本 `.work/test-host/payload-0.2.1/dsh` 仍在，提交 `332895e0f7c9d4dbfb29729f5eb367fa263ff986`，不再作为本次结论 |
+| 插件兼容声明 | `engines.dsh = "0.2.1-rc.2 \|\| 0.2.1-rc.3 \|\| 0.2.2-rc.1"` | 没有 `compatibility.json`，也没有 `dsh plugin allow-version` |
+| 宿主运行时 Node | **`v24.21.0`**（`~/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe`） | 宿主套件由这份运行时启动。当天单元测试的 shell `node` 是 `v24.22.1` |
+| 宿主 React | `18.3.1`（此前 web shell 静态模块表） | 2026-11-10 未重测 React 版本。桌面探针无 `Invalid hook call` / 多份 React 报错 |
+| 测试用宿主副本 | `.work/test-host/payload-0.2.2/dsh` | `tools/build-test-payload.mjs` 从已安装 asar 提取。用户 `~/.dsh` 的 profiles 未作为测试家目录 |
+| 用户真实 `~/.dsh` | **未读写其 DSH_HOME 数据** | 宿主套件与桌面探针都用 `.work/test-runs/**`。桌面探针 `userDshUntouched: true`。测试会调用 `~/.dsh/dsh-runtimes` 里的 node/pnpm |
+| 自有模型服务（IN-01/02/03） | 上次金标是 vLLM `http://172.26.0.49:8000/v1`，模型 `qwen3.8-27b` | 2026-11-10 **没有**设置 `BOOP_QWEN_BASE_URL` / `BOOP_QWEN_MODEL`。真实模型用例 SKIPPED，不记 PASS |
 
-> 陈旧值提示：`~/.dsh/dsh-runtimes/dsh-primary-runtime/runtime.json` 仍写 `desktopVersion: 0.2.1-rc.1`（上一次启动残留）。
-> 以 asar 内 `package.json` 为准；不要用该 runtime.json 判定宿主版本。
+> 版本以桌面 asar / 测试载荷里的 `package.json` 为准，不以 `runtime.json` 里残留的 desktopVersion 为准。
+> 下面 §0.1 是 2026-10-18 切到 rc.2 时的记录，不是这次的环境。
+
+## 0.3 2026-11-10（0.2.2-rc.1）
+
+隔离 Web 载荷 `.work/test-host/payload-0.2.2/dsh`，桌面安装 `0.2.2-rc.1`。
+
+- E02-03：5 通过，1 跳过（未设 Qwen）。SIGKILL 后重启进程拿到租约时，账本已是 `outcome_unknown`，`bootstrap.storage.bootReconcile.unknown` 与随后的 `pocReconcile.boot.unknown` 都包含该 action；durable 证据再把它收成 `accepted`。证据 `docs/development/evidence/e02-03/idempotency-2026-11-10T06-37-54-326Z.json`。
+- E07-01 模型不可达：5/5。`boop_dispatch` 已登记。同一 `requestId` 接受后动作变为 `running` 并占住唯一名额，另一条返回 `SLOT_HELD`。目标回合以 `error: Connection error.` 结束后动作回到 `accepted`（不是完成），同一 `requestId` 为 duplicate，名额放开。控制行 `dispatch.available` 仍为 false。证据 `docs/development/evidence/e07-01/fault-model-down-2026-11-10T06-38-38-756Z.json`。
+- 单元：`mvp-turn-release`、`mvp-slot`、`poc-switch`、`e03-05-host-init` 共 18/18（shell Node v24.22.1）。
+- 桌面窗口：`desktop-gui-1794292802095`。写模式开启，控制行派发不可用，浅色/深色跟随宿主，停用后侧边栏标签和 BOOP 样式表消失且「新会话」仍在，同一开关重新打开后侧边栏回来。见 `docs/development/evidence/desktop-gui/report.md`。
+- 未做：真实 Qwen；`boop_task_control`；contextToken；控制行派发。`boop_dispatch` 只在模型不可达的回合上验证过名额释放，没有在真实模型完成回合上验证 `settled`。
 
 ## 0.1 rc.2.1 对齐（2026-10-18，commit `2c99dc2`）
 
@@ -55,7 +65,7 @@
 | G06 | **PASS** | 真实宿主 `tests/host/e04-01b-main-session.test.mjs` 10/10：`from_now` 写入水位，`learn_history` 读完已解析来源并结束作业（不调用模型），没有确认预览的导入不写。遗忘 tombstone 与 FTS 降级见 `tests/unit/e03-05-host-init.test.mjs` 5/5。 |
 | G07 | **BLOCKED** | 凭证未配置。主宿主行只挂关闭的渠道运行时（`tests/unit/e06-01-admission.test.mjs`）。不开网络。 |
 | G08 | **PASS** | 真实 Web Host：第二进程在第一进程心跳期间保持只读且 fencing token 不变，释放后重启 token+1（`tests/host/e01-01-storage-in-host.test.mjs` 6/6）。单元：心跳越过 TTL 不放权、关闭后接管 token 增大（`e01-01-lease-heartbeat`）；node:sqlite、一致备份、失败迁移仍可读（`e00-03` 11/11）。Desktop GUI 打开同一账本并出现 `boot/reconciled clean=true`。macOS/Linux 不宣称。 |
-| G09 | **PASS** | Desktop **0.2.1-rc.3** 私有窗口：任务板显示写模式开启且派发不可用（`dispatch-not-on-this-row`）、浅色/深色跟随宿主、停用后侧边栏和样式表消失且「新会话」仍在、同一开关重新打开后侧边栏回来（`docs/development/evidence/desktop-gui/report.md`，`desktop-gui-1793092410382`）。Edge 任务板搜索框 IME「波波」（`web-e2e-control/2026-10-27T09-16-44-730Z`）。无重复 React 报错。macOS/Linux 仍不宣称支持。 |
+| G09 | **PASS** | Desktop **0.2.2-rc.1** 私有窗口（2026-11-10，`desktop-gui-1794292802095`）：任务板显示写模式开启且控制行派发不可用（`dispatch-not-on-this-row`）、浅色/深色跟随宿主、停用后侧边栏和样式表消失且「新会话」仍在、同一开关重新打开后侧边栏回来（`docs/development/evidence/desktop-gui/report.md`）。此前 rc.3 窗口 `desktop-gui-1793092410382` 的截图已被这次探针覆盖。Edge 任务板搜索框 IME「波波」（`web-e2e-control/2026-10-27T09-16-44-730Z`）。无重复 React 报错。macOS/Linux 仍不宣称支持。 |
 
 当前 `writeMode.enabled = true`，`blockedByGates = []`（G01–G06、G08、G09 PASS；G07 BLOCKED 不阻塞本地写）。持有写租约的进程才会真正写入。
 `tests/unit/gates.test.mjs` 锁定规则（PASS 必须有证据、缺任一必需门则关闭、G07 不阻塞本地写）。

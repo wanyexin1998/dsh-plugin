@@ -55,6 +55,10 @@ export interface MainSessionFacts {
     scopeId: string
     leaseHeld: boolean
   } | null
+  /** Absolute directory used as this Session's workspace. Null when it could not be created. */
+  workspacePath: string | null
+  /** Always null: the BOOP directory is not listed as a left-sidebar workspace. */
+  workspaceId: string | null
 }
 
 export type SourceCoverage = 'full' | 'behind' | 'unseen' | 'unverified' | 'processing' | 'gap' | 'excluded'
@@ -157,6 +161,8 @@ export function mainSessionFacts(ctx: any): MainSessionFacts {
           leaseHeld: storageFacts.lease?.held === true,
         }
       : null,
+    workspacePath: null,
+    workspaceId: null,
   }
 
   if (!storage || !scopeId) return base

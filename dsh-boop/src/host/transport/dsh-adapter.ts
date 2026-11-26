@@ -422,16 +422,19 @@ export class DshAdapter {
     return trace
   }
 
-  /** Ask the Agent to flush its durable log; used before reconciliation reads. */
+  /**
+   * Flush the durable session log before a reconciliation read.
+   * `whenIdle` is whole-agent quiescence, not a durability barrier, and
+   * resolving the agent would wake a cold session. Missing persistence
+   * fails the flush instead of pretending the log was saved.
+   */
   async flush(sessionId: string): Promise<void> {
     const session = this.ctx.reflect?.get?.('sessions', false)?.get?.(sessionId)
     const persistence = this.ctx.reflect?.get?.('sessionPersistence', false)
-    if (session && persistence && typeof persistence.flush === 'function') {
-      await persistence.flush(session)
-      return
+    if (!session || !persistence || typeof persistence.flush !== 'function') {
+      throw new Error('boop: session persistence flush is unavailable')
     }
-    const agent = await this.resolveAgent(sessionId)
-    await agent?.whenIdle?.()
+    await persistence.flush(session)
   }
 
   /**

@@ -24,6 +24,8 @@
 
 /** Fallback id used only when the host identity plane cannot answer. */
 export const MAIN_SESSION_ID = 'boop-main'
+/** Agent preset id from `presets/boop.patch.yml`. Ordinary Sessions keep the user's default. */
+export const BOOP_AGENT_PRESET_ID = 'boop'
 /** Client-side cache of the last resolved identity (decoration hint only). */
 export const MAIN_SESSION_STORAGE_KEY = 'dsh.boop.mainSessionId'
 
@@ -55,6 +57,8 @@ export interface MainSessionHostFacts {
     scopeId: string
     leaseHeld: boolean
   } | null
+  workspacePath?: string | null
+  workspaceId?: string | null
 }
 
 export interface MainSessionState {
@@ -171,6 +175,8 @@ function normalizeHostFacts(value: unknown): MainSessionHostFacts | null {
           leaseHeld: storage.leaseHeld === true,
         }
       : null,
+    workspacePath: typeof record.workspacePath === 'string' && record.workspacePath !== '' ? record.workspacePath : null,
+    workspaceId: typeof record.workspaceId === 'string' && record.workspaceId !== '' ? record.workspaceId : null,
   }
 }
 
@@ -221,7 +227,7 @@ export interface SessionsListSnapshot {
 export interface SessionsLike {
   list?: { getSnapshot?: () => SessionsListSnapshot }
   refresh?: () => Promise<unknown>
-  create?: (request: { sessionId: string }) => Promise<string>
+  create?: (request: { sessionId?: string; cwd?: string; workspaceId?: string; agentPreset?: string }) => Promise<unknown>
 }
 
 export interface UiWorkspaceLike {
@@ -235,6 +241,11 @@ export interface OpenMainSessionDeps {
   uiWorkspace: UiWorkspaceLike | null | undefined
   /** Bounded wait for the client catalog refresh (default 2500ms). */
   catalogWaitMs?: number
+  /**
+   * Switch a still-blank Session onto the BOOP preset. Started Sessions are
+   * locked by the host (`agent-preset/locked`); failures are ignored.
+   */
+  selectAgentPreset?: (sessionId: string, presetId: string) => Promise<unknown>
 }
 
 export type OpenMainSessionOutcome =
@@ -292,6 +303,100 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function normalizeDir(value: string): string {
+  return value.replace(/[\\/]+$/g, '').replace(/\\/g, '/').toLowerCase()
+}
+
+function sameDir(left: string | null, right: string | null): boolean {
+  if (!left || !right) return false
+  return normalizeDir(left) === normalizeDir(right)
+}
+
+function summaryOf(sessions: SessionsLike | null | undefined, sessionId: string): { cwd: string | null; blank: boolean | null } | null {
+  if (!catalogHas(sessions, sessionId)) return null
+  try {
+    const row = sessions?.list?.getSnapshot?.()?.byId?.[sessionId]
+    if (!row || typeof row !== 'object') return { cwd: null, blank: null }
+    const record = row as Record<string, unknown>
+    const cwd = typeof record.cwd === 'string' && record.cwd.trim() !== '' ? record.cwd : null
+    const blank = record.blank === true ? true : record.blank === false ? false : null
+    return { cwd, blank }
+  } catch {
+    return { cwd: null, blank: null }
+  }
+}
+
+function findPlacedSession(
+  sessions: SessionsLike | null | undefined,
+  workspacePath: string,
+  prefer: string | null,
+): string | null {
+  try {
+    const snapshot = sessions?.list?.getSnapshot?.()
+    if (!snapshot) return null
+    const ids = Array.isArray(snapshot.ids) ? snapshot.ids : Object.keys(snapshot.byId ?? {})
+    const matches = ids.filter((id) => {
+      const row = snapshot.byId?.[id]
+      const cwd = row && typeof row === 'object' && typeof (row as { cwd?: unknown }).cwd === 'string'
+        ? (row as { cwd: string }).cwd
+        : null
+      return sameDir(cwd, workspacePath)
+    })
+    if (prefer && matches.includes(prefer)) return prefer
+    return matches[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+function withBoopPreset<T extends Record<string, unknown>>(request: T): T & { agentPreset: string } {
+  return { ...request, agentPreset: BOOP_AGENT_PRESET_ID }
+}
+
+function listedAgentPreset(sessions: SessionsLike | null | undefined, sessionId: string): string | null {
+  try {
+    const row = sessions?.list?.getSnapshot?.()?.byId?.[sessionId]
+    if (!row || typeof row !== 'object') return null
+    const values = (row as { projectionValues?: { agentPreset?: unknown } }).projectionValues
+    return typeof values?.agentPreset === 'string' && values.agentPreset !== '' ? values.agentPreset : null
+  } catch {
+    return null
+  }
+}
+
+async function ensureBoopAgentPreset(deps: OpenMainSessionDeps, sessionId: string): Promise<void> {
+  if (typeof deps.selectAgentPreset !== 'function') return
+  if (listedAgentPreset(deps.sessions, sessionId) === BOOP_AGENT_PRESET_ID) return
+  try {
+    await deps.selectAgentPreset(sessionId, BOOP_AGENT_PRESET_ID)
+  } catch {
+    /* locked after the first turn; AGENTS.md still overlays the voice contract */
+  }
+}
+
+function createMainRequest(mainSessionId: string, workspacePath: string | null, reuseNamed: boolean): Record<string, unknown> {
+  const request: Record<string, unknown> = {}
+  if (reuseNamed) request.sessionId = mainSessionId
+  if (workspacePath) request.cwd = workspacePath
+  return withBoopPreset(request)
+}
+
+function createdSessionId(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim() !== '') return value.trim()
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  for (const key of ['sessionId', 'id'] as const) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.trim() !== '') return candidate.trim()
+  }
+  if (typeof record.value === 'string' && record.value.trim() !== '') return record.value.trim()
+  if (record.value && typeof record.value === 'object') {
+    const nested = record.value as Record<string, unknown>
+    if (typeof nested.sessionId === 'string' && nested.sessionId.trim() !== '') return nested.sessionId.trim()
+  }
+  return null
+}
+
 /**
  * Locate or create the ONE BOOP main Session, then open it in the native
  * Conversation. Repeated clicks resolve to the same Session (FE-02); the native
@@ -299,30 +404,43 @@ function messageOf(error: unknown): string {
  */
 export async function openMainSession(deps: OpenMainSessionDeps): Promise<OpenMainSessionOutcome> {
   const resolution = await resolveMainSessionIdentity({ call: deps.call, store: deps.store })
-  const mainSessionId = resolution.mainSessionId
+  let mainSessionId = resolution.mainSessionId
   const state = deps.store.getSnapshot()
+  const workspacePath = typeof state.host?.workspacePath === 'string' && state.host.workspacePath !== '' ? state.host.workspacePath : null
 
   let sessionId: string | null = null
   let created = false
   let identityConflict = false
 
-  if (catalogHas(deps.sessions, mainSessionId)) {
+  const keepNamed = (summary: { cwd: string | null; blank: boolean | null } | null): boolean => {
+    if (!summary) return false
+    if (!workspacePath) return true
+    if (sameDir(summary.cwd, workspacePath)) return true
+    // A blank Session whose directory is the desktop profile, or any other
+    // project, is not BOOP's workspace. Leave it and open one created inside
+    // the BOOP directory. A Session that already has history stays.
+    return summary.blank === false
+  }
+
+  if (keepNamed(summaryOf(deps.sessions, mainSessionId))) {
     sessionId = mainSessionId
-  } else {
+  } else if (!catalogHas(deps.sessions, mainSessionId)) {
     // The cached catalog may lag a Session created in another tab: refresh once
     // before asking the Host to create anything, so repeat clicks cannot mint
     // a second main Session.
     await refreshCatalog(deps.sessions, deps.catalogWaitMs ?? 2500)
-    if (catalogHas(deps.sessions, mainSessionId)) {
+    if (keepNamed(summaryOf(deps.sessions, mainSessionId))) {
       sessionId = mainSessionId
-    } else if (state.activeSessionId !== null && catalogHas(deps.sessions, state.activeSessionId)) {
+    } else if (catalogHas(deps.sessions, mainSessionId)) {
+      sessionId = null
+    } else if (state.activeSessionId !== null && catalogHas(deps.sessions, state.activeSessionId) && (!workspacePath || sameDir(summaryOf(deps.sessions, state.activeSessionId)?.cwd ?? null, workspacePath) || state.identityConflict)) {
       // This browser already opened the Session the Host minted for the conflict.
       sessionId = state.activeSessionId
       identityConflict = state.identityConflict
     } else if (state.identityConflict && state.activeSessionId !== null) {
       sessionId = state.activeSessionId
       identityConflict = true
-    } else {
+    } else if (!workspacePath) {
       if (typeof deps.sessions?.create !== 'function') {
         return {
           ok: false,
@@ -332,8 +450,8 @@ export async function openMainSession(deps: OpenMainSessionDeps): Promise<OpenMa
         }
       }
       try {
-        const createdId = await deps.sessions.create({ sessionId: mainSessionId })
-        if (typeof createdId !== 'string' || createdId.trim() === '') {
+        const createdId = createdSessionId(await deps.sessions.create(createMainRequest(mainSessionId, null, true)))
+        if (createdId === null) {
           return {
             ok: false,
             reason: 'session-create-failed',
@@ -355,9 +473,56 @@ export async function openMainSession(deps: OpenMainSessionDeps): Promise<OpenMa
     }
   }
 
+  // The named Session is blank and its directory is not the BOOP workspace.
+  // The host freezes cwd at creation, so open a Session created inside the
+  // BOOP directory. Do not pass the existing id: that call is refused.
+  if (sessionId === null && workspacePath) {
+    const placed = findPlacedSession(deps.sessions, workspacePath, state.activeSessionId)
+    if (placed) {
+      sessionId = placed
+    } else if (typeof deps.sessions?.create !== 'function') {
+      return {
+        ok: false,
+        reason: 'sessions-unavailable',
+        message: '客户端会话服务不可用，无法创建 BOOP 主会话。',
+        mainSessionId,
+      }
+    } else {
+      try {
+        const minted = createdSessionId(await deps.sessions.create(
+          createMainRequest(mainSessionId, workspacePath, !catalogHas(deps.sessions, mainSessionId)),
+        ))
+        if (minted === null) {
+          return {
+            ok: false,
+            reason: 'session-create-failed',
+            message: '宿主没有返回 BOOP 主会话标识。',
+            mainSessionId,
+          }
+        }
+        sessionId = minted
+        created = true
+      } catch (error) {
+        return { ok: false, reason: 'session-create-failed', message: messageOf(error), mainSessionId }
+      }
+    }
+  }
+
   if (sessionId === null) {
     return { ok: false, reason: 'sessions-unavailable', message: '无法定位 BOOP 主会话。', mainSessionId }
   }
+  if (workspacePath && sessionId !== mainSessionId) {
+    try {
+      const adopted = await deps.call('boop/adoptPlacedMainSession', { sessionId })
+      const adoptedId = adopted?.ok && adopted.value && typeof adopted.value === 'object'
+        ? (adopted.value as { mainSessionId?: unknown }).mainSessionId
+        : null
+      if (typeof adoptedId === 'string' && adoptedId !== '') mainSessionId = adoptedId
+    } catch {
+      /* the placed Session still opens; the ledger keeps the previous id */
+    }
+  }
+  await ensureBoopAgentPreset(deps, sessionId)
   if (typeof deps.uiWorkspace?.openSession !== 'function') {
     return {
       ok: false,
@@ -374,18 +539,20 @@ export async function openMainSession(deps: OpenMainSessionDeps): Promise<OpenMa
     return { ok: false, reason: 'open-failed', message: messageOf(error), mainSessionId }
   }
 
+  const shownMainId = sessionId === resolution.mainSessionId ? mainSessionId : sessionId
   deps.store.set({
-    mainSessionId,
+    mainSessionId: shownMainId,
     activeSessionId: sessionId,
     phase: resolution.degraded || identityConflict ? 'degraded' : 'ready',
     identityConflict,
     error: identityConflict ? 'main-session-identity-conflict' : resolution.error,
   })
+  writeCachedMainSessionId(shownMainId)
 
   return {
     ok: true,
     sessionId,
-    mainSessionId,
+    mainSessionId: shownMainId,
     created,
     identityConflict,
     degraded: resolution.degraded,

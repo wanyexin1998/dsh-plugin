@@ -42,7 +42,7 @@ import { fileURLToPath } from 'node:url'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EVIDENCE_DIR = path.join(PROJECT_ROOT, 'docs/development/evidence/e07-01')
-const PAYLOAD_ROOT = process.env.DSH_PAYLOAD ?? path.join(PROJECT_ROOT, '.work/test-host/payload-0.2.1/dsh')
+const PAYLOAD_ROOT = process.env.DSH_PAYLOAD ?? path.join(PROJECT_ROOT, '.work/test-host/payload-0.2.2/dsh')
 const NODE = process.execPath
 
 const REAL_BASE_URL = process.env.BOOP_QWEN_BASE_URL?.trim() ?? ''
@@ -165,7 +165,7 @@ function payloadFacts() {
   const manifestPath = path.join(PAYLOAD_ROOT, 'node_modules/@deepseek-ai/dsh/package.json')
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-    return { payloadRoot: PAYLOAD_ROOT, dshVersion: manifest.version, pinnedCommit: '332895e0f7c9d4dbfb29729f5eb367fa263ff986' }
+    return { payloadRoot: PAYLOAD_ROOT, dshVersion: manifest.version, pinnedCommit: 'c59d10aff167ad7eefead4b3a9082fb57c8fbfe8' }
   } catch (error) {
     return { payloadRoot: PAYLOAD_ROOT, dshVersion: null, pinnedCommit: null, error: error instanceof Error ? error.message : String(error) }
   }

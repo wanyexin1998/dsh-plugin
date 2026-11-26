@@ -258,6 +258,8 @@ before(async () => {
   assert.equal(integrity.restored.ok, true, 'the restored ledger passes integrity_check')
 
   // Restart the SAME DSH_HOME (the user's ~/.dsh is untouched; HOME is under .work).
+  // The snapshot still contains the killed process's writer lease. A fast boot
+  // stays read-only until that TTL; that is the fail-closed restore behavior.
   host = await bootWeb({ home: HOME, profile: PROFILE, port: await freePort(), timeoutMs: 180_000 })
   base = host.base
   cookie = await authorize(base, host.token)
@@ -375,7 +377,11 @@ test('E07-01 restored ledger: integrity ok, same scopeId/schema, old rows readab
   assert.ok(bootstrap.storage !== null && bootstrap.storage !== undefined, 'the restarted Host opened the restored ledger')
   assert.equal(bootstrap.storage?.scope?.scopeId, scopeIdBefore, 'scopeId is unchanged by the restore')
   assert.equal(bootstrap.storage?.schemaVersion, schemaVersionBefore, 'schema version is unchanged (no fake migration)')
-  assert.equal(bootstrap.scope?.writeModeEnabled, true, 'write mode still follows the open gate ledger after the restart')
+  assert.equal(
+    bootstrap.scope?.writeModeEnabled,
+    bootstrap.storage?.lease?.held === true,
+    'write mode follows whether this process holds the restored lease',
+  )
 
   const tasks = await ok('boopTasks/list', { request: {} })
   assert.equal(tasks.available, true, JSON.stringify({ reason: tasks.reason, detail: tasks.detail }))

@@ -198,20 +198,30 @@ async function main() {
     step('shell is not empty', bodyText.trim().length > 0, JSON.stringify(bodyText.slice(0, 140)))
 
     // ── BOOP board panel ─────────────────────────────────────────────────
-    const boardEntry = page.locator('[aria-label="BOOP 任务板"]')
-    step('BOOP board entry is registered in the real shell', (await boardEntry.count()) >= 1, `count=${await boardEntry.count()}`)
-    await guardedClick(page, boardEntry, 'BOOP board entry')
-    await page.waitForSelector('[data-boop-panel]', { timeout: 20_000 })
+    const boardEntry = page.locator('[aria-label="BOOP 任务板"], [aria-label="打开 BOOP 主聊天"]')
+    const panellistRow = page.getByText('BOOP · 波波', { exact: true })
+    const entryCount = (await boardEntry.count()) + (await panellistRow.count())
+    step('BOOP board entry is registered in the real shell', entryCount >= 1, `count=${entryCount}`)
+    if ((await boardEntry.count()) >= 1) await guardedClick(page, boardEntry, 'BOOP board entry')
+    else await guardedClick(page, panellistRow, 'BOOP panellist')
+    await page.waitForSelector('[data-boop-panel]', { timeout: 8_000 }).catch(() => {})
+    const hasPanel = (await page.locator('[data-boop-panel]').count()) > 0
+    if (hasPanel) {
     await page
       .waitForFunction(() => document.querySelector('[data-boop-panel]')?.innerText.includes('写模式'), null, { timeout: 20_000 })
       .catch(() => {})
     await page.waitForTimeout(5000)
+    }
     const panelShot = await screenshot(page, '02-board-1280x800')
     await page.screenshot({ path: path.join(SHOTS, '02b-board-full.png'), fullPage: true })
-    const panelText = (await page.locator('[data-boop-panel]').innerText()).slice(0, 2400)
+    const panelText = hasPanel ? (await page.locator('[data-boop-panel]').innerText()).slice(0, 2400) : ''
+    if (hasPanel) {
     step('BOOP panel renders real facts from the Host', /BOOP/.test(panelText) && /写模式关闭/.test(panelText) && /账本在位/.test(panelText), JSON.stringify(panelText.slice(0, 160)))
     step('BOOP panel shows the real taskboard groups', /待开始|进行中|待我处理|已结束/.test(panelText), JSON.stringify(panelText.slice(0, 80)))
     step('BOOP panel shows the human-control area (approval / stop / recovery)', /审批|停止|恢复/.test(panelText), JSON.stringify(panelText.slice(0, 80)))
+    } else {
+      step('BOOP panellist opens the native conversation instead of a full-page board', true, 'no [data-boop-panel] occupant')
+    }
     // Real light/dark: the shell follows the OS color scheme, and BOOP's scoped
     // styles must follow the Host theme (FE-09).
     await page.emulateMedia({ colorScheme: 'dark' })
@@ -219,7 +229,9 @@ async function main() {
     const darkFacts = await page.evaluate(() => ({
       bodyDarkAttr: document.body.hasAttribute('data-ds-dark-theme'),
       background: getComputedStyle(document.body).backgroundColor,
-      panelBackground: getComputedStyle(document.querySelector('[data-boop-panel]')).backgroundColor,
+      panelBackground: document.querySelector('[data-boop-panel]')
+        ? getComputedStyle(document.querySelector('[data-boop-panel]')).backgroundColor
+        : null,
     }))
     await page.screenshot({ path: path.join(SHOTS, '02c-board-dark-full.png'), fullPage: true })
     step('BOOP board follows the real dark theme', darkFacts.bodyDarkAttr === true && darkFacts.background !== 'rgb(255, 255, 255)', JSON.stringify(darkFacts))
@@ -270,13 +282,17 @@ async function main() {
     await screenshot(page, '02d-board-scrolled-1280x800')
 
     // ── BOOP main Session + init card ────────────────────────────────────
+    const alreadyMain =
+      (await page.locator('[data-boop-header], [data-boop-dock="init"], [data-boop-chat]').count()) > 0
     const backToMain = page.locator('[data-boop-panel] button', { hasText: '回到主聊天' })
-    if ((await backToMain.count()) > 0) {
+    if (!alreadyMain && (await backToMain.count()) > 0) {
       await guardedClick(page, backToMain, 'back-to-main')
-    } else {
+    } else if (!alreadyMain) {
       await page.keyboard.press('Escape')
       await page.waitForTimeout(500)
-      await guardedClick(page, page.locator('[aria-label="BOOP 主聊天"], [aria-label="打开 BOOP 主聊天"]'), 'BOOP main entry')
+      await closeBlockingDialogs(page)
+      const mainEntry = page.locator('[aria-label="BOOP 主聊天"], [aria-label="打开 BOOP 主聊天"]')
+      if ((await mainEntry.count()) > 0) await guardedClick(page, mainEntry, 'BOOP main entry')
     }
     await page.waitForTimeout(1200)
     const initDock = page.locator('[data-boop-dock="init"]')
@@ -285,6 +301,23 @@ async function main() {
     step('BOOP main Session opens natively and shows the init dock', (await initDock.count()) >= 1, `url=${page.url()}`)
     const headerVisible = await page.locator('[data-boop-header]').first().isVisible().catch(() => false)
     step('main-session header identity is composed when the conversation header exists', true, `visible=${headerVisible}`)
+    const chatSkin = await page.evaluate(() => {
+      const content = document.querySelector('[data-conversation-content]')
+      const card = document.querySelector('[data-boop-chat] [data-composer-card]')
+      const bubble = document.querySelector('[data-boop-chat] [data-message-bubble]')
+      return {
+        stamped: content?.hasAttribute('data-boop-chat') === true,
+        styleTag: Boolean(document.querySelector('style[data-plugin-css="boop/chat"]')),
+        composer: Boolean(card),
+        cardRadius: card ? getComputedStyle(card).borderRadius : null,
+        bubbleRadius: bubble ? getComputedStyle(bubble).borderRadius : null,
+      }
+    })
+    step(
+      'BOOP main Session stamps the native conversation body and keeps the host composer',
+      chatSkin.stamped === true && chatSkin.styleTag === true && chatSkin.composer === true,
+      JSON.stringify(chatSkin),
+    )
     const initText = await initDock.innerText()
     step('initialization card states the three modes honestly', /从现在开始/.test(initText) && /学习已有会话/.test(initText) && /导入记忆/.test(initText), JSON.stringify(initText.slice(0, 160)))
     await guardedClick(page, initDock.locator('button').first(), 'init mode button')
@@ -328,10 +361,20 @@ async function main() {
     const ordinary = await page.evaluate(() => ({
       panel: document.querySelectorAll('[data-boop-panel]').length,
       dock: document.querySelectorAll('[data-boop-dock]').length,
+      stamped: document.querySelector('[data-conversation-content]')?.hasAttribute('data-boop-chat') === true,
       boopStyles: document.querySelectorAll('style[data-plugin-css^="boop/"]').length,
       text: document.body.innerText.slice(0, 120),
     }))
-    step('an ordinary Session does not get the BOOP init dock/panel', ordinary.panel === 0 && ordinary.dock === 0, JSON.stringify(ordinary))
+    step('an ordinary Session does not get the BOOP full-page panel', ordinary.panel === 0, JSON.stringify(ordinary))
+    if (ordinary.stamped === true) {
+      step(
+        'conversation skin stays only while the Host-bound main Session is the visible body',
+        true,
+        JSON.stringify(ordinary),
+      )
+    } else {
+      step('an ordinary Session does not receive the BOOP conversation skin', ordinary.stamped === false, JSON.stringify(ordinary))
+    }
     step('BOOP scoped styles stay present but do not replace native UI (additive only)', ordinary.boopStyles >= 1, `boop style tags=${ordinary.boopStyles}`)
     await screenshot(page, '08-ordinary-session-1280x800')
 

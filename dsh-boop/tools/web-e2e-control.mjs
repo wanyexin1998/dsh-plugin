@@ -35,7 +35,7 @@ const OUT = path.resolve(flag('--out', path.join(PROJECT_ROOT, 'docs/development
 const SHOTS = path.join(OUT, 'screens')
 const BASE_URL = process.env.BOOP_QWEN_BASE_URL ?? 'http://172.26.0.49:8000/v1'
 const MODEL_ID = process.env.BOOP_QWEN_MODEL ?? 'qwen3.8-27b'
-const EXPECTED_DSH = '0.2.1-rc.2'
+const EXPECTED_DSH = '0.2.2-rc.1'
 const COMPOSED = '波波'
 
 /** Copy from `src/client/control.tsx` / `control-model.ts`. Assertions match these strings. */

@@ -13,7 +13,10 @@
  *  - boop_catalog (E00-01): read-only scope identity + host capability facts;
  *  - boop_verify (E05-02): READ-ONLY evidence verification of one authorized
  *    task. It never runs a test command, never reads an arbitrary file, and
- *    never treats an Agent claim or a finished turn as a pass (AT-16/AT-17).
+ *    never treats an Agent claim or a finished turn as a pass (AT-16/AT-17);
+ *  - boop_context: read-only memory lookup;
+ *  - boop_dispatch: one followup to an existing session. It does not steer,
+ *    does not approve, and holds the single slot until that session's turn ends.
  * The remaining frozen tools arrive with their owning work items and stay
  * absent until then — an absent tool cannot be prompted into existing.
  *
@@ -29,6 +32,7 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
+import { dispatchFollowup } from './dispatch/followup.ts'
 import { runVerifyTool } from './verify/verify-api.ts'
 
 export const name = 'boop-tools'
@@ -241,6 +245,60 @@ export function apply(ctx: any): void {
   } catch (error) {
     try {
       ctx.logger?.warn?.('[boop] boop_context registration failed; other tools stay registered', error)
+    } catch {
+      /* never break activation */
+    }
+  }
+
+  try {
+    ctx.tools.register(
+      defineTool({
+        name: 'boop_dispatch',
+        description:
+          'Delegate one followup to an existing session the user already named. ' +
+          'Queue only: it never steers a live turn and never approves anything. ' +
+          'One global slot: a second delegation is refused until that session turn ends. ' +
+          'The same requestId returns the earlier receipt and does not send again. ' +
+          'Returns as soon as the followup is accepted; it does not wait for the target to finish.',
+        parameters: {
+          requestId: {
+            type: 'string',
+            required: true,
+            description: 'Idempotency key, 1–128 characters (letters, digits, dot, colon, underscore, hyphen).',
+          },
+          targetSessionId: {
+            type: 'string',
+            required: true,
+            description: 'Exact id of an existing session. This tool does not create a session.',
+          },
+          instruction: {
+            type: 'string',
+            required: true,
+            description: 'The followup text. It is not a permission and is not parsed as one.',
+          },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            additionalProperties: true,
+            properties: {
+              ok: { type: 'boolean' },
+              kind: { type: 'string' },
+              reason: { type: 'string' },
+              actionId: { type: 'string' },
+              messageId: { type: 'string' },
+              slotHeld: { type: 'boolean' },
+            },
+          },
+          render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+        },
+        execute: async (args) => dispatchFollowup(ctx, args) as unknown as Record<string, unknown>,
+      }),
+    )
+    ctx.logger?.info?.('[boop] boop_dispatch registered (one followup, single slot until turn/end)')
+  } catch (error) {
+    try {
+      ctx.logger?.warn?.('[boop] boop_dispatch registration failed; other tools stay registered', error)
     } catch {
       /* never break activation */
     }

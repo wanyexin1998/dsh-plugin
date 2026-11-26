@@ -234,6 +234,10 @@ export class Dispatcher {
      */
     cleanRestart?: boolean
   }): Promise<DispatchOutcome> {
+    if (input.mode === 'steer') {
+      // A steer inserts into a live turn. Delegation only followups an idle target.
+      return { kind: 'rejected', actionId: input.actionId ?? '', reason: 'STEER_REFUSED' }
+    }
     const writeFence = this.repo.getScope(this.scopeId)
     if (!writeFence) return { kind: 'rejected', actionId: '', reason: 'SCOPE_UNKNOWN' }
     if (writeFence.policyEpoch !== input.policyEpoch) {
@@ -251,8 +255,10 @@ export class Dispatcher {
 
     let action: ActionRow | null = input.actionId ? this.repo.getAction(this.scopeId, input.actionId) : null
     if (action && action.payloadHash !== hash) {
-      // The approval card and the current payload disagree: refuse.
+      // The approval card and the current payload disagree: refuse, and do not
+      // leave the old row claimable.
       this.repo.markActionState(this.scopeId, action.id, 'rejected')
+      this.repo.settleOutbox(this.scopeId, action.id, 'cancelled')
       return { kind: 'rejected', actionId: action.id, reason: 'PAYLOAD_CHANGED' }
     }
 
@@ -301,6 +307,12 @@ export class Dispatcher {
 
     if (input.requiresApproval && (!input.approvalId || !input.approvalNonce)) {
       return { kind: 'rejected', actionId: input.actionId ?? '', reason: 'APPROVAL_REQUIRED' }
+    }
+
+    const holder = this.repo.slotHolder(this.scopeId)
+    if (holder && holder.actionId !== (action?.id ?? '')) {
+      // Leave this action queued. Do not claim it and do not touch the holder.
+      return { kind: 'rejected', actionId: action?.id ?? '', reason: 'SLOT_HELD' }
     }
 
     if (!action) {
@@ -355,9 +367,14 @@ export class Dispatcher {
       mode: input.mode,
     }
 
-    const claimed = this.repo.claimOutbox(this.scopeId, 30_000).find((row) => row.actionId === action.id)
-    if (!claimed) {
-      return { kind: 'rejected', actionId: action.id, reason: 'OUTBOX_NOT_CLAIMED' }
+    const taskNow = this.repo.getTask(this.scopeId, input.taskId)
+    if (!taskNow || taskNow.version !== input.expectedTaskVersion) {
+      return { kind: 'rejected', actionId: action.id, reason: 'TASK_VERSION_CONFLICT' }
+    }
+
+    const claimed = this.repo.claimAction(this.scopeId, action.id, 30_000)
+    if (!claimed.ok) {
+      return { kind: 'rejected', actionId: action.id, reason: claimed.reason }
     }
 
     try {

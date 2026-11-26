@@ -501,9 +501,16 @@ test('AT-13 delivered-but-unsettled survives a real SIGKILL: durable evidence la
   assert.equal(bootstrap.storage?.ok, true, 'the restarted Host acquired the writer lease after the TTL')
   assert.equal(bootstrap.storage?.scope?.scopeId, scopeId, 'the same data domain restarted')
   assert.equal((await ok('boop/pocGateStatus')).adoptedMessageIds.length, 0, 'no process-local id registry survived')
+  assert.equal(ledgerAction(fixture.actionId).state, 'outcome_unknown', 'start() already moved the crashed sending row to outcome_unknown')
+  assert.equal(ledgerOutbox(fixture.actionId).state, 'unknown')
+  assert.ok(
+    (bootstrap.storage?.bootReconcile?.unknown ?? []).includes(fixture.actionId),
+    `bootstrap lists the ids reconciled while taking the lease: ${JSON.stringify(bootstrap.storage?.bootReconcile)}`,
+  )
 
   const boot = await reconcile({ actionId: fixture.actionId, cleanRestart: false })
-  assert.ok(boot.boot.unknown.includes(fixture.actionId), 'the crashed sending row is now outcome_unknown')
+  assert.ok(boot.boot.unknown.includes(fixture.actionId), 'the reconcile response includes the id already taken at startup')
+  assert.ok(boot.boot.reconciledAtBoot.includes(fixture.actionId))
   const verdict = boot.report.results[0]
   assert.equal(verdict.verdict, 'accepted', JSON.stringify(verdict))
   assert.equal(verdict.changed, true)

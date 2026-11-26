@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BOOP 主会话 · Pasta UI 气泡体验</title>
+<style>
+  :root {
+    --sea: #073f5c;
+    --blue: #449bcc;
+    --wave: #adddeb;
+    --pearl: #f8f7f2;
+    --ink: #0b2637;
+    --action: #17648b;
+    --soft: #eaf5fb;
+    --user: #d7eef6;
+    --muted: #f3f1ea;
+    --line: rgba(11, 38, 55, 0.08);
+    --shadow: 0 10px 30px rgba(7, 63, 92, 0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  button, textarea { font: inherit; }
+  [hidden] { display: none !important; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 280px at 50% -40px, rgba(173, 221, 235, 0.7), transparent 70%),
+      #ffffff;
+  }
+  .stage {
+    height: 100%;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr) 300px;
+    min-width: 1080px;
+  }
+  .side, .rail {
+    background: rgba(248, 247, 242, 0.72);
+    border-right: 1px solid var(--line);
+  }
+  .rail { border-right: 0; border-left: 1px solid var(--line); padding: 16px; }
+  .side { padding: 18px 14px; }
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 650; letter-spacing: 0.01em; margin: 8px 8px 22px;
+  }
+  .mark {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: var(--sea);
+    box-shadow: inset 0 -6px 0 var(--blue);
+  }
+  .nav-item {
+    width: 100%;
+    height: 34px; border-radius: 9px; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; color: rgba(11, 38, 55, 0.72); font-size: 13px;
+    border: 0; background: transparent; cursor: pointer; text-align: left;
+  }
+  .nav-item.on { background: white; color: var(--ink); box-shadow: var(--shadow); }
+  .chat {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 56px minmax(0, 1fr) auto;
+  }
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+  }
+  .who { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 99px; background: #3c9a62; }
+  .chip {
+    font-size: 12px; color: var(--action); background: var(--soft);
+    border-radius: 999px; padding: 4px 10px;
+  }
+  .thread {
+    position: relative;
+    min-height: 0;
+    padding: 0 8px 0 8px;
+  }
+  .messages {
+    height: 100%;
+    overflow: auto;
+    padding: 12px 40px 24px 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+  }
+  .day {
+    align-self: center;
+    font-size: 12px;
+    color: rgba(11, 38, 55, 0.45);
+  }
+  .bubble {
+    width: fit-content;
+    max-width: min(560px, 85%);
+    border-radius: 16px;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    animation: in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  @keyframes in {
+    from { opacity: 0; transform: translateY(6px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { animation: none; }
+    .typing i { animation: none; opacity: 0.7; }
+    .messages { scroll-behavior: auto; }
+  }
+  .row { display: flex; flex-direction: column; }
+  .row.user { align-items: flex-end; }
+  .row.assistant { align-items: flex-start; }
+  .row.user .bubble {
+    background: linear-gradient(#e7f6fb, var(--user));
+    color: var(--sea);
+  }
+  .row.assistant .bubble { background: var(--muted); }
+  .row.failed .bubble { opacity: 0.7; }
+  .row.flash .bubble { box-shadow: 0 0 0 2px rgba(23, 100, 139, 0.45); }
+  .meta {
+    margin-top: 4px;
+    padding: 0 4px;
+    font-size: 12px;
+    color: rgba(11, 38, 55, 0.45);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .retry {
+    border: 0; background: none; color: var(--action);
+    text-decoration: underline; cursor: pointer; padding: 0;
+  }
+  .typing { display: flex; gap: 4px; height: 22px; align-items: center; }
+  .typing i {
+    width: 6px; height: 6px; border-radius: 99px; background: var(--action);
+    opacity: 0.35; animation: blink 1s infinite;
+  }
+  .typing i:nth-child(2) { animation-delay: 0.15s; }
+  .typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes blink { 50% { opacity: 1; } }
+  .turns {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    z-index: 7;
+    width: 28px;
+    max-height: min(420px, calc(100% - 48px));
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .turns[hidden] { display: none !important; }
+  .turn-frame {
+    position: relative;
+    pointer-events: auto;
+  }
+  .turn-marks {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 6px 0;
+  }
+  .turn-mark {
+    height: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .turn-mark::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: rgba(11, 38, 55, 0.22);
+    transform: translateY(-50%) scaleX(0.6);
+    transform-origin: right center;
+    transition: transform 140ms ease, background-color 140ms ease;
+  }
+  .turn-mark:hover::before, .turn-mark:focus-visible::before {
+    transform: translateY(-50%) scaleX(0.9);
+    background: rgba(11, 38, 55, 0.45);
+  }
+  .turn-mark.on::before {
+    transform: translateY(-50%) scaleX(1);
+    background: var(--ink);
+  }
+  .turn-mark.busy::before { animation: blink 1s ease-in-out infinite; }
+  .turn-mark:focus-visible { outline: none; }
+  .turn-preview {
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 0;
+    width: min(280px, 42vw);
+    max-height: 100px;
+    overflow: hidden;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: white;
+    box-shadow: var(--shadow);
+    pointer-events: none;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .turn-preview b, .turn-preview span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .turn-preview b { -webkit-line-clamp: 1; font-weight: 600; }
+  .turn-preview span {
+    margin-top: 4px;
+    -webkit-line-clamp: 3;
+    color: rgba(11, 38, 55, 0.55);
+    font-size: 12px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .turn-mark::before { transition: none; }
+  }
+  .composer-wrap {
+    padding: 0 28px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .queue-list {
+    width: min(720px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    margin: 0 0 8px;
+    min-height: 0;
+  }
+  .queue {
+    width: fit-content;
+    max-width: 420px;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    box-shadow: var(--shadow);
+  }
+  .queue span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .steer, .drop {
+    border: 0; border-radius: 999px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+  }
+  .steer { background: var(--soft); color: var(--action); }
+  .drop { background: transparent; color: rgba(11, 38, 55, 0.45); }
+  .prompt {
+    width: min(720px, 100%);
+    background: white;
+    border: 0.5px solid rgba(11, 38, 55, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 6px 8px -6px rgba(7, 63, 92, 0.08);
+    padding: 10px;
+    position: relative;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 8px 2px;
+  }
+  .chips:empty { display: none; }
+  .chip-item {
+    max-width: 12rem;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--pearl);
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 10px;
+    font-size: 12px;
+    animation: in 150ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .chip-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chip-item button {
+    border: 0;
+    background: none;
+    color: rgba(11, 38, 55, 0.4);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .prompt textarea {
+    width: 100%;
+    border: 0;
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    max-height: 240px;
+    overflow-y: auto;
+    color: rgba(11, 38, 55, 0.88);
+    font-size: 15px;
+    font-weight: 450;
+    line-height: 1.5;
+    background: transparent;
+    padding: 6px 8px;
+  }
+  .prompt-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 2px 0;
+  }
+  .plus, .send, .model {
+    border: 0;
+    cursor: pointer;
+    background: transparent;
+  }
+  .plus, .send {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: var(--sea);
+  }
+  .plus:hover, .plus[aria-expanded="true"] { background: var(--soft); }
+  .model {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    color: rgba(11, 38, 55, 0.62);
+    cursor: default;
+  }
+  .model i {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    background: var(--sea);
+    box-shadow: inset 0 -4px 0 var(--blue);
+  }
+  .send {
+    margin-left: auto;
+    background: linear-gradient(#3b8fb8, var(--action));
+    color: white;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(7, 63, 92, 0.18);
+  }
+  .send:hover:not(:disabled) { filter: brightness(1.08); }
+  .send:disabled { opacity: 0.35; cursor: default; filter: none; }
+  .send .ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .send .stop { display: none; width: 10px; height: 10px; background: currentColor; border-radius: 2px; }
+  .send.pending .ico { display: none; }
+  .send.pending .stop { display: block; }
+  .plus-menu {
+    position: absolute;
+    left: 8px;
+    bottom: 48px;
+    z-index: 8;
+    width: min(22rem, calc(100% - 16px));
+    background: #fff;
+    border-radius: 16px;
+    border: 0.5px solid rgba(11, 38, 55, 0.12);
+    box-shadow: 0 16px 40px rgba(7, 63, 92, 0.16);
+    padding: 8px;
+  }
+  .tool {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .tool:hover, .tool:focus { background: var(--muted); }
+  .tool .glyph {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: var(--soft);
+    color: var(--action);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .tool b { display: block; font-size: 13px; font-weight: 450; }
+  .tool small { display: block; font-size: 12px; color: rgba(11, 38, 55, 0.5); }
+  .tool-search {
+    width: 100%;
+    border: 0;
+    outline: none;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+    color: var(--ink);
+    background: transparent;
+  }
+  .bubble-files {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .bubble-files span {
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  .row.assistant .bubble-files span { background: rgba(255, 255, 255, 0.7); }
+  .rail h2 { margin: 8px 8px 4px; font-size: 15px; }
+  .rail .sub { margin: 0 8px 16px; font-size: 12px; color: rgba(11, 38, 55, 0.5); }
+  .card {
+    background: white; border-radius: 16px; padding: 12px; box-shadow: var(--shadow);
+    margin-bottom: 10px; font-size: 13px;
+  }
+  .card strong { display: block; margin-bottom: 4px; }
+  .native {
+    margin: 48px auto;
+    max-width: 420px;
+    text-align: center;
+    color: rgba(11, 38, 55, 0.55);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .hint { font-size: 12px; color: rgba(11, 38, 55, 0.4); padding: 6px 4px 0; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <aside class="side">
+      <div class="brand"><i class="mark"></i> BOOP · 波波</div>
+      <button class="nav-item" data-room="new" type="button">新会话</button>
+      <button class="nav-item on" data-room="boop" type="button">BOOP 主会话</button>
+      <button class="nav-item" data-room="plugin" type="button">dsh-plugin</button>
+      <button class="nav-item" data-room="code" type="button">wyx_code</button>
+    </aside>
+    <main class="chat" id="chat">
+      <header class="top">
+        <div class="who"><i class="dot"></i> <span id="who">波波</span> <span class="chip" id="ws">BOOP 工作区</span></div>
+        <span class="chip" id="mode">只这一条会话换气泡</span>
+      </header>
+      <div class="thread" id="boop-thread">
+        <section class="messages" id="messages" aria-label="主会话"></section>
+        <nav class="turns" id="turns" aria-label="跳到这一轮" hidden>
+          <div class="turn-frame">
+            <div class="turn-marks" id="turn-marks"></div>
+            <div class="turn-preview" id="turn-preview" hidden></div>
+          </div>
+        </nav>
+      </div>
+      <div class="native" id="native" hidden>
+        这是普通 DSH 会话，仍用原来的对话界面。<br />点左侧「BOOP 主会话」再试气泡。
+      </div>
+      <div class="composer-wrap" id="composer-wrap">
+        <div class="queue-list" id="queue"></div>
+        <form class="prompt" id="form">
+          <input id="file-input" type="file" multiple hidden aria-label="上传文件" />
+          <div class="chips" id="chips"></div>
+          <textarea id="input" rows="1" placeholder="给波波发一句…"></textarea>
+          <div class="prompt-bar">
+            <button class="plus" id="plus" type="button" aria-label="添加文件和更多" aria-expanded="false" aria-haspopup="menu">+</button>
+            <span class="model" title="仍用这条 DSH 会话当前选中的模型"><i></i>沿用当前模型</span>
+            <button class="send" id="send" type="submit" aria-label="发送" disabled>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+              <span class="stop" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="plus-menu" id="plus-menu" hidden role="menu">
+            <button class="tool" type="button" data-tool="files" role="menuitem"><span class="glyph">📎</span><span><b>添加照片和文件</b><small>从电脑上传</small></span></button>
+            <button class="tool" type="button" data-tool="library" role="menuitem"><span class="glyph">📚</span><span><b>从资料库添加</b><small>浏览已有文件</small></span></button>
+            <button class="tool" type="button" data-tool="image" role="menuitem"><span class="glyph">🖼</span><span><b>创建图片</b><small>画出任何东西</small></span></button>
+            <button class="tool" type="button" data-tool="search" role="menuitem"><span class="glyph">🌐</span><span><b>网页搜索</b><small>查找实时资讯</small></span></button>
+            <button class="tool" type="button" data-tool="research" role="menuitem"><span class="glyph">🔭</span><span><b>深度研究</b><small>生成详细报告</small></span></button>
+            <input class="tool-search" id="tool-search" type="search" placeholder="搜索插件、文件、文件夹和技能" />
+          </div>
+        </form>
+        <div class="hint">Enter 发送，Shift+Enter 换行。回复中点停止，或再发一句排到输入框上方。</div>
+      </div>
+    </main>
+    <aside class="rail">
+      <h2>波波</h2>
+      <p class="sub">任务、记忆、设置仍是现在的右侧栏</p>
+      <div class="card"><strong>待我处理</strong><span id="todo">2 项审批还在原来的位置</span></div>
+      <div class="card"><strong>记忆</strong>从现在开始 · 学习已有会话</div>
+    </aside>
+  </div>
+<script>
+const REPLIES = [
+  "收到。工作区已经定在插件目录，这条会话只换气泡，发送还走原来的 DSH 会话。",
+  "好。右侧任务和记忆不动，其他会话也不改外观。",
+  "可以。你刚才那句会排在待发队列里，点插话就会立刻插进来。",
+  "记下了。附件只显示在这一条会话的输入条上，不会写到其他工作区。"
+];
+
+const TOOLS = {
+  files: "添加照片和文件",
+  library: "从资料库添加",
+  image: "创建图片",
+  search: "网页搜索",
+  research: "深度研究"
+};
+
+const state = {
+  room: "boop",
+  messages: [
+    { id: "m1", from: "user", text: "把这周还没做完的事收成几句，别再让我选工作区。", time: "23:02", status: "read" },
+    { id: "m2", from: "assistant", text: "工作区已经定在插件自己的目录。这条会话继续用原来的 DSH 会话发送，只是气泡和输入框换成 Pasta UI 的样子。", time: "23:02" },
+    { id: "m3", from: "user", text: "右侧还是波波的任务和记忆，不要再做一套聊天后端。", time: "23:03", status: "read" },
+    { id: "m4", from: "assistant", text: "对。会话、发送、模型都还是现在这条 DSH 会话。只把这一条的消息列换成气泡。", time: "23:03" },
+    { id: "m5", from: "user", text: "附件还是走原来的发送。", time: "23:04", status: "read" },
+    { id: "m6", from: "assistant", text: "对，输入卡只换外观，文件仍交给这条 DSH 会话。", time: "23:04" },
+    { id: "m7", from: "user", text: "模型不要另做选择器。", time: "23:05", status: "read" },
+    { id: "m8", from: "assistant", text: "沿用当前这条会话已经选好的模型。", time: "23:05" },
+    { id: "m9", from: "user", text: "输入框空的时候发送键先灰掉。", time: "23:06", status: "read" },
+    { id: "m10", from: "assistant", text: "有字才亮，回复中变成停止。", time: "23:06" }
+  ],
+  queue: [],
+  files: [{ name: "周计划.txt", size: "12 KB" }],
+  tool: "",
+  typing: false,
+  followTail: true,
+  replyIndex: 0,
+  timer: 0
+};
+
+const el = {
+  messages: document.getElementById("messages"),
+  turns: document.getElementById("turns"),
+  turnMarks: document.getElementById("turn-marks"),
+  turnPreview: document.getElementById("turn-preview"),
+  queue: document.getElementById("queue"),
+  chips: document.getElementById("chips"),
+  input: document.getElementById("input"),
+  form: document.getElementById("form"),
+  send: document.getElementById("send"),
+  plus: document.getElementById("plus"),
+  plusMenu: document.getElementById("plus-menu"),
+  fileInput: document.getElementById("file-input"),
+  toolSearch: document.getElementById("tool-search"),
+  thread: document.getElementById("boop-thread"),
+  native: document.getElementById("native"),
+  composer: document.getElementById("composer-wrap"),
+  who: document.getElementById("who"),
+  ws: document.getElementById("ws"),
+  mode: document.getElementById("mode"),
+  todo: document.getElementById("todo")
+};
+
+function now() {
+  return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function uid() {
+  return "m" + Math.random().toString(36).slice(2, 9);
+}
+
+function renderMessages() {
+  const html = ['<div class="day">今天</div>'];
+  for (const msg of state.messages) {
+    if (msg.typing) {
+      html.push(`<div class="row assistant" id="${msg.id}"><div class="bubble"><div class="typing" aria-label="正在输入"><i></i><i></i><i></i></div></div></div>`);
+      continue;
+    }
+    const status = msg.from === "user" ? statusLabel(msg) : "";
+    const files = (msg.files || []).map((file) => `<span>${escapeHtml(file.name)}</span>`).join("");
+    html.push(`<div class="row ${msg.from}${msg.status === "failed" ? " failed" : ""}" id="${msg.id}">
+      <div class="bubble">${escapeHtml(msg.text)}${files ? `<div class="bubble-files">${files}</div>` : ""}</div>
+      ${msg.from === "user" ? `<div class="meta"><time>${msg.time}</time><span>·</span><span>${status}</span>${msg.status === "failed" ? `<button class="retry" data-retry="${msg.id}" type="button">重试</button>` : ""}</div>` : ""}
+    </div>`);
+  }
+  el.messages.innerHTML = html.join("");
+  if (state.followTail) el.messages.scrollTop = el.messages.scrollHeight;
+  renderTurns();
+}
+
+function statusLabel(msg) {
+  if (msg.status === "sending") return "发送中";
+  if (msg.status === "sent") return "✓ 已发送";
+  if (msg.status === "read") return "✓✓ 已读";
+  if (msg.status === "failed") return "未发送";
+  return "";
+}
+
+function turnItems() {
+  const items = [];
+  for (const msg of state.messages) {
+    if (msg.from === "user" && !msg.typing) {
+      items.push({ id: msg.id, prompt: msg.text, response: "", busy: msg.status === "sending" });
+    } else if (msg.from === "assistant" && items.length) {
+      const last = items[items.length - 1];
+      last.busy = Boolean(msg.typing);
+      if (!msg.typing) last.response = msg.text;
+    }
+  }
+  return items;
+}
+
+function renderTurns() {
+  const items = turnItems();
+  el.turns.hidden = items.length < 2;
+  el.turnMarks.innerHTML = items.map((item, index) =>
+    `<button class="turn-mark${item.busy ? " busy" : ""}" type="button" data-jump="${item.id}" data-index="${index}" aria-label="跳到第 ${index + 1} 轮"></button>`
+  ).join("");
+  syncActiveTurn();
+}
+
+function syncActiveTurn(forced) {
+  const items = turnItems();
+  if (!items.length) return;
+  let current = forced || items[0].id;
+  if (!forced) {
+    const line = el.messages.getBoundingClientRect().top + 48;
+    for (const item of items) {
+      const row = document.getElementById(item.id);
+      if (row && row.getBoundingClientRect().top <= line) current = item.id;
+    }
+  }
+  el.turnMarks.querySelectorAll(".turn-mark").forEach((mark) => {
+    mark.classList.toggle("on", mark.dataset.jump === current);
+  });
+}
+
+function jumpTo(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  state.followTail = false;
+  row.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.messages.querySelectorAll(".flash").forEach((node) => node.classList.remove("flash"));
+  row.classList.add("flash");
+  window.setTimeout(() => row.classList.remove("flash"), 1600);
+  syncActiveTurn(id);
+}
+
+function showTurnPreview(mark) {
+  const items = turnItems();
+  const item = items[Number(mark.dataset.index)];
+  if (!item) {
+    el.turnPreview.hidden = true;
+    return;
+  }
+  el.turnPreview.innerHTML = `<b>${escapeHtml(item.prompt)}</b>${item.response ? `<span>${escapeHtml(item.response)}</span>` : ""}`;
+  el.turnPreview.hidden = false;
+  const frame = mark.closest(".turn-frame").getBoundingClientRect();
+  const markBox = mark.getBoundingClientRect();
+  const height = el.turnPreview.offsetHeight;
+  const top = markBox.top + markBox.height / 2 - frame.top - height / 2;
+  el.turnPreview.style.top = Math.max(0, Math.min(top, frame.height - height)) + "px";
+}
+
+function renderQueue() {
+  el.queue.innerHTML = state.queue.map((item) =>
+    `<div class="queue"><span>${escapeHtml(item.text)}</span>
+      <button class="steer" data-steer="${item.id}" type="button">插话</button>
+      <button class="drop" data-drop="${item.id}" type="button">去掉</button></div>`
+  ).join("");
+}
+
+function renderChips() {
+  const tool = state.tool
+    ? `<span class="chip-item"><span>${escapeHtml(TOOLS[state.tool] || state.tool)}</span>
+        <button type="button" data-untool aria-label="去掉工具">×</button></span>`
+    : "";
+  const files = state.files.map((file, index) =>
+    `<span class="chip-item"><span>${escapeHtml(file.name)}</span>
+      <button type="button" data-unfile="${index}" aria-label="移除 ${escapeHtml(file.name)}">×</button></span>`
+  ).join("");
+  el.chips.innerHTML = tool + files;
+}
+
+function resizeInput() {
+  el.input.style.height = "0px";
+  el.input.style.height = Math.min(el.input.scrollHeight, 240) + "px";
+}
+
+function syncSend() {
+  el.send.classList.toggle("pending", state.typing);
+  el.send.setAttribute("aria-label", state.typing ? "停止回复" : "发送");
+  el.send.disabled = !state.typing && !el.input.value.trim();
+}
+
+function setPlusOpen(open) {
+  el.plusMenu.hidden = !open;
+  el.plus.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    el.toolSearch.value = "";
+    filterTools("");
+    el.toolSearch.focus();
+  }
+}
+
+function filterTools(query) {
+  const q = query.trim().toLowerCase();
+  el.plusMenu.querySelectorAll(".tool").forEach((button) => {
+    const hay = button.textContent.toLowerCase();
+    button.hidden = Boolean(q) && !hay.includes(q);
+  });
+}
+
+function addFiles(list) {
+  for (const file of list) {
+    const size = file.size >= 1024 ? `${Math.max(1, Math.round(file.size / 1024))} KB` : `${file.size} B`;
+    state.files.push({ name: file.name, size });
+  }
+  renderChips();
+}
+
+function pickTool(id) {
+  setPlusOpen(false);
+  if (id === "files") {
+    el.fileInput.click();
+    return;
+  }
+  if (id === "library") {
+    state.files.push({ name: "资料库-周计划.txt", size: "12 KB" });
+    renderChips();
+    return;
+  }
+  state.tool = id;
+  renderChips();
+}
+
+function stopReply() {
+  window.clearTimeout(state.timer);
+  state.messages = state.messages.filter((msg) => !msg.typing);
+  state.typing = false;
+  renderMessages();
+  syncSend();
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function submit(text, { steer = false } = {}) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (state.typing && !steer) {
+    state.queue.push({ id: uid(), text: trimmed });
+    renderQueue();
+    return;
+  }
+  const id = uid();
+  state.followTail = true;
+  const files = state.files.slice();
+  state.files = [];
+  state.tool = "";
+  renderChips();
+  state.messages.push({ id, from: "user", text: trimmed, time: now(), status: "sending", files });
+  renderMessages();
+  resizeInput();
+  syncSend();
+  window.setTimeout(() => {
+    const msg = state.messages.find((item) => item.id === id);
+    if (msg) msg.status = "sent";
+    renderMessages();
+  }, 280);
+  window.setTimeout(() => {
+    const msg = state.messages.find((item) => item.id === id);
+    if (msg && msg.status !== "failed") msg.status = "read";
+    renderMessages();
+  }, 900);
+  startReply();
+}
+
+function startReply() {
+  if (state.typing) return;
+  state.typing = true;
+  const typingId = uid();
+  state.messages.push({ id: typingId, from: "assistant", typing: true });
+  renderMessages();
+  state.timer = window.setTimeout(() => {
+    state.messages = state.messages.filter((item) => item.id !== typingId);
+    const answer = REPLIES[state.replyIndex % REPLIES.length];
+    state.replyIndex += 1;
+    state.messages.push({ id: uid(), from: "assistant", text: answer, time: now() });
+    state.typing = false;
+    renderMessages();
+    syncSend();
+  }, 2400);
+  syncSend();
+}
+
+function steer(id) {
+  const item = state.queue.find((entry) => entry.id === id);
+  if (!item) return;
+  state.queue = state.queue.filter((entry) => entry.id !== id);
+  renderQueue();
+  if (state.typing) {
+    window.clearTimeout(state.timer);
+    state.messages = state.messages.filter((msg) => !msg.typing);
+    state.typing = false;
+  }
+  submit(item.text, { steer: true });
+}
+
+function setRoom(room) {
+  state.room = room;
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.classList.toggle("on", button.dataset.room === room);
+  });
+  const boop = room === "boop";
+  el.thread.hidden = !boop;
+  el.composer.hidden = !boop;
+  el.native.hidden = boop;
+  el.who.textContent = boop ? "波波" : room === "plugin" ? "dsh-plugin" : room === "code" ? "wyx_code" : "新会话";
+  el.ws.textContent = boop ? "BOOP 工作区" : "需要选择工作区";
+  el.mode.textContent = boop ? "只这一条会话换气泡" : "原生 DSH 会话";
+  el.todo.textContent = boop ? "2 项审批还在原来的位置" : "这条会话没有 BOOP 任务";
+}
+
+el.form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (state.typing) {
+    stopReply();
+    return;
+  }
+  const text = el.input.value;
+  el.input.value = "";
+  submit(text);
+});
+
+el.send.addEventListener("click", (event) => {
+  if (!state.typing) return;
+  event.preventDefault();
+  stopReply();
+});
+
+el.input.addEventListener("input", () => {
+  resizeInput();
+  syncSend();
+});
+
+el.input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    if (state.typing) {
+      submit(el.input.value);
+      el.input.value = "";
+      resizeInput();
+      return;
+    }
+    el.form.requestSubmit();
+  }
+});
+
+el.plus.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setPlusOpen(el.plusMenu.hidden);
+});
+
+el.plusMenu.addEventListener("click", (event) => {
+  const tool = event.target.closest("[data-tool]");
+  if (tool) pickTool(tool.dataset.tool);
+});
+
+el.toolSearch.addEventListener("input", () => filterTools(el.toolSearch.value));
+
+el.fileInput.addEventListener("change", () => {
+  addFiles(el.fileInput.files);
+  el.fileInput.value = "";
+});
+
+el.turns.addEventListener("click", (event) => {
+  const mark = event.target.closest("[data-jump]");
+  if (mark) jumpTo(mark.dataset.jump);
+});
+
+el.turns.addEventListener("pointerover", (event) => {
+  const mark = event.target.closest(".turn-mark");
+  if (mark) showTurnPreview(mark);
+});
+
+el.turns.addEventListener("pointerleave", () => {
+  el.turnPreview.hidden = true;
+});
+
+el.messages.addEventListener("scroll", () => {
+  window.requestAnimationFrame(() => syncActiveTurn());
+});
+
+document.body.addEventListener("click", (event) => {
+  if (!el.plusMenu.hidden && !event.target.closest("#plus-menu") && !event.target.closest("#plus")) {
+    setPlusOpen(false);
+  }
+  const steerBtn = event.target.closest("[data-steer]");
+  if (steerBtn) steer(steerBtn.dataset.steer);
+  const drop = event.target.closest("[data-drop]");
+  if (drop) {
+    state.queue = state.queue.filter((item) => item.id !== drop.dataset.drop);
+    renderQueue();
+  }
+  const unfile = event.target.closest("[data-unfile]");
+  if (unfile) {
+    state.files.splice(Number(unfile.dataset.unfile), 1);
+    renderChips();
+  }
+  if (event.target.closest("[data-untool]")) {
+    state.tool = "";
+    renderChips();
+  }
+  const retry = event.target.closest("[data-retry]");
+  if (retry) {
+    const msg = state.messages.find((item) => item.id === retry.dataset.retry);
+    if (msg) {
+      msg.status = "sending";
+      renderMessages();
+      window.setTimeout(() => { msg.status = "read"; renderMessages(); }, 400);
+    }
+  }
+  const room = event.target.closest("[data-room]");
+  if (room) setRoom(room.dataset.room);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setPlusOpen(false);
+});
+
+renderMessages();
+renderQueue();
+renderChips();
+resizeInput();
+syncSend();
+el.input.focus();
+</script>
+</body>
+</html>

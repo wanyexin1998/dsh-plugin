@@ -94,7 +94,7 @@ export function BoardColumn({
           ))}
           {tasks.length === 0 && (
             <div data-boop-column-empty="">
-              {filtersActive ? '当前筛选下没有匹配任务' : `没有${label}任务（宿主可读，真实为空）`}
+              {filtersActive ? '没有匹配' : '没有任务'}
             </div>
           )}
         </div>

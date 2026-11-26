@@ -36,7 +36,9 @@ export const BOOP_INTERACTION_CSS = `
 [data-boop-header],
 [data-boop-dock],
 [data-boop-source],
-[data-boop-settings] {
+[data-boop-settings],
+[data-boop-side],
+[data-boop-tools] {
 ${BRAND_TOKENS}
   color: var(--boop-ink);
   font: inherit;
@@ -46,7 +48,9 @@ body[data-ds-dark-theme] [data-boop-mark],
 body[data-ds-dark-theme] [data-boop-header],
 body[data-ds-dark-theme] [data-boop-dock],
 body[data-ds-dark-theme] [data-boop-source],
-body[data-ds-dark-theme] [data-boop-settings] {
+body[data-ds-dark-theme] [data-boop-settings],
+body[data-ds-dark-theme] [data-boop-side],
+body[data-ds-dark-theme] [data-boop-tools] {
 ${DARK_TOKENS}
 }
 
@@ -66,6 +70,13 @@ ${DARK_TOKENS}
   text-align: left;
   font: inherit;
   font-size: 13px;
+}
+[data-boop-hide-nav],
+[data-boop-hide-preset] { display: none !important; }
+/* Native AgentPresetLabel is a sibling of the conversation body. The phase
+   root carries data-boop-session so we can hide it without restyling host classes. */
+[data-boop-session] [data-slot="conversation.session.header.actions"]:not(:has([data-boop-header])) {
+  display: none !important;
 }
 [data-boop-entry]:hover { background: var(--boop-soft); border-color: var(--boop-line); }
 [data-boop-entry]:focus-visible { outline: 2px solid var(--boop-interactive); outline-offset: 1px; }
@@ -93,6 +104,15 @@ ${DARK_TOKENS}
   white-space: nowrap;
 }
 [data-boop-header] .boop-header-name { font-weight: 600; letter-spacing: 0.01em; }
+[data-boop-header] .boop-header-mode {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--boop-line);
+  font-size: 12px;
+  opacity: 0.88;
+}
 [data-boop-header] .boop-header-status {
   display: inline-flex;
   align-items: center;
@@ -204,7 +224,8 @@ ${DARK_TOKENS}
   border-radius: 16px;
   background: var(--boop-soft);
   padding: 14px 16px;
-  max-width: 860px;
+  min-width: 0;
+  max-width: none;
   font-size: 13px;
 }
 [data-boop-source] .boop-source-head {

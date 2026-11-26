@@ -33,6 +33,7 @@ import {
 } from './transport/command-envelope.ts'
 import { apply as applyClosedChannels } from './channels-api.ts'
 import { readHostIdentity } from './host-identity.ts'
+import { releaseRunningOnTurnEnd, sessionIdFromEventTarget } from './dispatch/turn-release.ts'
 
 export const name = 'dsh-boop'
 
@@ -67,8 +68,8 @@ export function apply(ctx: any): void {
     const state: BoopRuntimeState = {
       schemaVersion: 1,
       product: 'BOOP',
-      // engines.dsh admits the rc.2 web payload and the rc.3 desktop build.
-      // This string is the process that actually loaded the plugin.
+      // engines.dsh admits the checked payloads. This string is the process
+      // that actually loaded the plugin.
       dshProfileVersion: hostIdentity.version,
       dshCommit: hostIdentity.commit,
       // Derived from the frozen gate ledger (src/host/gates.ts): today G01/G02
@@ -128,6 +129,7 @@ export function apply(ctx: any): void {
         migration: null,
         lease: { held: false, holder: '', fencingToken: 0, released: false },
         scope: { scopeId: '', ownerId: '', dshHomeFingerprint: '' },
+        bootReconcile: null,
         error: error instanceof Error ? error.message : String(error),
       }
       try {
@@ -231,6 +233,22 @@ export function apply(ctx: any): void {
         observedReader as unknown as SourceReader,
         new LedgerCursorStore(storage.repo),
       )
+    }
+
+    if (typeof ctx.on === 'function') {
+      ctx.on('session/event', (session: unknown, event: unknown) => {
+        try {
+          if (!storage || !storage.checkWrite().ok) return
+          releaseRunningOnTurnEnd(
+            storage.repo,
+            storage.identity.scopeId,
+            sessionIdFromEventTarget(session),
+            event,
+          )
+        } catch {
+          /* a turn observer must never break the host */
+        }
+      })
     }
 
     ctx.effect(() => () => storage?.close(), 'boop: storage disposal')

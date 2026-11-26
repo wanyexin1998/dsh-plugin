@@ -206,7 +206,7 @@ export function BoopBoard({
         <BoopCompanion3D
           state={to3DState(companionState(state))}
           line={companionLine(state)}
-          size={168}
+          size={88}
         />
         <div className="boop-hero-text">
           <h1>BOOP · 波波</h1>
@@ -230,6 +230,11 @@ export function BoopBoard({
       {state.kind === 'loading' && <div className="boop-card">正在连接 Host…</div>}
       {state.kind === 'offline' && <div className="boop-card">连接已断开。任务看板会在重新连接后刷新，不会显示伪空列表。</div>}
       {state.kind === 'error' && <div className="boop-card">面板出错：{state.message}</div>}
+
+      <TaskboardPanel call={call} onOpenSession={onOpenSession} />
+
+      <details className="boop-more">
+        <summary>连接、来源和控制</summary>
 
       {/* 项目 / 主会话 */}
       <section className="boop-card">
@@ -288,9 +293,6 @@ export function BoopBoard({
         mainSessionId={mainFacts?.mainSessionId ?? null}
       />
 
-      {/* 任务看板：E04-02 接通的只读四组投影；不可读/断线/旧响应都如实显示 */}
-      <TaskboardPanel call={call} onOpenSession={onOpenSession} />
-
       {/* 人工控制：E04-03 的审批决定 / 确定性 Stop / 重启恢复显式释放 */}
       <BoopControlPanel call={call} onOpenSession={onOpenSession} />
 
@@ -345,6 +347,7 @@ export function BoopBoard({
           </section>
         </>
       )}
+      </details>
     </div>
   )
 }

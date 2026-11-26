@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BOOP 主会话</title>
+  <style>
+    :root {
+      --ink: #0b2637;
+      --blue: #449bcc;
+      --deep: #073f5c;
+      --soft: #eaf5fb;
+      --wave: #d7eef6;
+      --line: rgba(11, 38, 55, 0.1);
+      --muted: rgba(11, 38, 55, 0.52);
+      --faint: rgba(11, 38, 55, 0.38);
+      --paper: #f7f6f3;
+      --white: #fff;
+      --rail: 300px;
+      --rail-open: 400px;
+      --side: 248px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--white);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    .app { display: flex; height: 100%; min-width: 960px; }
+
+    .nav {
+      width: var(--side);
+      flex: none;
+      border-right: 1px solid var(--line);
+      background: #fbfaf8;
+      display: flex;
+      flex-direction: column;
+      padding: 14px 12px 16px;
+    }
+    .mark {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px 16px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+    .mark b { font-weight: 650; font-size: 14px; }
+    .mark span {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      color: var(--muted);
+    }
+    .new-chat {
+      margin: 0 4px 14px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--white);
+      text-align: left;
+      padding: 0 12px;
+      color: var(--muted);
+    }
+    .nav-label {
+      margin: 8px 8px 6px;
+      font-size: 12px;
+      color: var(--faint);
+    }
+    .session {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: left;
+    }
+    .session.current { background: rgba(68, 155, 204, 0.12); }
+    .dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--blue);
+      flex: none;
+    }
+    .session small { display: block; color: var(--muted); font-size: 12px; }
+    .nav-foot { margin-top: auto; padding: 8px; color: var(--muted); font-size: 12px; }
+
+    .stage {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+      --cover: 0px;
+    }
+    .thread {
+      flex: 1;
+      overflow: auto;
+      padding: 28px calc(8vw + var(--cover)) 8px 8vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .msg { width: min(640px, 100%); margin: 0 auto 18px; }
+    .msg p { margin: 0 0 8px; }
+    .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+    .bubble {
+      background: var(--wave);
+      border-radius: 14px;
+      padding: 10px 14px;
+      max-width: 78%;
+    }
+    .time {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--faint);
+    }
+    .mark-word { background: #fff3c4; border-radius: 2px; padding: 0 2px; }
+
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 10px calc(8vw + var(--cover)) 14px 8vw;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .composer .plus, .send {
+      width: 32px;
+      height: 32px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 8px;
+    }
+    .composer input {
+      flex: 1;
+      border: 0;
+      outline: none;
+      background: transparent;
+      padding: 8px 4px;
+    }
+    .composer input::placeholder { color: var(--faint); }
+
+    .rail {
+      position: absolute;
+      z-index: 2;
+      overflow: hidden;
+      background: var(--white);
+      border: 1px solid var(--line);
+      will-change: width, height, top, right, border-radius;
+    }
+    .sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: 16px 46px 8px 16px;
+    }
+    .morph {
+      position: absolute;
+      z-index: 3;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(11, 38, 55, 0.16);
+      background: linear-gradient(180deg, #ffffff 0%, #e4edf2 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -1px 0 rgba(11, 38, 55, 0.08),
+        0 1px 1px rgba(11, 38, 55, 0.12),
+        0 2px 4px rgba(11, 38, 55, 0.08);
+      display: grid;
+      place-items: center;
+    }
+    .morph:hover {
+      background: linear-gradient(180deg, #ffffff 0%, #dbe7ee 100%);
+    }
+    .morph:active {
+      background: linear-gradient(180deg, #d5e0e7 0%, #f4f8fa 100%);
+      box-shadow:
+        inset 0 1px 2px rgba(11, 38, 55, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+    }
+    .morph svg { display: block; }
+    .morph .icon-in { display: none; }
+    .rail[data-open="true"] .morph .icon-out { display: none; }
+    .rail[data-open="true"] .morph .icon-in { display: block; }
+    .sheet.board {
+      bottom: 0;
+      overflow: auto;
+      padding-bottom: 20px;
+    }
+    .who { display: flex; gap: 12px; align-items: center; margin-bottom: 18px; }
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--soft);
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .who h1 { font-size: 16px; font-weight: 650; margin: 0; }
+    .who p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+    .group { margin: 0 0 18px; }
+    .group h2 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .row, .task {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 6px 2px;
+      border-radius: 8px;
+    }
+    .task:hover, .back:hover { background: var(--soft); }
+    .count { margin-left: auto; color: var(--faint); font-size: 12px; }
+    .quiet { color: var(--muted); font-size: 13px; padding: 4px 2px; }
+    .rail-foot { padding: 8px 18px 16px; }
+    .text-btn {
+      border: 0;
+      background: transparent;
+      color: var(--deep);
+      padding: 6px 0;
+      font-size: 13px;
+    }
+
+    .bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .bar h2 { margin: 0; font-size: 14px; font-weight: 650; }
+    .back {
+      border: 0;
+      background: transparent;
+      padding: 4px 6px;
+      border-radius: 8px;
+      color: var(--muted);
+    }
+    .list-item {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 8px 4px;
+      border-radius: 8px;
+      display: block;
+    }
+    .list-item:hover { background: var(--soft); }
+    .list-item b { display: block; font-weight: 600; font-size: 14px; }
+    .list-item span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+    .detail h3 { margin: 8px 0 12px; font-size: 16px; font-weight: 650; }
+    .kv { display: grid; grid-template-columns: 72px 1fr; gap: 6px 10px; font-size: 13px; margin-bottom: 14px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; }
+    .open-src {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--white);
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="nav">
+      <div class="mark"><b>deepseek</b><span>HARNESS</span></div>
+      <button class="new-chat" type="button">＋ 新会话</button>
+      <div class="nav-label">会话</div>
+      <button class="session current" type="button">
+        <i class="dot"></i>
+        <span>波波<small>主会话</small></span>
+      </button>
+      <button class="session" type="button">
+        <span>部署说明<small>昨天</small></span>
+      </button>
+      <div class="nav-foot">默认工作区</div>
+    </aside>
+
+    <main class="stage">
+      <div class="thread">
+        <article class="msg">
+          <p>测试范围我先按你上次说的来：只覆盖安装和 Connector，不改现有会话里的草稿。</p>
+          <p>有两件要你看一眼。一件是测试要不要包含真实机器，一件是部署说明还缺回滚步骤。</p>
+        </article>
+        <article class="msg user">
+          <div class="bubble">先不要上真实机器。部署说明补上回滚后再给我。</div>
+          <div class="time">11/10 16:18</div>
+        </article>
+        <article class="msg">
+          <p>好。真实机器这一项我标成等你确认。<span class="mark-word">部署说明</span>补完我会把结果放回这里。</p>
+        </article>
+      </div>
+      <form class="composer" onsubmit="return false">
+        <button class="plus" type="button" aria-label="添加">＋</button>
+        <input type="text" placeholder="发送消息" aria-label="发送消息" />
+        <button class="send" type="submit" aria-label="发送">↑</button>
+      </form>
+
+    <aside class="rail" id="rail">
+      <div class="sheet" id="summary">
+        <div class="who">
+          <div class="avatar" aria-hidden="true">
+            <svg width="26" height="20" viewBox="0 0 26 20" fill="none">
+              <path d="M4 12c0-4 3.5-8 9-8s9 4 9 8-3 6-9 6-9-2-9-6z" fill="#449BCC"/>
+              <circle cx="10" cy="11" r="1.2" fill="#F8F7F2"/>
+              <circle cx="16" cy="11" r="1.2" fill="#F8F7F2"/>
+              <path d="M8 5c1-3 3-4 5-3" stroke="#073F5C" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <h1>波波</h1>
+            <p>有 2 件要你处理</p>
+          </div>
+        </div>
+        <section class="group">
+          <h2>待我处理</h2>
+          <button class="task" type="button" data-open="scope">确认测试范围</button>
+          <button class="task" type="button" data-open="rollback">补一份部署说明</button>
+        </section>
+        <section class="group">
+          <h2>进行中</h2>
+          <div class="row"><span class="quiet">2 个在进行</span></div>
+        </section>
+      </div>
+
+      <button class="morph" id="morph" type="button" aria-label="展开">
+        <svg class="icon-out" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M8 2h4v4M12 2 8 6M6 12H2V8M2 12l4-4" fill="none" stroke="#073F5C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <svg class="icon-in" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M12 6V2H8M12 2 8 6M2 8v4h4M2 12l4-4" fill="none" stroke="#073F5C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <div class="sheet board" id="board">
+        <div class="bar">
+          <h2>任务</h2>
+        </div>
+        <div id="groups">
+          <section class="group">
+            <h2>待我处理</h2>
+            <button class="list-item" type="button" data-open="scope"><b>确认测试范围</b><span>等你决定要不要上真实机器</span></button>
+            <button class="list-item" type="button" data-open="rollback"><b>补一份部署说明</b><span>缺回滚步骤</span></button>
+          </section>
+          <section class="group">
+            <h2>进行中</h2>
+            <button class="list-item" type="button" data-open="install"><b>核对安装步骤</b><span>正在整理</span></button>
+            <button class="list-item" type="button" data-open="connector"><b>看 Connector 日志</b><span>正在读</span></button>
+          </section>
+          <section class="group">
+            <h2>待开始</h2>
+            <button class="list-item" type="button" data-open="later"><b>整理验收标准</b><span>还没开始</span></button>
+          </section>
+          <section class="group">
+            <h2>已结束</h2>
+            <button class="list-item" type="button" data-open="done"><b>记下当前范围</b><span>已结束</span></button>
+          </section>
+        </div>
+        <div class="detail" id="detail" hidden>
+          <button class="back" id="detail-back" type="button">← 返回</button>
+          <h3 id="detail-title"></h3>
+          <dl class="kv">
+            <dt>状态</dt><dd id="detail-state"></dd>
+            <dt>要你做什么</dt><dd id="detail-need"></dd>
+            <dt>结果在</dt><dd id="detail-where"></dd>
+          </dl>
+          <button class="open-src" type="button">打开原会话</button>
+        </div>
+      </div>
+    </aside>
+    </main>
+  </div>
+  <script>
+    const tasks = {
+      scope: { title: "确认测试范围", state: "待我处理", need: "决定这次要不要上真实机器。", where: "这条会话" },
+      rollback: { title: "补一份部署说明", state: "待我处理", need: "看补上的回滚步骤，再收下。", where: "部署说明" },
+      install: { title: "核对安装步骤", state: "进行中", need: "先不用做。做完我会把缺口放回这里。", where: "安装记录" },
+      connector: { title: "看 Connector 日志", state: "进行中", need: "先不用做。", where: "Connector" },
+      later: { title: "整理验收标准", state: "待开始", need: "还没开始。", where: "这条会话" },
+      done: { title: "记下当前范围", state: "已结束", need: "已经记在这条会话里。", where: "这条会话" }
+    }
+    const rail = document.getElementById("rail")
+    const stage = document.querySelector(".stage")
+    const summary = document.getElementById("summary")
+    const board = document.getElementById("board")
+    const groups = document.getElementById("groups")
+    const detail = document.getElementById("detail")
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const motion = { value: 0, velocity: 0, target: 0 }
+    let last = 0
+    let frame = 0
+    const omega = 18
+    const zeta = 1.12
+
+    function collapsedHeight() {
+      return Math.ceil(summary.scrollHeight)
+    }
+    function apply(t) {
+      const width = 280 + (400 - 280) * t
+      rail.style.width = width + "px"
+      const collapsed = collapsedHeight()
+      const height = collapsed + (stage.clientHeight - collapsed) * t
+      const inset = 16 * (1 - t)
+      const radius = 18 * (1 - t)
+      const shade = 0.08 * (1 - t)
+      rail.style.top = inset + "px"
+      rail.style.right = inset + "px"
+      rail.style.height = height + "px"
+      rail.style.borderRadius = radius + "px"
+      rail.style.boxShadow = "0 " + (12 * (1 - t)) + "px " + (32 * (1 - t)) + "px rgba(11,38,55," + shade + ")"
+      stage.style.setProperty("--cover", (400 * t) + "px")
+      summary.style.opacity = String(Math.max(0, 1 - t * 1.7))
+      board.style.opacity = String(Math.max(0, (t - 0.22) / 0.78))
+      summary.style.pointerEvents = t < 0.45 ? "auto" : "none"
+      board.style.pointerEvents = t > 0.55 ? "auto" : "none"
+      const open = motion.target === 1
+      rail.setAttribute("data-open", open ? "true" : "false")
+      document.getElementById("morph").setAttribute("aria-label", open ? "收起" : "展开")
+    }
+    function step(now) {
+      const dt = Math.min(0.032, (now - last) / 1000 || 0.016)
+      last = now
+      const x = motion.value
+      const v = motion.velocity
+      const accel = (-2 * zeta * omega * v) - (omega * omega * (x - motion.target))
+      motion.velocity = v + accel * dt
+      motion.value = x + motion.velocity * dt
+      if (Math.abs(motion.target - motion.value) < 0.0015 && Math.abs(motion.velocity) < 0.02) {
+        motion.value = motion.target
+        motion.velocity = 0
+      }
+      apply(motion.value)
+      if (motion.value !== motion.target) frame = requestAnimationFrame(step)
+      else frame = 0
+    }
+    function seek(target) {
+      motion.target = target
+      if (reduced) {
+        motion.value = target
+        motion.velocity = 0
+        apply(target)
+        return
+      }
+      if (!frame) {
+        last = performance.now()
+        frame = requestAnimationFrame(step)
+      }
+    }
+    function showSummary() {
+      groups.hidden = false
+      detail.hidden = true
+      seek(0)
+    }
+    function showBoard() {
+      groups.hidden = false
+      detail.hidden = true
+      seek(1)
+    }
+    function showDetail(id) {
+      const task = tasks[id]
+      if (!task) return
+      groups.hidden = true
+      detail.hidden = false
+      document.getElementById("detail-title").textContent = task.title
+      document.getElementById("detail-state").textContent = task.state
+      document.getElementById("detail-need").textContent = task.need
+      document.getElementById("detail-where").textContent = task.where
+      seek(1)
+    }
+
+    document.getElementById("morph").onclick = () => (motion.target === 1 ? showSummary() : showBoard())
+    document.getElementById("detail-back").onclick = showBoard
+    document.querySelectorAll("[data-open]").forEach((node) => {
+      node.onclick = () => showDetail(node.getAttribute("data-open"))
+    })
+    window.addEventListener("resize", () => apply(motion.value))
+    apply(0)
+  </script>
+</body>
+</html>

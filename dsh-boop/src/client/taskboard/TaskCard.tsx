@@ -92,13 +92,6 @@ export function TaskCard({
       aria-labelledby={titleId}
       onKeyDown={handleKeyDown}
     >
-      <div data-boop-task-meta="">
-        <span>ID: {task.taskId.slice(0, 24)}</span>
-        {task.taskVersion > 0 && <span>版本 {task.taskVersion}</span>}
-        {updated && <span>更新 {updated}</span>}
-        {task.workspaceId && <span>工作区 {task.workspaceId}</span>}
-      </div>
-
       <h3 id={titleId} data-boop-task-title="" title={task.title}>
         {task.title}
       </h3>
@@ -106,6 +99,13 @@ export function TaskCard({
       <div data-boop-task-status="" data-tone={tone}>
         {taskStatusLine(task)}
       </div>
+
+      {(updated || task.workspaceId) && (
+        <div data-boop-task-meta="">
+          {updated && <span>{updated}</span>}
+          {task.workspaceId && <span>{task.workspaceId}</span>}
+        </div>
+      )}
 
       {task.pendingReason != null && (
         <div data-boop-task-pending="">

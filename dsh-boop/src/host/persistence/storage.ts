@@ -39,6 +39,11 @@ export interface StorageFacts {
   migration: MigrationReport | null
   lease: { held: boolean; holder: string; fencingToken: number; released: boolean }
   scope: ScopeIdentity
+  /**
+   * Ids this process already moved off `sending` or `running` while taking the
+   * lease. A later reconcile call will not see those rows as `sending` again.
+   */
+  bootReconcile: { unknown: string[]; retryable: number } | null
   error?: string
 }
 
@@ -71,7 +76,7 @@ export class BoopStorage {
   readonly repo: BoopRepository
   readonly lease: LeaseManager
   readonly identity: ScopeIdentity
-  readonly migration: MigrationReport | null
+  migration: MigrationReport | null
   private released = false
   private ownsLease = false
   private fencingToken = 0
@@ -99,7 +104,7 @@ export class BoopStorage {
     this.migration = null
     this.repo = new BoopRepository(this.db, undefined, () => `b_${Math.random().toString(36).slice(2, 12)}`)
     this.leaseTtlMs = options.leaseTtlMs ?? 15_000
-    this.lease = new LeaseManager(createSqliteLeaseStore(this.db.db), Date.now, this.leaseTtlMs)
+    this.lease = new LeaseManager(createSqliteLeaseStore(this.db.raw), Date.now, this.leaseTtlMs)
   }
 
   /**
@@ -122,28 +127,45 @@ export class BoopStorage {
   }
 
   /** Run migrations with a pre-migration consistent backup. */
-  async migrateNow(): Promise<MigrationReport> {
-    const report = await migrate(this.db, {
+  migrateNow(): MigrationReport {
+    return migrate(this.db, {
       backupDir: path.join(path.dirname(this.db.path), 'backups'),
     })
-    return report
   }
 
   /** Create the data domain and take the single-writer lease. */
   start(): StorageFacts {
+    try {
+      this.migration = this.migrateNow()
+    } catch (error) {
+      try {
+        this.freezeReadOnly()
+        this.close()
+      } catch {
+        /* keep the migration error; the ledger is already closed or read-only */
+      }
+      throw error
+    }
+    if (this.migration.refused || this.migration.integrity !== 'ok') {
+      this.freezeReadOnly()
+      return this.facts(false)
+    }
     this.repo.ensureScope(this.identity.scopeId, this.identity.ownerId)
     const acquired = this.lease.acquire(this.identity.scopeId, this.holder)
     if (acquired.kind === 'held') {
       // Another live Host owns the write management for this domain. BOOP stays
       // read-only here instead of fighting over the ledger (03§02).
-      this.db.db.exec('PRAGMA query_only = ON')
+      this.freezeReadOnly()
     } else {
       this.ownsLease = true
       this.fencingToken = acquired.lease.fencingToken
+      this.armWriteGuard()
       this.startHeartbeat()
-      // Production boot reconciliation (G03): a crashed `sending` row becomes
-      // outcome_unknown and is never auto-retried. The clean-shutdown marker
-      // is cleared now and written back only from close().
+      // Production boot reconciliation (G03): a crashed `sending` or `running`
+      // row becomes outcome_unknown and is never auto-retried. The list is
+      // kept on this process and returned by facts(); a later reconcile call
+      // no longer sees those rows as `sending`. The clean-shutdown marker is
+      // cleared now and written back only from close().
       this.previousShutdownClean = this.repo.getMeta('clean_shutdown') === '1'
       this.bootReconcile = this.repo.reconcileOutbox(this.identity.scopeId)
       this.repo.setMeta('clean_shutdown', '0')
@@ -179,14 +201,36 @@ export class BoopStorage {
       migration: this.migration,
       lease: { held, holder: leaseHolder, fencingToken: token, released: this.released },
       scope: this.identity,
+      bootReconcile: this.bootReconcile,
     }
   }
 
-  /** Check the write fence before any mutation (03§02 single controller). */
+  /**
+   * Fence for this process. Uses the holder and token captured at acquire,
+   * never the current row: a takeover must not let the old process present
+   * the new owner's token as its own.
+   */
   checkWrite(): { ok: true } | { ok: false; reason: string } {
-    const current = this.leaseStoreRead()
-    if (!current) return { ok: false, reason: 'no lease for this data domain' }
-    return this.lease.checkWrite(this.identity.scopeId, current.holder, current.fencingToken)
+    if (!this.ownsLease) return { ok: false, reason: 'this process does not hold the writer lease' }
+    return this.lease.checkWrite(this.identity.scopeId, this.holder, this.fencingToken)
+  }
+
+  private armWriteGuard(): void {
+    this.db.setWriteGuard(() => {
+      const gate = this.checkWrite()
+      if (!gate.ok) throw new Error(`boop: write refused: ${gate.reason}`)
+    })
+  }
+
+  private freezeReadOnly(): void {
+    this.db.setWriteGuard(() => {
+      throw new Error('boop: write refused: this process does not hold the writer lease')
+    })
+    try {
+      this.db.db.exec('PRAGMA query_only = ON')
+    } catch {
+      /* a closed database has already stopped writes */
+    }
   }
 
   private leaseStoreRead(): { holder: string; fencingToken: number } | null {

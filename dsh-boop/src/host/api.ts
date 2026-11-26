@@ -18,8 +18,12 @@ import { BoopApi, configureApi, registerPocApiMethods, type BoopApiConfig } from
 
 export const name = 'boop-api'
 
-/** `boop` is BOOP's own runtime service; the gateway is the Remote transport. */
-export const inject = ['boop', 'typertGateway']
+/**
+ * `boop` is BOOP's own runtime service. `typertGateway` is the Remote transport.
+ * `workspaceRegistry` is required so a leftover BOOP workspace row can be
+ * dropped from the left sidebar. The directory itself is never re-registered.
+ */
+export const inject = ['boop', 'typertGateway', 'workspaceRegistry']
 
 export function apply(ctx: any, config?: BoopApiConfig): void {
   try {

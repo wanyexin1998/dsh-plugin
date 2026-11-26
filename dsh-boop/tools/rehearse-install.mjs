@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ASAR = process.env.DSH_ASAR ?? 'E:/deepseek-harness/resources/app.asar'
 const PAYLOAD =
-  process.env.DSH_PAYLOAD ?? path.join(ROOT, '.work/test-host/payload-0.2.1/dsh')
+  process.env.DSH_PAYLOAD ?? path.join(ROOT, '.work/test-host/payload-0.2.2/dsh')
 const NODE_BIN =
   process.env.DSH_NODE ??
   'C:/Users/wanyexin/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin/node.exe'

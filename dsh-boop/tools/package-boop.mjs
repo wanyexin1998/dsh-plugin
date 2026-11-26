@@ -73,6 +73,7 @@ function collectRequiredEntries() {
     'LICENSE',
     'NOTICE',
     'presets/boop.patch.yml',
+    'server/workspace/AGENTS.md',
     ...ASSET_ENTRIES,
   ])
   const patch = readFileSync(join(REPO_ROOT, 'cordis.patch.yml'), 'utf8')

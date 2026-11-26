@@ -1007,7 +1007,7 @@ export function BoopApprovalBadge({ call, onOpenBoard }: BoopApprovalBadgeProps)
     <span data-boop-approval-badge="" data-count={state.count} title="有等待你决定的 BOOP 审批">
       <button
         type="button"
-        aria-label={`有 ${state.count} 项待决审批；打开 BOOP 任务板`}
+        aria-label={`有 ${state.count} 项待决审批`}
         onClick={() => onOpenBoard?.()}
       >
         待批 {state.count}
