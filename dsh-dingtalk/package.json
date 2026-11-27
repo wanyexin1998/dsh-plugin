@@ -81,6 +81,7 @@
     "prepack": "pnpm run build",
     "dws:confirmation-template": "node enhancements/scripts/confirmation-template.mjs",
     "test:web": "cd enhancements && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:seat-rebuild": "bash scripts/test-seat-rebuild.sh",
     "verify:bundle": "node enhancements/scripts/verify-bundle.mjs",
     "verify:dsh-web": "node enhancements/scripts/verify-dsh-web.mjs",
     "verify:browser": "cd enhancements && node scripts/verify-browser.mjs",

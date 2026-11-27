@@ -250,12 +250,14 @@ test('同一 checkpoint 的执行锁会串行化并发 resume', async (t) => {
   const checkpoint = await createSetupCheckpoint(stateDir, safeInput())
   const events = []
 
+  const entered = Promise.withResolvers()
   const first = withSetupCheckpointLock(stateDir, checkpoint.id, async () => {
     events.push('first:start')
+    entered.resolve()
     await new Promise((resolve) => setTimeout(resolve, 50))
     events.push('first:end')
   })
-  await new Promise((resolve) => setTimeout(resolve, 5))
+  await Promise.race([entered.promise, first])
   const second = withSetupCheckpointLock(stateDir, checkpoint.id, async () => {
     events.push('second:start')
     events.push('second:end')

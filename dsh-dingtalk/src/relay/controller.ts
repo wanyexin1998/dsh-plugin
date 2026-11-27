@@ -4,7 +4,7 @@ import { RelayClient, type ChannelBinding } from './client.js'
 import { enterpriseConnection, profileRobotDirectory, type EnterpriseConnection } from './connection-config.js'
 import { readState, saveState } from './state.js'
 import { startRobotGateway } from './robot.js'
-import { withRecoverableFileLock } from '../file-lock.js'
+import { withRecoverableFileLock, withReceiverLock } from '../file-lock.js'
 import { loadDingTalkAccountCredentials, saveDingTalkAccountCredentials } from '../setup-state.js'
 import { Outbound } from '../outbound.js'
 import type { DingTalkIdentity } from '../identity.js'
@@ -303,14 +303,13 @@ export class RobotConnection extends RelayClient {
     if (this.problem) return
     try {
       await new Promise<void>((resolve, reject) => {
-        this.deviceLease = withRecoverableFileLock(
+        this.deviceLease = withReceiverLock(
           join(this.directory, 'receiver.lock'),
           () =>
             new Promise<void>((done) => {
               this.releaseDevice = done
               resolve()
             }),
-          { timeoutMs: 500 },
         ).catch(() => {
           this.problem = 'device_in_use'
           reject(new Error('device_in_use'))

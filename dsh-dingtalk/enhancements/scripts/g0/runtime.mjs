@@ -28,7 +28,7 @@ export async function sandbox() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => systemVariables.has(key.toLowerCase())));
   Object.assign(env, {
     DWS_CONFIG_DIR: config, DWS_KEYCHAIN_DIR: join(root, 'keys'),
-    DWS_DISABLE_KEYCHAIN: '1', DWS_NO_UPDATE_CHECK: '1', DWS_LANG: 'zh',
+    DWS_DISABLE_KEYCHAIN: '1', DWS_NO_UPDATE_CHECK: '1', DO_NOT_TRACK: '1', DWS_LANG: 'zh',
     DWS_KEYCHAIN_TEST_NAMESPACE: root,
   });
   return { root, config, env, dispose: async () => {
