@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { writeFile, readFile, readdir } from 'node:fs/promises';
+import { copyFile, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createManagedConnection } from '../lib/host/managed-connection.js';
 import { createConnectionService } from '../lib/shared/service.js';
@@ -20,7 +20,8 @@ export const officialFixtureSkip = process.platform !== 'win32'
 export async function freePort() { const server = createServer(); await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.address().port; await new Promise(r => server.close(r)); return port; }
 export async function fixture({ automatic = false, install = automatic, nativeDownload = false } = {}) {
   const isolated = await sandbox();
-  const binary = await verifiedBinary(resolve('../.cache/dingtalk-g0/bin-amd64/dws.exe'));
+  const binary = join(isolated.root, 'dws.exe');
+  await copyFile(await verifiedBinary(resolve('../.cache/dingtalk-g0/bin-amd64/dws.exe')), binary);
   const events = [], failures = [];
   const state = { user: 'test-user', exchangeFailure: false, businessFailure: false, cancel: false, identityCalls: 0, failIdentityAt: -1 };
   const server = createServer(async (req, res) => {
